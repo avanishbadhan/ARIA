@@ -14,6 +14,16 @@ contextBridge.exposeInMainWorld('jarvisElectron', {
     logout: () => ipcRenderer.invoke('spotify:logout'),
     getLibrary: (clientId, clientSecret) => ipcRenderer.invoke('spotify:get-library', { clientId, clientSecret })
   },
+  googleAuth: {
+    status: () => ipcRenderer.invoke('google:auth-status'),
+    login: (clientId, clientSecret) => ipcRenderer.invoke('google:authorize', { clientId, clientSecret }),
+    logout: () => ipcRenderer.invoke('google:logout')
+  },
+  gmail: {
+    listMessages: (clientId, clientSecret, maxResults) => ipcRenderer.invoke('gmail:list-messages', { clientId, clientSecret, maxResults }),
+    search: (clientId, clientSecret, query, maxResults) => ipcRenderer.invoke('gmail:search-messages', { clientId, clientSecret, query, maxResults }),
+    getMessage: (clientId, clientSecret, id) => ipcRenderer.invoke('gmail:get-message', { clientId, clientSecret, id })
+  },
   mic: {
     start: () => ipcRenderer.invoke('mic:start'),
     stop: () => ipcRenderer.invoke('mic:stop'),
