@@ -32,8 +32,8 @@
     },
     "publish": {
       "provider": "github",
-      "owner": "Taksh-Biyani",
-      "repo": "jarvis-voice-ai",
+      "owner": "avanishbadhan",
+      "repo": "personalassistant",
       "releaseType": "release"
     },
     "files": [

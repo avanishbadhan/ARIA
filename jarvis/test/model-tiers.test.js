@@ -2,11 +2,19 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { MODEL_TIERS, TIER_ORDER, normalizeTierAlias, getModelQueue } from '../src/model-tiers.js';
 
-test('MODEL_TIERS has all four tiers with a model id and label', () => {
+test('MODEL_TIERS has all four tiers with a model id, provider, and label', () => {
   for (const key of ['quick', 'medium', 'high', 'ultra']) {
     assert.ok(MODEL_TIERS[key].model, `${key} has a model id`);
+    assert.ok(MODEL_TIERS[key].provider, `${key} has a provider`);
     assert.ok(MODEL_TIERS[key].label, `${key} has a label`);
   }
+});
+
+test('Quick/Medium/High run on Groq; Ultra runs on Gemini', () => {
+  assert.equal(MODEL_TIERS.quick.provider, 'groq');
+  assert.equal(MODEL_TIERS.medium.provider, 'groq');
+  assert.equal(MODEL_TIERS.high.provider, 'groq');
+  assert.equal(MODEL_TIERS.ultra.provider, 'gemini');
 });
 
 test('getModelQueue("quick") tries llama-3.1-8b-instant first, then falls back to openai/gpt-oss-20b', () => {
@@ -16,7 +24,10 @@ test('getModelQueue("quick") tries llama-3.1-8b-instant first, then falls back t
 test('getModelQueue returns just the primary model for tiers with no configured fallback', () => {
   assert.deepEqual(getModelQueue('medium'), ['llama-3.3-70b-versatile']);
   assert.deepEqual(getModelQueue('high'), ['openai/gpt-oss-120b']);
-  assert.deepEqual(getModelQueue('ultra'), ['groq/compound']);
+});
+
+test('getModelQueue("ultra") tries gemini-2.5-pro first, then falls back through older Gemini models', () => {
+  assert.deepEqual(getModelQueue('ultra'), ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro']);
 });
 
 test('getModelQueue returns an empty array for an unknown tier', () => {

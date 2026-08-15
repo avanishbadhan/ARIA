@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>J.A.R.V.I.S. Voice AI System | Swarm & Tool Harness</title>
+  <!-- TensorFlow.js + COCO-SSD for the Camera Vision Harness's live bounding-box overlay -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
   <link rel="stylesheet" href="/src/styles.css">
 </head>
 <body>
@@ -20,7 +23,7 @@
         </div>
       </div>
 
-      <div class="tier-control" id="tierControl" title="Groq model tier — drag, or say &quot;switch mode to quick/medium/high/ultra&quot;">
+      <div class="tier-control" id="tierControl" title="Model tier — Quick/Medium/High run on Groq, Ultra runs on Gemini. Drag, or say &quot;switch mode to quick/medium/high/ultra&quot;">
         <span class="tier-control-icon">🧠</span>
         <div class="tier-control-track">
           <input type="range" id="tierSlider" class="tier-slider" min="0" max="3" step="1" value="0" disabled />
@@ -28,7 +31,7 @@
             <span>Quick</span><span>Medium</span><span>High</span><span>Ultra</span>
           </div>
         </div>
-        <span class="tier-control-label" id="tierControlLabel">Add Groq key</span>
+        <span class="tier-control-label" id="tierControlLabel">Add Groq or Gemini key</span>
       </div>
 
       <div style="display: flex; align-items: center; gap: 12px;">
@@ -100,6 +103,21 @@
           <div class="steam-games-grid" id="steamGamesGrid">
             <!-- Game cards populated by JS -->
           </div>
+        </div>
+
+        <!-- Camera Vision Harness Panel -->
+        <div class="camera-panel">
+          <div class="panel-header" style="padding-bottom: 6px;">
+            <span class="panel-title">📷 Camera Vision Harness</span>
+            <button class="btn-steam-launch" id="cameraToggleBtn">OPEN CAMERA 📷</button>
+          </div>
+
+          <div class="camera-viewport" id="cameraViewport">
+            <video class="camera-video" id="cameraVideo" autoplay playsinline muted></video>
+            <canvas class="camera-overlay-canvas" id="cameraOverlayCanvas"></canvas>
+          </div>
+
+          <div class="steam-library-status" id="cameraStatus">Camera inactive — say "open camera" or click OPEN CAMERA</div>
         </div>
       </section>
 
@@ -237,6 +255,8 @@
           or
           <a href="https://console.groq.com/keys" target="_blank">Groq</a>
           (faster) for conversational answers ·
+          <a href="https://aistudio.google.com/apikey" target="_blank">Get a Gemini key</a>
+          (required for Ultra tier — see the 🧠 slider) ·
           <a href="https://console.deepgram.com" target="_blank">Get a Deepgram key</a>
           (optional, improves speech recognition) ·
           <a href="https://products.wolframalpha.com/api" target="_blank">Get a WolframAlpha AppID</a>
@@ -246,6 +266,7 @@
         </div>
         <input type="password" id="openrouterKeyInput" class="steam-input" placeholder="OpenRouter API Key" autocomplete="off" />
         <input type="password" id="groqKeyInput" class="steam-input" placeholder="Groq API Key (optional, get one at console.groq.com/keys)" autocomplete="off" />
+        <input type="password" id="geminiKeyInput" class="steam-input" placeholder="Gemini API Key (required for Ultra tier, get one at aistudio.google.com/apikey)" autocomplete="off" />
         <input type="password" id="deepgramKeyInput" class="steam-input" placeholder="Deepgram API Key (optional)" autocomplete="off" />
         <input type="password" id="wolframKeyInput" class="steam-input" placeholder="WolframAlpha AppID (optional, get one free at products.wolframalpha.com/api)" autocomplete="off" />
         <input type="password" id="spotifyClientIdInput" class="steam-input" placeholder="Spotify Client ID (optional, developer.spotify.com/dashboard)" autocomplete="off" />

@@ -30,13 +30,19 @@ export class GroqClient {
 
   /**
    * Switches which Groq model this client calls, via the tier picked from
-   * the HUD slider or a "switch mode to X" voice command.
+   * the HUD slider or a "switch mode to X" voice command. Still tracks
+   * currentTier for non-provider-specific tiers (Ultra/Gemini) — several
+   * call sites in jarvis-core.js read this.groq.currentTier as the single
+   * source of truth for "which tier is active" regardless of which
+   * provider actually serves it — but modelQueue is left empty so a stray
+   * call into this client at a non-Groq tier fails fast and falls through
+   * to the next provider, instead of sending a foreign model ID to Groq.
    */
   setTier(tierKey) {
     const tier = MODEL_TIERS[tierKey];
     if (!tier) return;
     this.currentTier = tierKey;
-    this.modelQueue = getModelQueue(tierKey);
+    this.modelQueue = tier.provider === 'groq' ? getModelQueue(tierKey) : [];
   }
 
   /**

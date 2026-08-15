@@ -16,7 +16,7 @@ export class AutonomousToolReasoner {
    * Format returned:
    * {
    *    shouldCallTool: true|false,
-   *    toolName: 'GOOGLE_SEARCH' | 'STEAM_LAUNCH_GAME' | 'STEAM_OPEN_CLIENT' | 'SPOTIFY_PLAY_SONG' | 'SPOTIFY_PLAY_LIBRARY' | 'SPOTIFY_OPEN_CLIENT' | 'EPIC_OPEN_CLIENT' | 'XBOX_OPEN_CLIENT' | 'XBOX_LAUNCH_GAME' | 'EPIC_LAUNCH_GAME' | 'OPEN_SITE' | 'MATH_QUERY' | 'SET_MODEL_TIER' | 'SCREEN_MONITOR_START' | 'SCREEN_MONITOR_STOP' | 'SCREEN_QUERY' | 'CONVERSATIONAL',
+   *    toolName: 'GOOGLE_SEARCH' | 'STEAM_LAUNCH_GAME' | 'STEAM_OPEN_CLIENT' | 'SPOTIFY_PLAY_SONG' | 'SPOTIFY_PLAY_LIBRARY' | 'SPOTIFY_OPEN_CLIENT' | 'EPIC_OPEN_CLIENT' | 'XBOX_OPEN_CLIENT' | 'XBOX_LAUNCH_GAME' | 'EPIC_LAUNCH_GAME' | 'OPEN_SITE' | 'MATH_QUERY' | 'SET_MODEL_TIER' | 'SCREEN_MONITOR_START' | 'SCREEN_MONITOR_STOP' | 'SCREEN_QUERY' | 'CAMERA_START' | 'CAMERA_STOP' | 'CONVERSATIONAL',
    *    confidence: 0.0 to 1.0,
    *    params: { ... },
    *    reasoning: "Explanation of autonomous decision"
@@ -267,6 +267,28 @@ export class AutonomousToolReasoner {
         confidence: 0.85,
         params: { question: input.trim() },
         reasoning: "Autonomous reasoner detected a question about the contents of the screen."
+      };
+    }
+
+    // 1g. Check for camera vision commands — same thin fallback-net role as
+    // the screen monitoring checks above.
+    if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
+      return {
+        shouldCallTool: true,
+        toolName: 'CAMERA_START',
+        confidence: 0.93,
+        params: {},
+        reasoning: "Autonomous reasoner detected intent to open the camera vision feed."
+      };
+    }
+
+    if (text.match(/^(?:close|stop|turn\s+off)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
+      return {
+        shouldCallTool: true,
+        toolName: 'CAMERA_STOP',
+        confidence: 0.93,
+        params: {},
+        reasoning: "Autonomous reasoner detected intent to close the camera vision feed."
       };
     }
 

@@ -5,6 +5,7 @@ import { ConversationController } from './conversation-controller.js';
 import { loadSettings, saveSettings } from './settings.js';
 import { isUpdateSupported, getCurrentVersion, checkForUpdate, downloadUpdate, installUpdate, onUpdateState, getChangelog } from './update-manager.js';
 import { MODEL_TIERS, TIER_ORDER } from './model-tiers.js';
+import { CameraVisionHarness } from './camera-vision-harness.js';
 
 // DOM Element References
 const micBtn = document.getElementById('micBtn');
@@ -18,6 +19,9 @@ const swarmList = document.getElementById('swarmList');
 const steamGamesGrid = document.getElementById('steamGamesGrid');
 const launchSteamBtn = document.getElementById('launchSteamBtn');
 const muteBtn = document.getElementById('muteBtn');
+const cameraVideo = document.getElementById('cameraVideo');
+const cameraOverlayCanvas = document.getElementById('cameraOverlayCanvas');
+const cameraViewport = document.getElementById('cameraViewport');
 const viewportPlaceholder = document.getElementById('viewportPlaceholder');
 const viewportFrame = document.getElementById('viewportFrame');
 const viewportTitle = document.getElementById('viewportTitle');
@@ -185,13 +189,34 @@ function initApp() {
     }
   });
 
+  const cameraVisionHarness = new CameraVisionHarness({
+    videoEl: cameraVideo,
+    canvasEl: cameraOverlayCanvas,
+    panelEl: cameraViewport,
+    onLog: addLog
+  });
+
   jarvis = new JarvisCore(voiceEngine, harness, {
     onLog: addLog,
     onStatusChange: updateStatus,
+    cameraVisionHarness,
     onResponse: ({ text, actionType, data }) => {
       addLog({ type: 'JARVIS', message: text });
-      if (actionType === 'SET_MODEL_TIER' && data?.applied) {
-        syncTierControl(data.tier);
+      if (actionType === 'SET_MODEL_TIER') {
+        // On success, sync the slider to the tier that was just applied. On
+        // failure (e.g. dragged to Ultra with a Groq key but no Gemini key)
+        // snap it back to whatever tier is actually still active, rather
+        // than leaving the thumb sitting on a switch that didn't happen.
+        syncTierControl(data?.applied ? data.tier : jarvis.groq.currentTier);
+      }
+      if (actionType === 'CAMERA_START' || actionType === 'CAMERA_STOP') {
+        const cameraStatus = document.getElementById('cameraStatus');
+        if (cameraStatus) cameraStatus.textContent = text;
+        const cameraToggleBtn = document.getElementById('cameraToggleBtn');
+        if (cameraToggleBtn) {
+          const isOpen = Boolean(jarvis.cameraVisionHarness?.isOpen);
+          cameraToggleBtn.textContent = isOpen ? 'CLOSE CAMERA 📷' : 'OPEN CAMERA 📷';
+        }
       }
     },
     onSwarmUpdate: renderSwarmTelemetry
@@ -293,8 +318,11 @@ function initApp() {
   // main-process loopback server)
   initSpotifyAccountPanel();
 
-  // 8d. Model-Tier Slider (Quick/Medium/High/Ultra Groq models)
+  // 8d. Model-Tier Slider (Quick/Medium/High on Groq, Ultra on Gemini)
   initTierControl();
+
+  // 8e. Camera Vision Harness Panel (live COCO-SSD bounding-box overlay)
+  initCameraVisionPanel();
 
   // Voice & Mute Control Handlers
   if (micBtn) {
@@ -574,6 +602,7 @@ function initSettingsPanel() {
   const useGroqToggle = document.getElementById('useGroqToggle');
   const openrouterKeyInput = document.getElementById('openrouterKeyInput');
   const groqKeyInput = document.getElementById('groqKeyInput');
+  const geminiKeyInput = document.getElementById('geminiKeyInput');
   const deepgramKeyInput = document.getElementById('deepgramKeyInput');
   const wolframKeyInput = document.getElementById('wolframKeyInput');
   const spotifyClientIdInput = document.getElementById('spotifyClientIdInput');
@@ -596,6 +625,9 @@ function initSettingsPanel() {
   }
   if (groqKeyInput && localStorage.getItem('jarvis_groq_api_key')) {
     groqKeyInput.placeholder = '••••••••••••••••• (saved)';
+  }
+  if (geminiKeyInput && localStorage.getItem('jarvis_gemini_api_key')) {
+    geminiKeyInput.placeholder = '••••••••••••••••• (saved)';
   }
   if (deepgramKeyInput && localStorage.getItem('jarvis_deepgram_api_key')) {
     deepgramKeyInput.placeholder = '••••••••••••••••• (saved)';
@@ -658,6 +690,7 @@ function initSettingsPanel() {
     apiKeysSaveBtn.addEventListener('click', () => {
       const openrouterKey = openrouterKeyInput ? openrouterKeyInput.value.trim() : '';
       const groqKey = groqKeyInput ? groqKeyInput.value.trim() : '';
+      const geminiKey = geminiKeyInput ? geminiKeyInput.value.trim() : '';
       const deepgramKey = deepgramKeyInput ? deepgramKeyInput.value.trim() : '';
       const wolframAppId = wolframKeyInput ? wolframKeyInput.value.trim() : '';
       const spotifyClientId = spotifyClientIdInput ? spotifyClientIdInput.value.trim() : '';
@@ -674,6 +707,13 @@ function initSettingsPanel() {
         if (jarvis) jarvis.groq.apiKey = groqKey;
         groqKeyInput.value = '';
         groqKeyInput.placeholder = '••••••••••••••••• (saved)';
+        refreshTierControlAvailability();
+      }
+      if (geminiKey) {
+        localStorage.setItem('jarvis_gemini_api_key', geminiKey);
+        if (jarvis) jarvis.gemini.apiKey = geminiKey;
+        geminiKeyInput.value = '';
+        geminiKeyInput.placeholder = '••••••••••••••••• (saved)';
         refreshTierControlAvailability();
       }
       if (deepgramKey) {
@@ -702,7 +742,7 @@ function initSettingsPanel() {
       }
 
       if (apiKeysStatus) {
-        if (openrouterKey || groqKey || deepgramKey || wolframAppId || spotifyClientId || spotifyClientSecret) {
+        if (openrouterKey || groqKey || geminiKey || deepgramKey || wolframAppId || spotifyClientId || spotifyClientSecret) {
           apiKeysStatus.textContent = '✅ Saved.';
           apiKeysStatus.style.color = '#39ff14';
         } else {
@@ -923,8 +963,11 @@ function initUpdatePanel() {
 
 /**
  * Enables/disables the tier slider and updates its label based on whether a
- * Groq key exists — called at init and again right after a Groq key is saved
- * in Settings, so the slider goes live immediately without a page reload.
+ * Groq or Gemini key exists (Quick/Medium/High need Groq, Ultra needs
+ * Gemini — one of either is enough to unlock the slider; per-tier gating
+ * happens in JarvisCore's SET_MODEL_TIER handler) — called at init and
+ * again right after a key is saved in Settings, so the slider goes live
+ * immediately without a page reload.
  */
 function refreshTierControlAvailability() {
   const tierSlider = document.getElementById('tierSlider');
@@ -932,10 +975,11 @@ function refreshTierControlAvailability() {
   if (!tierSlider || !tierControlLabel) return;
 
   const hasGroqKey = Boolean(localStorage.getItem('jarvis_groq_api_key'));
-  tierSlider.disabled = !hasGroqKey;
+  const hasGeminiKey = Boolean(localStorage.getItem('jarvis_gemini_api_key'));
+  tierSlider.disabled = !hasGroqKey && !hasGeminiKey;
 
-  if (!hasGroqKey) {
-    tierControlLabel.textContent = 'Add Groq key';
+  if (tierSlider.disabled) {
+    tierControlLabel.textContent = 'Add Groq or Gemini key';
   } else {
     const tierKey = TIER_ORDER[Number(tierSlider.value)];
     tierControlLabel.textContent = MODEL_TIERS[tierKey].label;
@@ -979,6 +1023,23 @@ function initTierControl() {
   tierSlider.addEventListener('change', () => {
     const tierKey = TIER_ORDER[Number(tierSlider.value)];
     if (jarvis) jarvis.processUserInput(`switch mode to ${tierKey}`);
+  });
+}
+
+/**
+ * Wires the Camera Vision Harness panel's toggle button. Routes through the
+ * same processUserInput text-command path as every other header/panel
+ * button (see launchSteamBtn, initTierControl) so logging, agent-state
+ * updates, and the spoken confirmation all stay in one place.
+ */
+function initCameraVisionPanel() {
+  const cameraToggleBtn = document.getElementById('cameraToggleBtn');
+  if (!cameraToggleBtn) return;
+
+  cameraToggleBtn.addEventListener('click', () => {
+    if (!jarvis) return;
+    const isOpen = Boolean(jarvis.cameraVisionHarness?.isOpen);
+    jarvis.processUserInput(isOpen ? 'close camera' : 'open camera');
   });
 }
 

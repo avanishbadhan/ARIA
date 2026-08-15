@@ -31,6 +31,7 @@ provide keys:
 |---|---|---|
 | `VITE_OPENROUTER_API_KEY` | One of OpenRouter or Groq — powers conversational answers | https://openrouter.ai/keys |
 | `VITE_GROQ_API_KEY` | One of OpenRouter or Groq — much faster responses | https://console.groq.com/keys |
+| `VITE_GEMINI_API_KEY` | Required for the Ultra model tier (see Model Tiers below) | https://aistudio.google.com/apikey |
 | `VITE_DEEPGRAM_API_KEY` | Optional — better speech recognition | https://console.deepgram.com |
 | `VITE_WOLFRAM_APP_ID` | Optional — grounds math answers in a real computation instead of the LLM guessing | https://products.wolframalpha.com/api |
 | `VITE_STEAM_API_KEY` + `VITE_STEAM_ID` | Optional — launch games from your real library by name | https://steamcommunity.com/dev/apikey and https://steamid.io |
@@ -80,21 +81,27 @@ Click **⚙️ SETTINGS** in the header to configure:
 
 ## Model Tiers
 
-A **🧠 slider in the header** (not Settings) picks how JARVIS thinks, mapped
-to different Groq models:
+A **🧠 slider in the header** (not Settings) picks how JARVIS thinks. Quick,
+Medium, and High run on Groq; Ultra runs on Gemini:
 
-| Tier | Model |
-|---|---|
-| Quick | `llama-3.1-8b-instant` — fastest, default |
-| Medium | `llama-3.3-70b-versatile` |
-| High | `openai/gpt-oss-120b` — Groq's largest standalone reasoning model |
-| Ultra | `groq/compound` — an agentic system that can autonomously do its own web search/code execution mid-answer |
+| Tier | Provider | Model |
+|---|---|---|
+| Quick | Groq | `llama-3.1-8b-instant` — fastest, default |
+| Medium | Groq | `llama-3.3-70b-versatile` |
+| High | Groq | `openai/gpt-oss-120b` — Groq's largest standalone reasoning model |
+| Ultra | Gemini | `gemini-2.5-pro`, falling back through `gemini-2.5-flash` → `gemini-2.0-flash` → `gemini-1.5-pro` if unavailable |
 
 Drag the slider, or just say **"switch mode to quick/medium/high/ultra"**
 (also understands "low" for quick and "max"/"maximum" for ultra) — both
-paths do the same thing and stay in sync with each other. Needs a Groq API
-key (Settings, one-time); the slider stays disabled with a hint until one's
-saved, and picking a tier automatically makes Groq the active provider.
+paths do the same thing and stay in sync with each other. Quick/Medium/High
+need a Groq API key; Ultra needs a Gemini API key instead (Settings,
+one-time, get one free at [aistudio.google.com/apikey](https://aistudio.google.com/apikey)).
+The slider stays disabled with a hint until at least one of the two keys is
+saved; picking Quick/Medium/High automatically makes Groq the active
+provider for general chat, picking Ultra does not (it only affects that one
+tier). If Ultra is selected but no Gemini key is configured, switching to it
+is rejected with a spoken prompt instead of silently falling back to a
+different model.
 
 ## Spotify
 
@@ -115,6 +122,19 @@ before.
 Either way, if the exact track can't be resolved (typo, obscure title, no
 credentials, API error), JARVIS always falls back to opening Spotify search
 rather than failing silently.
+
+## Camera Vision
+
+The **📷 Camera Vision Harness** panel (left column, below the Steam
+launcher) opens your webcam and runs a live TensorFlow.js/COCO-SSD object
+detector over the feed, drawing bounding boxes and labels directly on the
+video — a real-time HUD overlay, not an LLM call. Click **OPEN CAMERA**, or
+say **"open camera"** / **"close camera"** (also understands "start/stop
+camera" and "turn on/off camera"). No API key or setup required — it just
+asks for webcam permission the first time. This is a local, real-time
+detector distinct from **Screen Vision** (`SCREEN_QUERY` — "what's on my
+screen") above, which snapshots the screen and asks an LLM a question about
+it instead of detecting objects live.
 
 ## Running it
 

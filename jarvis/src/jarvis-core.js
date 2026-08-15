@@ -14,6 +14,7 @@ import { GameLauncherOrchestrator } from './game-launcher-orchestrator.js';
 import { AutonomousToolReasoner } from './autonomous-tool-reasoner.js';
 import { OpenRouterClient } from './openrouter-client.js';
 import { GroqClient } from './groq-client.js';
+import { GeminiClient } from './gemini-client.js';
 import { WolframClient } from './wolfram-client.js';
 import { MODEL_TIERS } from './model-tiers.js';
 import { loadSettings, saveSettings } from './settings.js';
@@ -50,6 +51,16 @@ export class JarvisCore {
       onLog: (logData) => this.onLog(logData)
     });
     this.groq.setTier(loadSettings().groqModelTier);
+
+    // Instantiate Gemini Client — powers the Ultra tier exclusively (see
+    // model-tiers.js). Unlike Groq/OpenRouter it isn't a general-purpose
+    // alternate provider for the other tiers, so it has no setTier of its
+    // own; _chatWithActiveLLM only reaches it when this.groq.currentTier
+    // is 'ultra'.
+    const geminiApiKey = localStorage.getItem('jarvis_gemini_api_key') || '';
+    this.gemini = new GeminiClient(geminiApiKey, {
+      onLog: (logData) => this.onLog(logData)
+    });
 
     // Instantiate WolframAlpha Client (optional — grounds math answers in a
     // real computation instead of the LLM guessing; no key means MATH_QUERY
@@ -126,6 +137,12 @@ export class JarvisCore {
       onLog: (logData) => this.onLog(logData),
       askVisionLLM: (args) => this._askVisionLLM(args)
     });
+
+    // Camera Vision Harness — unlike every other harness, this one owns real
+    // DOM elements (video/canvas), so it's constructed by main.js (which
+    // already holds those refs) and injected here rather than built
+    // locally. May be null/undefined outside a browser context (tests).
+    this.cameraVisionHarness = options.cameraVisionHarness || null;
 
     // Short-term conversational memory: keeps the last few user/assistant turns
     // so follow-up questions ("what about its sequel?") resolve against prior context.
@@ -391,22 +408,31 @@ export class JarvisCore {
 
     // 5. Handle Model-Tier Switch Commands
     if (decision.toolName === 'SET_MODEL_TIER') {
-      const tier = MODEL_TIERS[decision.params.tier];
-      const groqApiKey = this.groq.apiKey;
+      const tierKey = decision.params.tier;
+      const tier = MODEL_TIERS[tierKey];
+      const requiresGemini = tier.provider === 'gemini';
+      const hasRequiredKey = requiresGemini ? Boolean(this.gemini.apiKey) : Boolean(this.groq.apiKey);
 
       let spokenResponse;
-      if (!groqApiKey) {
-        spokenResponse = "You'll need a Groq API key in Settings first, Sir.";
+      if (!hasRequiredKey) {
+        spokenResponse = requiresGemini
+          ? "You'll need a Gemini API key in Settings first, Sir."
+          : "You'll need a Groq API key in Settings first, Sir.";
       } else {
-        saveSettings({ groqModelTier: decision.params.tier, useGroq: true });
-        this.groq.setTier(decision.params.tier);
+        // Ultra doesn't run on Groq, so switching to it shouldn't flip
+        // useGroq on the way the other three tiers do — that flag only
+        // governs the Groq/OpenRouter preference for non-Ultra chat.
+        const settingsPatch = { groqModelTier: tierKey };
+        if (!requiresGemini) settingsPatch.useGroq = true;
+        saveSettings(settingsPatch);
+        this.groq.setTier(tierKey);
         spokenResponse = `Switched to ${tier.label} mode, Sir.`;
       }
 
       this.onResponse({
         text: spokenResponse,
         actionType: 'SET_MODEL_TIER',
-        data: { tier: decision.params.tier, applied: Boolean(groqApiKey) }
+        data: { tier: tierKey, applied: hasRequiredKey }
       });
 
       await this.voiceEngine.speak(spokenResponse);
@@ -449,13 +475,11 @@ export class JarvisCore {
 
     // 7. Handle Google Search Commands (Explicit or Autonomous)
     if (decision.toolName === 'GOOGLE_SEARCH') {
-      // High/Ultra tiers are the larger, more capable Groq models — the
-      // point of stepping up is to lean on that model's own knowledge
-      // instead of paying the latency/noise cost of a live web search, so
-      // skip the search grounding step entirely at those tiers. (Note:
-      // Ultra runs groq/compound, Groq's own agentic model that can invoke
-      // web search server-side on its own initiative regardless of this
-      // flag — that's outside JARVIS's control.)
+      // High/Ultra tiers are the largest, most capable models (High on Groq,
+      // Ultra on Gemini) — the point of stepping up is to lean on that
+      // model's own knowledge instead of paying the latency/noise cost of a
+      // live web search, so skip the search grounding step entirely at
+      // those tiers. See _prefersOwnKnowledge for the per-tier key checks.
       if (this._prefersOwnKnowledge()) {
         this._updateAgentState("agent-3", "THINKING", `Answering from model knowledge: "${decision.params.query}"`);
         this.onLog({
@@ -591,6 +615,36 @@ export class JarvisCore {
       return;
     }
 
+    // 8e. Handle Camera Vision Start (open the webcam + bounding-box overlay)
+    if (decision.toolName === 'CAMERA_START') {
+      this._updateAgentState("agent-3", "EXECUTING", "Activating camera vision");
+
+      const result = this.cameraVisionHarness
+        ? await this.cameraVisionHarness.open()
+        : { success: false, message: 'Camera vision is not available here, Sir.' };
+
+      this.onResponse({ text: result.message, actionType: 'CAMERA_START', data: result });
+
+      this._updateAgentState("agent-3", "ACTIVE", result.success ? "Camera feed active" : "Camera unavailable");
+      await this.voiceEngine.speak(result.message);
+      return;
+    }
+
+    // 8f. Handle Camera Vision Stop
+    if (decision.toolName === 'CAMERA_STOP') {
+      this._updateAgentState("agent-3", "EXECUTING", "Deactivating camera vision");
+
+      const result = this.cameraVisionHarness
+        ? this.cameraVisionHarness.close()
+        : { success: false, message: 'Camera vision is not available here, Sir.' };
+
+      this.onResponse({ text: result.message, actionType: 'CAMERA_STOP', data: result });
+
+      this._updateAgentState("agent-3", "ACTIVE", "Camera feed inactive");
+      await this.voiceEngine.speak(result.message);
+      return;
+    }
+
     // 9. Conversational Response via OpenRouter LLM (with Local Knowledge Base fallback)
     this._updateAgentState("agent-6", "THINKING", "Querying OpenRouter LLM API...");
 
@@ -654,18 +708,32 @@ export class JarvisCore {
    * local knowledge base in processUserInput if it also returns nothing.
    */
   /**
-   * True when the active LLM path would actually be Groq at High/Ultra
-   * tier — mirrors the same preferGroq check _chatWithActiveLLM uses, so
-   * this doesn't fire based on a tier setting that isn't even in effect
-   * (e.g. useGroq off with an OpenRouter key present).
+   * True when the active LLM path at the current tier is capable enough to
+   * skip live search grounding — Groq at High tier (mirrors the same
+   * preferGroq check _chatWithActiveLLM uses, so this doesn't fire based on
+   * a tier setting that isn't even in effect), or Gemini at Ultra tier.
    */
   _prefersOwnKnowledge() {
     const tier = this.groq.currentTier;
-    if (tier !== 'high' && tier !== 'ultra') return false;
+    // Ultra only skips search grounding when Gemini is actually the model
+    // answering — without a Gemini key, Ultra silently degrades to the
+    // normal Groq/OpenRouter chat path (see _chatWithActiveLLM), which
+    // isn't more capable than any other tier and still benefits from
+    // live search grounding.
+    if (tier === 'ultra') return Boolean(this.gemini.apiKey);
+    if (tier !== 'high') return false;
     return loadSettings().useGroq || !this.openRouter.apiKey;
   }
 
   async _chatWithActiveLLM(userInput, context, options = {}) {
+    // Ultra tier routes to Gemini first, regardless of the Groq/OpenRouter
+    // preference below — if it has no key or fails, fall through to the
+    // normal Groq/OpenRouter chain exactly as any other tier would.
+    if (this.groq.currentTier === 'ultra' && this.gemini.apiKey) {
+      const geminiAnswer = await this.gemini.chatWithJarvis(userInput, context, options);
+      if (geminiAnswer) return geminiAnswer;
+    }
+
     // Prefer Groq when explicitly switched on, or automatically when
     // OpenRouter has no key configured — this is what makes the OpenRouter
     // key optional as long as a Groq key is set. options.tools/toolExecutor
