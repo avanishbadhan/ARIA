@@ -16,7 +16,7 @@ export class AutonomousToolReasoner {
    * Format returned:
    * {
    *    shouldCallTool: true|false,
-   *    toolName: 'GOOGLE_SEARCH' | 'STEAM_LAUNCH_GAME' | 'STEAM_OPEN_CLIENT' | 'SPOTIFY_PLAY_SONG' | 'SPOTIFY_PLAY_LIBRARY' | 'SPOTIFY_OPEN_CLIENT' | 'EPIC_OPEN_CLIENT' | 'XBOX_OPEN_CLIENT' | 'XBOX_LAUNCH_GAME' | 'EPIC_LAUNCH_GAME' | 'OPEN_SITE' | 'MATH_QUERY' | 'SET_MODEL_TIER' | 'SCREEN_MONITOR_START' | 'SCREEN_MONITOR_STOP' | 'SCREEN_QUERY' | 'CAMERA_START' | 'CAMERA_STOP' | 'CAMERA_QUERY' | 'CONVERSATIONAL',
+   *    toolName: 'GOOGLE_SEARCH' | 'STEAM_LAUNCH_GAME' | 'STEAM_OPEN_CLIENT' | 'SPOTIFY_PLAY_SONG' | 'SPOTIFY_PLAY_LIBRARY' | 'SPOTIFY_OPEN_CLIENT' | 'EPIC_OPEN_CLIENT' | 'XBOX_OPEN_CLIENT' | 'XBOX_LAUNCH_GAME' | 'EPIC_LAUNCH_GAME' | 'OPEN_SITE' | 'MATH_QUERY' | 'SET_MODEL_TIER' | 'SCREEN_MONITOR_START' | 'SCREEN_MONITOR_STOP' | 'SCREEN_QUERY' | 'CAMERA_START' | 'CAMERA_STOP' | 'CAMERA_QUERY' | 'GMAIL_CHECK_INBOX' | 'GMAIL_SEARCH' | 'GMAIL_READ_MESSAGE' | 'CONVERSATIONAL',
    *    confidence: 0.0 to 1.0,
    *    params: { ... },
    *    reasoning: "Explanation of autonomous decision"
@@ -300,6 +300,43 @@ export class AutonomousToolReasoner {
         confidence: 0.85,
         params: { question: input.trim() },
         reasoning: "Autonomous reasoner detected a question about what's visible through the camera."
+      };
+    }
+
+    // 1h. Check for Gmail commands — same thin fallback-net role as the
+    // screen/camera checks above. Checked well before the "gmail" entry in
+    // the OPEN_SITE site map (section 6) so "check my email" is never
+    // misread as "open gmail.com"; plain "open gmail" still falls through to
+    // that site-map entry unchanged, since none of these require "open".
+    if (text.match(/^(?:check|any new)\s+(?:my\s+)?(?:emails?|gmail|inbox)[.!]?\s*$/i)) {
+      return {
+        shouldCallTool: true,
+        toolName: 'GMAIL_CHECK_INBOX',
+        confidence: 0.93,
+        params: {},
+        reasoning: "Autonomous reasoner detected intent to check the Gmail inbox."
+      };
+    }
+
+    const gmailSearchMatch = text.match(/(?:search|find)\s+(?:my\s+)?(?:emails?|gmail|inbox)\s+for\s+(.+)/i);
+    if (gmailSearchMatch && gmailSearchMatch[1]) {
+      return {
+        shouldCallTool: true,
+        toolName: 'GMAIL_SEARCH',
+        confidence: 0.9,
+        params: { query: gmailSearchMatch[1].trim() },
+        reasoning: `Autonomous reasoner detected intent to search Gmail for "${gmailSearchMatch[1].trim()}".`
+      };
+    }
+
+    const gmailReadMatch = text.match(/read\s+(?:me\s+)?(?:the\s+)?(?:email|message)\s+from\s+(.+)/i);
+    if (gmailReadMatch && gmailReadMatch[1]) {
+      return {
+        shouldCallTool: true,
+        toolName: 'GMAIL_READ_MESSAGE',
+        confidence: 0.88,
+        params: { query: gmailReadMatch[1].trim() },
+        reasoning: `Autonomous reasoner detected intent to read the email from "${gmailReadMatch[1].trim()}".`
       };
     }
 
