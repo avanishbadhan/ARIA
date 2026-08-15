@@ -219,7 +219,7 @@ export class JarvisCore {
       message: `[USER INPUT] "${input}"`
     });
 
-    this.onStatusChange({ status: "THINKING", message: "JARVIS processing via OpenRouter..." });
+    this.onStatusChange({ status: "THINKING", message: `JARVIS processing via ${this._activeProviderLabel()}...` });
     this.voiceEngine.playBeep(1200, 0.05, 'triangle');
 
     // 1. Notify Swarm: Queen & Reasoner agents process request
@@ -670,7 +670,7 @@ export class JarvisCore {
     }
 
     // 9. Conversational Response via OpenRouter LLM (with Local Knowledge Base fallback)
-    this._updateAgentState("agent-6", "THINKING", "Querying OpenRouter LLM API...");
+    this._updateAgentState("agent-6", "THINKING", `Querying ${this._activeProviderLabel()} LLM API...`);
 
     // Grounding tools here (but not on the MATH_QUERY/GOOGLE_SEARCH paths
     // above, which have their own dedicated grounding logic) catch cases the
@@ -684,7 +684,7 @@ export class JarvisCore {
     if (answerText) {
       this.onLog({
         type: 'SUCCESS',
-        message: `[OPENROUTER RESPONSE GENERATED] Neural completion received.`
+        message: `[LLM RESPONSE GENERATED] Neural completion received.`
       });
       this._updateAgentState("agent-6", "ACTIVE", "Completion delivered");
     } else {
@@ -747,6 +747,22 @@ export class JarvisCore {
     if (tier === 'ultra') return Boolean(this.gemini.apiKey);
     if (tier !== 'high') return false;
     return loadSettings().useGroq || !this.openRouter.apiKey;
+  }
+
+  /**
+   * Name of whichever provider _chatWithActiveLLM would actually reach for
+   * right now, given the current tier/settings/keys — used purely for
+   * status-line/log display (e.g. "JARVIS processing via Gemini...")
+   * instead of hardcoding "OpenRouter" regardless of what's really
+   * configured. Mirrors _chatWithActiveLLM's own routing decision exactly;
+   * update both together if that logic ever changes.
+   */
+  _activeProviderLabel() {
+    if (this.groq.currentTier === 'ultra' && this.gemini.apiKey) return 'Gemini';
+    const preferGroq = loadSettings().useGroq || !this.openRouter.apiKey;
+    if (preferGroq && this.groq.apiKey) return 'Groq';
+    if (this.openRouter.apiKey) return 'OpenRouter';
+    return 'local knowledge base';
   }
 
   async _chatWithActiveLLM(userInput, context, options = {}) {
@@ -906,6 +922,21 @@ export class JarvisCore {
     // eyeballing arithmetic off the screenshot — see
     // docs/superpowers/specs/2026-08-14-grounding-tool-calling-design.md.
     const options = { temperature: 0.3, maxTokens: 600, tools: this.groundingTools, toolExecutor: this.toolExecutor };
+
+    // Ultra tier routes vision questions to Gemini first, same as
+    // _chatWithActiveLLM does for text — Gemini takes images inline in the
+    // same call, no separate vision model queue needed. Falls through to
+    // the normal Groq/OpenRouter chain below on failure or no key, exactly
+    // like the text path.
+    if (this.groq.currentTier === 'ultra' && this.gemini.apiKey) {
+      try {
+        const geminiAnswer = await this.gemini.generateVisionCompletion(messages, options);
+        if (geminiAnswer) return geminiAnswer;
+      } catch (e) {
+        this.onLog({ type: 'WARNING', message: `[GEMINI VISION] ${e.message}` });
+      }
+    }
+
     const preferGroq = loadSettings().useGroq || !this.openRouter.apiKey;
 
     const tryGroq = async () => {

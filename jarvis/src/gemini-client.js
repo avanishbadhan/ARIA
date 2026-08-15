@@ -10,17 +10,41 @@ import { buildJarvisMessages } from './llm-persona.js';
 import { getModelQueue } from './model-tiers.js';
 
 /**
+ * Converts one message's content into Gemini "parts". Plain string content
+ * (normal chat) becomes a single text part. Array content — JARVIS's
+ * OpenAI-style vision message shape, [{type:'text',...}, {type:'image_url',
+ * image_url:{url: 'data:...;base64,...'}}] — becomes a text part plus an
+ * inlineData part per image, which is how Gemini accepts images in the same
+ * generateContent call as the question (no separate vision endpoint/model,
+ * unlike Groq/OpenRouter).
+ */
+function contentToParts(content) {
+  if (typeof content === 'string') return [{ text: content }];
+
+  return content
+    .map((item) => {
+      if (item.type === 'text') return { text: item.text };
+      if (item.type === 'image_url') {
+        const match = (item.image_url?.url || '').match(/^data:([^;]+);base64,(.+)$/);
+        if (match) return { inlineData: { mimeType: match[1], data: match[2] } };
+      }
+      return null;
+    })
+    .filter(Boolean);
+}
+
+/**
  * Converts JARVIS's OpenAI-style {role, content} message array into
  * Gemini's shape: a single system_instruction string plus a contents array
  * using Gemini's role names ('model' instead of 'assistant').
  */
 function toGeminiRequestBody(messages) {
-  const systemParts = messages.filter(m => m.role === 'system').map(m => m.content);
+  const systemParts = messages.filter(m => m.role === 'system').map(m => (typeof m.content === 'string' ? m.content : '')).filter(Boolean);
   const contents = messages
     .filter(m => m.role !== 'system')
     .map(m => ({
       role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }]
+      parts: contentToParts(m.content)
     }));
 
   const body = { contents };
@@ -95,6 +119,18 @@ export class GeminiClient {
     }
 
     throw lastError || new Error("All GEMINI models exhausted.");
+  }
+
+  /**
+   * Vision completion — unlike GroqClient/OpenRouterClient, Gemini needs no
+   * separate vision model queue: every model in this.modelQueue accepts
+   * inline image parts in the same generateContent call as the text, so
+   * this is a thin alias kept for interface parity with the other two
+   * clients (JarvisCore._askVisionLLM calls whichever one is active the
+   * same way regardless of provider).
+   */
+  async generateVisionCompletion(messages, options = {}) {
+    return this.generateCompletion(messages, options);
   }
 
   /**

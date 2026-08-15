@@ -109,3 +109,38 @@ test('chatWithJarvis returns the model answer on success', async () => {
 
   assert.equal(result, 'The answer is 4, Sir.');
 });
+
+test('generateVisionCompletion converts an OpenAI-style vision message into a text part plus an inlineData image part', async () => {
+  const calls = mockFetchOnce({ candidates: [{ content: { parts: [{ text: 'Three fingers.' }] } }] });
+  const client = new GeminiClient('fake-key');
+
+  await client.generateVisionCompletion([
+    { role: 'system', content: 'You are JARVIS.' },
+    {
+      role: 'user',
+      content: [
+        { type: 'text', text: 'how many fingers am I holding up?' },
+        { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,ZmFrZWZyYW1l' } }
+      ]
+    }
+  ]);
+
+  assert.deepEqual(calls[0].body.contents, [{
+    role: 'user',
+    parts: [
+      { text: 'how many fingers am I holding up?' },
+      { inlineData: { mimeType: 'image/jpeg', data: 'ZmFrZWZyYW1l' } }
+    ]
+  }]);
+});
+
+test('generateVisionCompletion returns the model answer on success', async () => {
+  mockFetchOnce({ candidates: [{ content: { parts: [{ text: 'Three fingers.' }] } }] });
+  const client = new GeminiClient('fake-key');
+
+  const result = await client.generateVisionCompletion([
+    { role: 'user', content: [{ type: 'text', text: 'how many fingers?' }, { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,ZmFrZQ==' } }] }
+  ]);
+
+  assert.equal(result, 'Three fingers.');
+});

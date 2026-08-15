@@ -85,6 +85,55 @@ test('_askVisionLLM defaults to describing a screenshot when source is omitted',
   assert.match(systemMessage.content, /screenshot/);
 });
 
+test('_askVisionLLM routes to Gemini first when on Ultra tier with a Gemini key, and Groq/OpenRouter are never called', async () => {
+  const jarvis = createJarvis();
+  jarvis.groq.currentTier = 'ultra';
+  jarvis.gemini.apiKey = 'fake-gemini-key';
+  jarvis.groq.apiKey = 'fake-groq-key';
+  jarvis.openRouter.apiKey = 'fake-openrouter-key';
+  const geminiCalls = [];
+  jarvis.gemini.generateVisionCompletion = async (messages) => { geminiCalls.push(messages); return 'Three fingers.'; };
+  jarvis.groq.generateVisionCompletion = async () => { throw new Error('should not be called'); };
+  jarvis.openRouter.generateVisionCompletion = async () => { throw new Error('should not be called'); };
+
+  const result = await jarvis._askVisionLLM({ question: 'how many fingers?', imageDataUrl: 'data:image/jpeg;base64,FAKE', source: 'camera' });
+
+  assert.equal(result, 'Three fingers.');
+  assert.equal(geminiCalls.length, 1);
+});
+
+test('_askVisionLLM falls through to Groq/OpenRouter when Gemini fails at Ultra tier', async () => {
+  saveSettings({ useGroq: true });
+  const jarvis = createJarvis();
+  jarvis.groq.currentTier = 'ultra';
+  jarvis.gemini.apiKey = 'fake-gemini-key';
+  jarvis.groq.apiKey = 'fake-groq-key';
+  jarvis.gemini.generateVisionCompletion = async () => { throw new Error('rate limited'); };
+  const groqCalls = [];
+  jarvis.groq.generateVisionCompletion = async () => { groqCalls.push(1); return 'A terminal window.'; };
+
+  const result = await jarvis._askVisionLLM({ question: 'what is this?', imageDataUrl: 'data:image/jpeg;base64,FAKE' });
+
+  assert.equal(result, 'A terminal window.');
+  assert.equal(groqCalls.length, 1);
+});
+
+test('_askVisionLLM does not attempt Gemini when not on Ultra tier, even with a Gemini key configured', async () => {
+  saveSettings({ useGroq: true });
+  const jarvis = createJarvis();
+  jarvis.groq.currentTier = 'high';
+  jarvis.gemini.apiKey = 'fake-gemini-key';
+  jarvis.groq.apiKey = 'fake-groq-key';
+  const geminiCalls = [];
+  jarvis.gemini.generateVisionCompletion = async () => { geminiCalls.push(1); return 'should not be used'; };
+  jarvis.groq.generateVisionCompletion = async () => 'A terminal window.';
+
+  const result = await jarvis._askVisionLLM({ question: 'what is this?', imageDataUrl: 'data:image/jpeg;base64,FAKE' });
+
+  assert.equal(result, 'A terminal window.');
+  assert.equal(geminiCalls.length, 0);
+});
+
 test('JarvisCore constructor wires cameraVisionHarness.askVisionLLM to _askVisionLLM, when a CameraVisionHarness was injected', async () => {
   const { JarvisCore } = await import('../src/jarvis-core.js');
   const voiceEngine = { playBeep: () => {}, playSearchLaunchSound: () => {}, speak: async () => {} };
