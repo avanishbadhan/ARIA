@@ -101,3 +101,37 @@ test('allows a params object with extra unexpected keys through unchanged', asyn
   });
   assert.deepEqual(result.params, { gameQuery: 'Elden Ring', extra: 'ignored-but-fine' });
 });
+
+test('accepts a GMAIL_CHECK_INBOX decision', async () => {
+  const result = await classifyIntentWithAI({
+    input: 'check my email',
+    classifyIntent: async () => JSON.stringify({ toolName: 'GMAIL_CHECK_INBOX', params: {} })
+  });
+  assert.equal(result.toolName, 'GMAIL_CHECK_INBOX');
+});
+
+test('accepts a GMAIL_SEARCH decision with its required query param', async () => {
+  const result = await classifyIntentWithAI({
+    input: 'search my email for the invoice',
+    classifyIntent: async () => JSON.stringify({ toolName: 'GMAIL_SEARCH', params: { query: 'the invoice' } })
+  });
+  assert.equal(result.toolName, 'GMAIL_SEARCH');
+  assert.deepEqual(result.params, { query: 'the invoice' });
+});
+
+test('rejects a GMAIL_SEARCH decision missing the required query param', async () => {
+  const result = await classifyIntentWithAI({
+    input: 'search my email',
+    classifyIntent: async () => JSON.stringify({ toolName: 'GMAIL_SEARCH', params: {} })
+  });
+  assert.equal(result, null);
+});
+
+test('accepts a GMAIL_READ_MESSAGE decision with its required query param', async () => {
+  const result = await classifyIntentWithAI({
+    input: 'read me the email from sarah',
+    classifyIntent: async () => JSON.stringify({ toolName: 'GMAIL_READ_MESSAGE', params: { query: 'sarah' } })
+  });
+  assert.equal(result.toolName, 'GMAIL_READ_MESSAGE');
+  assert.deepEqual(result.params, { query: 'sarah' });
+});

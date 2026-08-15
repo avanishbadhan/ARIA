@@ -25,6 +25,9 @@ const TOOL_PARAM_REQUIREMENTS = {
   SCREEN_MONITOR_START: [],
   SCREEN_MONITOR_STOP: [],
   SCREEN_QUERY: ['question'],
+  GMAIL_CHECK_INBOX: [],
+  GMAIL_SEARCH: ['query'],
+  GMAIL_READ_MESSAGE: ['query'],
   CONVERSATIONAL: []
 };
 
@@ -52,6 +55,9 @@ Available tools and their exact params shape:
 - SCREEN_MONITOR_START: {}
 - SCREEN_MONITOR_STOP: {}
 - SCREEN_QUERY: { question: string }
+- GMAIL_CHECK_INBOX: {} — user wants to check their email/inbox generally
+- GMAIL_SEARCH: { query: string } — user wants to search their email for something specific
+- GMAIL_READ_MESSAGE: { query: string } — user wants JARVIS to read a specific email (by sender or subject) aloud
 - CONVERSATIONAL: {} (default — no tool needed, just answer normally)
 
 If the utterance may be a mis-transcribed version of one of the above
