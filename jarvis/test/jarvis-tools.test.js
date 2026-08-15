@@ -4,7 +4,7 @@ import { GROUNDING_TOOLS, createToolExecutor } from '../src/jarvis-tools.js';
 
 test('GROUNDING_TOOLS only lists read-only tools, no action tools', () => {
   const names = GROUNDING_TOOLS.map(t => t.function.name);
-  assert.deepEqual(names, ['solve_math', 'web_search']);
+  assert.deepEqual(names, ['solve_math', 'web_search', 'list_recent_emails', 'search_emails']);
 });
 
 test('solve_math delegates to wolfram.solve with the parsed query', async () => {
@@ -79,4 +79,51 @@ test('unparseable arguments resolve to a descriptive string instead of throwing'
   const result = await executor('solve_math', 'not json');
 
   assert.match(result, /invalid/i);
+});
+
+test('list_recent_emails delegates to gmail.listRecent using the stored Google credentials', async () => {
+  const calls = [];
+  const gmail = { listRecent: async (clientId, clientSecret) => { calls.push({ clientId, clientSecret }); return { success: true, messages: [{}], message: 'You have 1 recent email.' }; } };
+  const executor = createToolExecutor({ wolfram: null, harness: null, gmail, getGoogleCredentials: () => ({ clientId: 'id', clientSecret: 'secret' }) });
+
+  const result = await executor('list_recent_emails', '{}');
+
+  assert.equal(result, 'You have 1 recent email.');
+  assert.deepEqual(calls, [{ clientId: 'id', clientSecret: 'secret' }]);
+});
+
+test('list_recent_emails returns a graceful fallback string when Gmail reports failure', async () => {
+  const gmail = { listRecent: async () => ({ success: false, message: 'not connected' }) };
+  const executor = createToolExecutor({ wolfram: null, harness: null, gmail, getGoogleCredentials: () => ({ clientId: '', clientSecret: '' }) });
+
+  const result = await executor('list_recent_emails', '{}');
+
+  assert.match(result, /not connected|no matching/i);
+});
+
+test('search_emails delegates to gmail.search with the parsed query', async () => {
+  const calls = [];
+  const gmail = { search: async (clientId, clientSecret, query) => { calls.push(query); return { success: true, messages: [{}], message: 'Found it.' }; } };
+  const executor = createToolExecutor({ wolfram: null, harness: null, gmail, getGoogleCredentials: () => ({ clientId: 'id', clientSecret: 'secret' }) });
+
+  const result = await executor('search_emails', '{"query":"recruiter"}');
+
+  assert.equal(result, 'Found it.');
+  assert.deepEqual(calls, ['recruiter']);
+});
+
+test('search_emails returns a graceful fallback string when gmail.search throws', async () => {
+  const gmail = { search: async () => { throw new Error('network error'); } };
+  const executor = createToolExecutor({ wolfram: null, harness: null, gmail, getGoogleCredentials: () => ({ clientId: 'id', clientSecret: 'secret' }) });
+
+  const result = await executor('search_emails', '{"query":"recruiter"}');
+
+  assert.match(result, /not connected|no matching/i);
+});
+
+test('list_recent_emails and search_emails fall back gracefully when gmail/getGoogleCredentials are not wired up', async () => {
+  const executor = createToolExecutor({ wolfram: null, harness: null });
+
+  assert.match(await executor('list_recent_emails', '{}'), /not connected|no matching/i);
+  assert.match(await executor('search_emails', '{"query":"x"}'), /not connected|no matching/i);
 });

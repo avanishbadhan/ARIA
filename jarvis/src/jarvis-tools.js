@@ -14,6 +14,7 @@ const NO_SEARCH_RESULT = 'No web search result found for this query.';
 // written for its tab-opening caller (executeGoogleSearch). This tool never
 // opens a tab, so that sentinel would be misleading if handed to the model.
 const HARNESS_NO_RESULT_PREFIX = 'I have launched a Google search for';
+const NO_EMAIL_RESULT = 'Gmail is not connected or no matching emails were found.';
 
 export const GROUNDING_TOOLS = [
   {
@@ -43,6 +44,32 @@ export const GROUNDING_TOOLS = [
         required: ['query']
       }
     }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_recent_emails',
+      description: "Lists the user's most recent Gmail messages (sender, subject, snippet). Use this when the user asks about recent email or their inbox without a specific search term.",
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: []
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_emails',
+      description: "Searches the user's Gmail for messages matching a query (sender name, subject keywords, or content). Use this to answer questions about a specific email or sender.",
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Search terms — sender, subject keywords, or content to match.' }
+        },
+        required: ['query']
+      }
+    }
   }
 ];
 
@@ -52,7 +79,7 @@ export const GROUNDING_TOOLS = [
  * model can still answer from its own knowledge instead of the whole
  * completion failing.
  */
-export function createToolExecutor({ wolfram, harness, onLog = () => {} }) {
+export function createToolExecutor({ wolfram, harness, gmail, getGoogleCredentials, onLog = () => {} }) {
   return async function executeTool(name, argsJson) {
     let args;
     try {
@@ -84,6 +111,33 @@ export function createToolExecutor({ wolfram, harness, onLog = () => {} }) {
       } catch (e) {
         onLog({ type: 'WARNING', message: `[TOOL CALL] web_search failed: ${e.message}` });
         return NO_SEARCH_RESULT;
+      }
+    }
+
+    if (name === 'list_recent_emails') {
+      try {
+        if (!gmail || !getGoogleCredentials) return NO_EMAIL_RESULT;
+        const { clientId, clientSecret } = getGoogleCredentials();
+        const result = await gmail.listRecent(clientId, clientSecret);
+        onLog({ type: 'TOOL', message: `[TOOL CALL] list_recent_emails() -> ${result.success ? `${result.messages.length} message(s)` : 'unavailable'}` });
+        return result.success ? result.message : NO_EMAIL_RESULT;
+      } catch (e) {
+        onLog({ type: 'WARNING', message: `[TOOL CALL] list_recent_emails failed: ${e.message}` });
+        return NO_EMAIL_RESULT;
+      }
+    }
+
+    if (name === 'search_emails') {
+      const query = args.query || '';
+      try {
+        if (!gmail || !getGoogleCredentials) return NO_EMAIL_RESULT;
+        const { clientId, clientSecret } = getGoogleCredentials();
+        const result = await gmail.search(clientId, clientSecret, query);
+        onLog({ type: 'TOOL', message: `[TOOL CALL] search_emails("${query}") -> ${result.success ? `${result.messages.length} result(s)` : 'unavailable'}` });
+        return result.success ? result.message : NO_EMAIL_RESULT;
+      } catch (e) {
+        onLog({ type: 'WARNING', message: `[TOOL CALL] search_emails failed: ${e.message}` });
+        return NO_EMAIL_RESULT;
       }
     }
 
