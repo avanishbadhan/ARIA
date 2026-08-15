@@ -318,6 +318,10 @@ function initApp() {
   // main-process loopback server)
   initSpotifyAccountPanel();
 
+  // 8c3. Google Account Connection Panel (Electron-only — OAuth needs the
+  // main-process loopback server)
+  initGoogleAccountPanel();
+
   // 8d. Model-Tier Slider (Quick/Medium/High on Groq, Ultra on Gemini)
   initTierControl();
 
@@ -607,6 +611,8 @@ function initSettingsPanel() {
   const wolframKeyInput = document.getElementById('wolframKeyInput');
   const spotifyClientIdInput = document.getElementById('spotifyClientIdInput');
   const spotifyClientSecretInput = document.getElementById('spotifyClientSecretInput');
+  const googleClientIdInput = document.getElementById('googleClientIdInput');
+  const googleClientSecretInput = document.getElementById('googleClientSecretInput');
   const apiKeysSaveBtn = document.getElementById('apiKeysSaveBtn');
   const apiKeysStatus = document.getElementById('apiKeysStatus');
 
@@ -640,6 +646,12 @@ function initSettingsPanel() {
   }
   if (spotifyClientSecretInput && localStorage.getItem('jarvis_spotify_client_secret')) {
     spotifyClientSecretInput.placeholder = '••••••••••••••••• (saved)';
+  }
+  if (googleClientIdInput && localStorage.getItem('jarvis_google_client_id')) {
+    googleClientIdInput.placeholder = '••••••••••••••••• (saved)';
+  }
+  if (googleClientSecretInput && localStorage.getItem('jarvis_google_client_secret')) {
+    googleClientSecretInput.placeholder = '••••••••••••••••• (saved)';
   }
 
   const openModal = () => settingsModal.classList.add('open');
@@ -695,6 +707,8 @@ function initSettingsPanel() {
       const wolframAppId = wolframKeyInput ? wolframKeyInput.value.trim() : '';
       const spotifyClientId = spotifyClientIdInput ? spotifyClientIdInput.value.trim() : '';
       const spotifyClientSecret = spotifyClientSecretInput ? spotifyClientSecretInput.value.trim() : '';
+      const googleClientId = googleClientIdInput ? googleClientIdInput.value.trim() : '';
+      const googleClientSecret = googleClientSecretInput ? googleClientSecretInput.value.trim() : '';
 
       if (openrouterKey) {
         localStorage.setItem('jarvis_openrouter_api_key', openrouterKey);
@@ -740,9 +754,21 @@ function initSettingsPanel() {
         spotifyClientSecretInput.value = '';
         spotifyClientSecretInput.placeholder = '••••••••••••••••• (saved)';
       }
+      if (googleClientId) {
+        localStorage.setItem('jarvis_google_client_id', googleClientId);
+        if (jarvis) jarvis.googleClientId = googleClientId;
+        googleClientIdInput.value = '';
+        googleClientIdInput.placeholder = '••••••••••••••••• (saved)';
+      }
+      if (googleClientSecret) {
+        localStorage.setItem('jarvis_google_client_secret', googleClientSecret);
+        if (jarvis) jarvis.googleClientSecret = googleClientSecret;
+        googleClientSecretInput.value = '';
+        googleClientSecretInput.placeholder = '••••••••••••••••• (saved)';
+      }
 
       if (apiKeysStatus) {
-        if (openrouterKey || groqKey || geminiKey || deepgramKey || wolframAppId || spotifyClientId || spotifyClientSecret) {
+        if (openrouterKey || groqKey || geminiKey || deepgramKey || wolframAppId || spotifyClientId || spotifyClientSecret || googleClientId || googleClientSecret) {
           apiKeysStatus.textContent = '✅ Saved.';
           apiKeysStatus.style.color = '#39ff14';
         } else {
@@ -763,6 +789,18 @@ function initSettingsPanel() {
 function getSavedSpotifyCredentials() {
   const clientId = localStorage.getItem('jarvis_spotify_client_id') || '';
   const clientSecret = localStorage.getItem('jarvis_spotify_client_secret') || '';
+  return { clientId, clientSecret };
+}
+
+/**
+ * Reads the currently-saved Google Client ID/Secret the same way
+ * JarvisCore does (Settings-saved localStorage values) — kept local rather
+ * than reading off the `jarvis` instance since these panels can init before
+ * it's constructed.
+ */
+function getSavedGoogleCredentials() {
+  const clientId = localStorage.getItem('jarvis_google_client_id') || '';
+  const clientSecret = localStorage.getItem('jarvis_google_client_secret') || '';
   return { clientId, clientSecret };
 }
 
@@ -829,6 +867,75 @@ function initSpotifyAccountPanel() {
   if (disconnectBtn) {
     disconnectBtn.addEventListener('click', async () => {
       await jarvis.spotifyHarness.logout();
+      render(false);
+    });
+  }
+}
+
+/**
+ * Wires the Settings modal's "Google Account" section to
+ * GoogleAccountConnector's OAuth methods (which wrap electron/preload.cjs ->
+ * electron/main.cjs). Hidden entirely outside Electron, since the OAuth
+ * loopback server only runs in the main process. Mirrors
+ * initSpotifyAccountPanel() exactly.
+ */
+function initGoogleAccountPanel() {
+  if (typeof window === 'undefined' || !window.jarvisElectron?.googleAuth || !jarvis) return;
+
+  const section = document.getElementById('googleAccountSection');
+  const statusEl = document.getElementById('googleAccountStatus');
+  const connectBtn = document.getElementById('googleConnectBtn');
+  const disconnectBtn = document.getElementById('googleDisconnectBtn');
+
+  if (!section || !connectBtn) return;
+  section.style.display = '';
+
+  const render = (authenticated) => {
+    if (statusEl) {
+      statusEl.textContent = authenticated ? '✅ Connected' : 'Not connected';
+      statusEl.style.color = authenticated ? '#39ff14' : 'var(--text-dim)';
+    }
+    connectBtn.style.display = authenticated ? 'none' : '';
+    if (disconnectBtn) disconnectBtn.style.display = authenticated ? '' : 'none';
+  };
+
+  jarvis.googleAccountConnector.authStatus().then(({ authenticated }) => render(authenticated));
+
+  connectBtn.addEventListener('click', async () => {
+    const { clientId, clientSecret } = getSavedGoogleCredentials();
+    if (!clientId || !clientSecret) {
+      if (statusEl) {
+        statusEl.textContent = 'Save a Google Client ID/Secret above first.';
+        statusEl.style.color = '#ff9f1c';
+      }
+      return;
+    }
+
+    connectBtn.disabled = true;
+    connectBtn.textContent = 'CONNECTING… (check your browser)';
+    if (statusEl) {
+      statusEl.textContent = 'Approve access in the browser tab that just opened…';
+      statusEl.style.color = 'var(--text-dim)';
+    }
+
+    try {
+      await jarvis.googleAccountConnector.login(clientId, clientSecret);
+      render(true);
+    } catch (err) {
+      if (statusEl) {
+        statusEl.textContent = `Connection failed: ${err.message}`;
+        statusEl.style.color = '#ff3b3b';
+      }
+      render(false);
+    } finally {
+      connectBtn.disabled = false;
+      connectBtn.textContent = 'CONNECT GOOGLE ACCOUNT';
+    }
+  });
+
+  if (disconnectBtn) {
+    disconnectBtn.addEventListener('click', async () => {
+      await jarvis.googleAccountConnector.logout();
       render(false);
     });
   }
