@@ -16,7 +16,7 @@ export class AutonomousToolReasoner {
    * Format returned:
    * {
    *    shouldCallTool: true|false,
-   *    toolName: 'GOOGLE_SEARCH' | 'STEAM_LAUNCH_GAME' | 'STEAM_OPEN_CLIENT' | 'SPOTIFY_PLAY_SONG' | 'SPOTIFY_PLAY_LIBRARY' | 'SPOTIFY_OPEN_CLIENT' | 'EPIC_OPEN_CLIENT' | 'XBOX_OPEN_CLIENT' | 'XBOX_LAUNCH_GAME' | 'EPIC_LAUNCH_GAME' | 'OPEN_SITE' | 'MATH_QUERY' | 'SET_MODEL_TIER' | 'SCREEN_MONITOR_START' | 'SCREEN_MONITOR_STOP' | 'SCREEN_QUERY' | 'CAMERA_START' | 'CAMERA_STOP' | 'CONVERSATIONAL',
+   *    toolName: 'GOOGLE_SEARCH' | 'STEAM_LAUNCH_GAME' | 'STEAM_OPEN_CLIENT' | 'SPOTIFY_PLAY_SONG' | 'SPOTIFY_PLAY_LIBRARY' | 'SPOTIFY_OPEN_CLIENT' | 'EPIC_OPEN_CLIENT' | 'XBOX_OPEN_CLIENT' | 'XBOX_LAUNCH_GAME' | 'EPIC_LAUNCH_GAME' | 'OPEN_SITE' | 'MATH_QUERY' | 'SET_MODEL_TIER' | 'SCREEN_MONITOR_START' | 'SCREEN_MONITOR_STOP' | 'SCREEN_QUERY' | 'CAMERA_START' | 'CAMERA_STOP' | 'CAMERA_QUERY' | 'CONVERSATIONAL',
    *    confidence: 0.0 to 1.0,
    *    params: { ... },
    *    reasoning: "Explanation of autonomous decision"
@@ -289,6 +289,17 @@ export class AutonomousToolReasoner {
         confidence: 0.93,
         params: {},
         reasoning: "Autonomous reasoner detected intent to close the camera vision feed."
+      };
+    }
+
+    const cameraQueryPattern = /what am i holding|how many fingers|what('?s| is) (?:in front of|on) (?:the |my )?camera|what do you see(?: in the camera)?|look at (?:the |my )?camera|can you see me|what am i wearing|what color (?:is this|am i)/i;
+    if (cameraQueryPattern.test(text)) {
+      return {
+        shouldCallTool: true,
+        toolName: 'CAMERA_QUERY',
+        confidence: 0.85,
+        params: { question: input.trim() },
+        reasoning: "Autonomous reasoner detected a question about what's visible through the camera."
       };
     }
 

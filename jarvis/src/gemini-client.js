@@ -66,14 +66,17 @@ export class GeminiClient {
           body: JSON.stringify(body)
         });
 
-        if (response.status === 404 || response.status === 429) {
-          lastError = new Error(`HTTP ${response.status}`);
-          continue;
-        }
+        // Read the body even on failure — Google's error responses include a
+        // real message (e.g. "models/x is not found for API version v1beta")
+        // that's the only way to tell a bad model name apart from a bad key
+        // or a rate limit. Swallowing it down to a bare "HTTP 404" made a
+        // real production failure undebuggable (see incident where every
+        // model in the queue 404'd and the log gave no reason why).
+        const data = await response.json().catch(() => ({}));
 
-        const data = await response.json();
         if (!response.ok) {
           lastError = new Error(data?.error?.message || `HTTP ${response.status}`);
+          this.onLog({ type: 'WARNING', message: `[GEMINI] ${model} failed: ${lastError.message}. Trying next model...` });
           continue;
         }
 
@@ -84,6 +87,7 @@ export class GeminiClient {
         }
 
         lastError = new Error("Empty completion returned.");
+        this.onLog({ type: 'WARNING', message: `[GEMINI] ${model} returned no usable content. Trying next model...` });
       } catch (e) {
         lastError = e;
         this.onLog({ type: 'WARNING', message: `[GEMINI] ${model} failed: ${e.message}. Trying next model...` });

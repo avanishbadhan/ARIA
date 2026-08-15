@@ -142,7 +142,14 @@ export class JarvisCore {
     // DOM elements (video/canvas), so it's constructed by main.js (which
     // already holds those refs) and injected here rather than built
     // locally. May be null/undefined outside a browser context (tests).
+    // askVisionLLM is wired here (not passed in from main.js) since it
+    // needs `this`, which doesn't exist yet at the point main.js builds
+    // the harness — same _askVisionLLM used by screenVisionHarness above,
+    // just with source: 'camera' passed by CameraVisionHarness itself.
     this.cameraVisionHarness = options.cameraVisionHarness || null;
+    if (this.cameraVisionHarness) {
+      this.cameraVisionHarness.askVisionLLM = (args) => this._askVisionLLM(args);
+    }
 
     // Short-term conversational memory: keeps the last few user/assistant turns
     // so follow-up questions ("what about its sequel?") resolve against prior context.
@@ -645,6 +652,23 @@ export class JarvisCore {
       return;
     }
 
+    // 8g. Handle Camera Vision Questions ("how many fingers am I holding up")
+    if (decision.toolName === 'CAMERA_QUERY') {
+      this._updateAgentState("agent-3", "EXECUTING", `Reading camera: "${decision.params.question}"`);
+      this.voiceEngine.playSearchLaunchSound();
+
+      const result = this.cameraVisionHarness
+        ? await this.cameraVisionHarness.askAboutCamera(decision.params.question)
+        : { success: false, message: 'Camera vision is not available here, Sir.' };
+
+      this.onResponse({ text: result.message, actionType: 'CAMERA_QUERY', data: result });
+
+      this._updateAgentState("agent-3", "ACTIVE", result.success ? "Camera question answered" : "Camera capture failed");
+      this._pushHistory(input, result.message);
+      await this.voiceEngine.speak(result.message);
+      return;
+    }
+
     // 9. Conversational Response via OpenRouter LLM (with Local Knowledge Base fallback)
     this._updateAgentState("agent-6", "THINKING", "Querying OpenRouter LLM API...");
 
@@ -847,16 +871,23 @@ export class JarvisCore {
   }
 
   /**
-   * Screen-vision completion — same Groq/OpenRouter preferGroq pattern as
-   * _resolveEntityWithLLM and _classifyIntentWithAI, but calls the dedicated
-   * generateVisionCompletion() (a separate model queue — most text models
-   * can't accept image content) with an OpenAI-compatible vision message.
+   * Screen/camera-vision completion — same Groq/OpenRouter preferGroq
+   * pattern as _resolveEntityWithLLM and _classifyIntentWithAI, but calls
+   * the dedicated generateVisionCompletion() (a separate model queue —
+   * most text models can't accept image content) with an OpenAI-compatible
+   * vision message. Shared by both ScreenVisionHarness and
+   * CameraVisionHarness (see their constructor wiring below) —
+   * source distinguishes a screenshot from a live webcam frame so the
+   * system prompt describes the image accurately.
    */
-  async _askVisionLLM({ question, imageDataUrl }) {
+  async _askVisionLLM({ question, imageDataUrl, source = 'screen' }) {
+    const sourceDescription = source === 'camera'
+      ? "a live photo just captured from the user's webcam"
+      : "a screenshot of the user's screen";
     const messages = [
       {
         role: 'system',
-        content: "You are JARVIS, analyzing a screenshot of the user's screen. Answer their question about what is visible concisely (1-3 sentences), as JARVIS would speak it aloud. If the screenshot doesn't contain enough information to answer, say so honestly."
+        content: `You are JARVIS, analyzing ${sourceDescription}. Answer their question about what is visible concisely (1-3 sentences), as JARVIS would speak it aloud. If the image doesn't contain enough information to answer, say so honestly.`
       },
       {
         role: 'user',

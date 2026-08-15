@@ -8,9 +8,10 @@ function fakeCanvas() {
     strokeRect() {},
     fillRect() {},
     fillText() {},
+    drawImage() {},
     measureText: () => ({ width: 40 })
   };
-  return { width: 320, height: 240, getContext: () => ctx };
+  return { width: 320, height: 240, getContext: () => ctx, toDataURL: () => 'data:image/jpeg;base64,FAKEFRAME' };
 }
 
 function fakeVideo() {
@@ -37,6 +38,8 @@ function makeHarness(overrides = {}) {
       loadModel: async () => ({ detect: async () => [] }),
       requestAnimationFrame: (fn) => { rafCallbacks.push(fn); return rafCallbacks.length; },
       cancelAnimationFrame: () => {},
+      createElement: () => fakeCanvas(),
+      delay: async () => {},
       ...overrides
     }),
     rafCallbacks
@@ -143,4 +146,67 @@ test('close() cancels the pending animation frame and stops the detection loop',
 
   assert.equal(harness.isDetecting, false);
   assert.deepEqual(cancelled, [harness.animId]);
+});
+
+test('askAboutCamera opens the camera, captures a frame, asks the vision LLM, and returns its answer', async () => {
+  const visionCalls = [];
+  const { harness } = makeHarness({
+    askVisionLLM: async (args) => { visionCalls.push(args); return 'You are holding up three fingers, Sir.'; }
+  });
+
+  const result = await harness.askAboutCamera('how many fingers am I holding up');
+
+  assert.equal(result.success, true);
+  assert.equal(result.message, 'You are holding up three fingers, Sir.');
+  assert.equal(visionCalls.length, 1);
+  assert.equal(visionCalls[0].question, 'how many fingers am I holding up');
+  assert.equal(visionCalls[0].source, 'camera');
+  assert.equal(visionCalls[0].imageDataUrl, 'data:image/jpeg;base64,FAKEFRAME');
+});
+
+test('askAboutCamera closes the camera again afterward if it had to open it for this call', async () => {
+  const { harness } = makeHarness({ askVisionLLM: async () => 'answer' });
+
+  await harness.askAboutCamera('what am I holding');
+
+  assert.equal(harness.isOpen, false, 'camera is closed again since it was not already open');
+});
+
+test('askAboutCamera leaves the camera open afterward if it was already open before the call', async () => {
+  const { harness } = makeHarness({ askVisionLLM: async () => 'answer' });
+  await harness.open();
+
+  await harness.askAboutCamera('what am I holding');
+
+  assert.equal(harness.isOpen, true, 'camera stays open since the caller had it open already');
+});
+
+test('askAboutCamera reports failure gracefully when no vision-capable LLM is configured', async () => {
+  const { harness } = makeHarness(); // no askVisionLLM injected
+
+  const result = await harness.askAboutCamera('what am I holding');
+
+  assert.equal(result.success, false);
+});
+
+test('askAboutCamera reports failure gracefully when the camera itself fails to open', async () => {
+  const { harness } = makeHarness({
+    mediaDevices: { getUserMedia: async () => { throw new Error('Permission denied'); } },
+    askVisionLLM: async () => 'should not be called'
+  });
+
+  const result = await harness.askAboutCamera('what am I holding');
+
+  assert.equal(result.success, false);
+});
+
+test('askAboutCamera reports failure gracefully when the video never produces a frame', async () => {
+  const { harness } = makeHarness({
+    videoEl: { srcObject: null, videoWidth: 0, videoHeight: 0 },
+    askVisionLLM: async () => 'should not be called'
+  });
+
+  const result = await harness.askAboutCamera('what am I holding');
+
+  assert.equal(result.success, false);
 });

@@ -39,6 +39,41 @@ test('"open camera" without a CameraVisionHarness (non-browser context) speaks a
   assert.deepEqual(spoken, ['Camera vision is not available here, Sir.']);
 });
 
+test('"how many fingers am I holding up" routes to CameraVisionHarness.askAboutCamera and speaks its answer', async () => {
+  const jarvis = createJarvis();
+  const calls = [];
+  jarvis.cameraVisionHarness = { askAboutCamera: async (question) => { calls.push(question); return { success: true, message: 'You are holding up three fingers, Sir.' }; } };
+  const spoken = [];
+  jarvis.voiceEngine.speak = async (text) => { spoken.push(text); };
+
+  await jarvis.processUserInput('how many fingers am I holding up');
+
+  assert.deepEqual(calls, ['how many fingers am I holding up']);
+  assert.deepEqual(spoken, ['You are holding up three fingers, Sir.']);
+});
+
+test('a camera-vision failure result is still spoken as-is, not treated as a crash', async () => {
+  const jarvis = createJarvis();
+  jarvis.cameraVisionHarness = { askAboutCamera: async () => ({ success: false, message: "I wasn't able to access the camera, Sir." }) };
+  const spoken = [];
+  jarvis.voiceEngine.speak = async (text) => { spoken.push(text); };
+
+  await jarvis.processUserInput('what am I holding');
+
+  assert.deepEqual(spoken, ["I wasn't able to access the camera, Sir."]);
+});
+
+test('a camera query without a CameraVisionHarness (non-browser context) speaks an unavailable message instead of crashing', async () => {
+  const jarvis = createJarvis();
+  jarvis.cameraVisionHarness = null;
+  const spoken = [];
+  jarvis.voiceEngine.speak = async (text) => { spoken.push(text); };
+
+  await jarvis.processUserInput('what am I holding');
+
+  assert.deepEqual(spoken, ['Camera vision is not available here, Sir.']);
+});
+
 test('a non-camera query never calls the CameraVisionHarness', async () => {
   const jarvis = createJarvis();
   jarvis.cameraCalls = [];

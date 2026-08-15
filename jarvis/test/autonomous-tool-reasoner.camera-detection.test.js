@@ -20,18 +20,36 @@ for (const query of cameraStopCases) {
   });
 }
 
+const cameraQueryCases = [
+  'how many fingers am I holding up',
+  'what am I holding',
+  "what's in front of the camera",
+  'what do you see',
+  'can you see me',
+  'what am I wearing'
+];
+for (const query of cameraQueryCases) {
+  test(`classifies "${query}" as CAMERA_QUERY with the full input as the question`, () => {
+    const decision = reasoner.evaluateIntent(query);
+    assert.equal(decision.toolName, 'CAMERA_QUERY');
+    assert.equal(decision.params.question, query);
+  });
+}
+
 const nonCameraQueries = [
   'what is the capital of France',
   'play Cyberpunk 2077',
   'switch mode to high',
   'open spotify',
   'open steam',
-  'start monitoring my screen'
+  'start monitoring my screen',
+  "what's on my screen"
 ];
 for (const query of nonCameraQueries) {
   test(`does not classify "${query}" as a camera command`, () => {
     const decision = reasoner.evaluateIntent(query);
     assert.notEqual(decision.toolName, 'CAMERA_START');
     assert.notEqual(decision.toolName, 'CAMERA_STOP');
+    assert.notEqual(decision.toolName, 'CAMERA_QUERY');
   });
 }

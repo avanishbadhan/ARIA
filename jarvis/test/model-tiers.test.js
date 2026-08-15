@@ -26,8 +26,20 @@ test('getModelQueue returns just the primary model for tiers with no configured 
   assert.deepEqual(getModelQueue('high'), ['openai/gpt-oss-120b']);
 });
 
-test('getModelQueue("ultra") tries gemini-2.5-pro first, then falls back through older Gemini models', () => {
-  assert.deepEqual(getModelQueue('ultra'), ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro']);
+test('getModelQueue("ultra") tries the newest Gemini model first, then falls back through older generations', () => {
+  assert.deepEqual(getModelQueue('ultra'), [
+    'gemini-3.6-flash',
+    'gemini-3.5-flash',
+    'gemini-3.5-flash-lite',
+    'gemini-3.1-pro-preview',
+    'gemini-3-flash-preview',
+    'gemini-2.5-pro',
+    'gemini-2.5-flash',
+    'gemini-2.5-flash-lite',
+    'gemini-2.0-flash',
+    'gemini-1.5-flash',
+    'gemini-1.5-pro'
+  ]);
 });
 
 test('getModelQueue returns an empty array for an unknown tier', () => {

@@ -59,3 +59,42 @@ test('JarvisCore constructor wires screenVisionHarness.askVisionLLM to _askVisio
 
   assert.equal(answer, 'wired-answer');
 });
+
+test('_askVisionLLM describes the image as a webcam frame when source is "camera"', async () => {
+  const jarvis = createJarvis();
+  jarvis.groq.apiKey = 'fake-groq-key';
+  const groqCalls = [];
+  jarvis.groq.generateVisionCompletion = async (messages) => { groqCalls.push(messages); return 'Three fingers.'; };
+
+  await jarvis._askVisionLLM({ question: 'how many fingers?', imageDataUrl: 'data:image/jpeg;base64,FAKE', source: 'camera' });
+
+  const systemMessage = groqCalls[0].find(m => m.role === 'system');
+  assert.match(systemMessage.content, /webcam/);
+  assert.doesNotMatch(systemMessage.content, /screenshot/);
+});
+
+test('_askVisionLLM defaults to describing a screenshot when source is omitted', async () => {
+  const jarvis = createJarvis();
+  jarvis.groq.apiKey = 'fake-groq-key';
+  const groqCalls = [];
+  jarvis.groq.generateVisionCompletion = async (messages) => { groqCalls.push(messages); return 'A terminal.'; };
+
+  await jarvis._askVisionLLM({ question: 'what is this?', imageDataUrl: 'data:image/jpeg;base64,FAKE' });
+
+  const systemMessage = groqCalls[0].find(m => m.role === 'system');
+  assert.match(systemMessage.content, /screenshot/);
+});
+
+test('JarvisCore constructor wires cameraVisionHarness.askVisionLLM to _askVisionLLM, when a CameraVisionHarness was injected', async () => {
+  const { JarvisCore } = await import('../src/jarvis-core.js');
+  const voiceEngine = { playBeep: () => {}, playSearchLaunchSound: () => {}, speak: async () => {} };
+  const harness = { executeGoogleSearch: async () => ({}), openWebsite: () => ({}) };
+  const cameraVisionHarness = {};
+
+  const jarvis = new JarvisCore(voiceEngine, harness, { cameraVisionHarness });
+  jarvis._askVisionLLM = async () => 'wired-answer';
+
+  const answer = await cameraVisionHarness.askVisionLLM({ question: 'x', imageDataUrl: 'y' });
+
+  assert.equal(answer, 'wired-answer');
+});

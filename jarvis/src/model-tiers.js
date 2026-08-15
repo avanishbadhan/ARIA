@@ -13,12 +13,34 @@ export const MODEL_TIERS = {
   quick: { provider: 'groq', model: 'llama-3.1-8b-instant', fallbackModels: ['openai/gpt-oss-20b'], label: 'Quick' },
   medium: { provider: 'groq', model: 'llama-3.3-70b-versatile', label: 'Medium' },
   high: { provider: 'groq', model: 'openai/gpt-oss-120b', label: 'High' },
-  // Gemini — requires its own API key (Settings). Falls back through
-  // progressively older Gemini models rather than to a different provider,
+  // Gemini — requires its own API key (Settings). Falls back through a wide
+  // range of Gemini model generations rather than to a different provider,
   // so an Ultra request stays on Gemini as long as any key-eligible model
   // is reachable; only exhausting this whole queue falls through to
-  // Groq/OpenRouter (see JarvisCore._chatWithActiveLLM).
-  ultra: { provider: 'gemini', model: 'gemini-2.5-pro', fallbackModels: ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro'], label: 'Ultra' }
+  // Groq/OpenRouter (see JarvisCore._chatWithActiveLLM). Ordered newest
+  // first to match public/js/gemini.js's independently-maintained list —
+  // Google's model lineup moves fast enough that a short, conservative
+  // queue here previously 404'd on every entry in production; if a model
+  // in this list gets retired, add its replacement rather than trimming,
+  // since a stale name simply falls through to the next one at near-zero
+  // cost.
+  ultra: {
+    provider: 'gemini',
+    model: 'gemini-3.6-flash',
+    fallbackModels: [
+      'gemini-3.5-flash',
+      'gemini-3.5-flash-lite',
+      'gemini-3.1-pro-preview',
+      'gemini-3-flash-preview',
+      'gemini-2.5-pro',
+      'gemini-2.5-flash',
+      'gemini-2.5-flash-lite',
+      'gemini-2.0-flash',
+      'gemini-1.5-flash',
+      'gemini-1.5-pro'
+    ],
+    label: 'Ultra'
+  }
 };
 
 export const TIER_ORDER = ['quick', 'medium', 'high', 'ultra'];

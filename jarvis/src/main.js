@@ -209,7 +209,7 @@ function initApp() {
         // than leaving the thumb sitting on a switch that didn't happen.
         syncTierControl(data?.applied ? data.tier : jarvis.groq.currentTier);
       }
-      if (actionType === 'CAMERA_START' || actionType === 'CAMERA_STOP') {
+      if (actionType === 'CAMERA_START' || actionType === 'CAMERA_STOP' || actionType === 'CAMERA_QUERY') {
         const cameraStatus = document.getElementById('cameraStatus');
         if (cameraStatus) cameraStatus.textContent = text;
         const cameraToggleBtn = document.getElementById('cameraToggleBtn');

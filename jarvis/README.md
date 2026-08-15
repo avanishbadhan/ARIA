@@ -126,15 +126,24 @@ rather than failing silently.
 ## Camera Vision
 
 The **📷 Camera Vision Harness** panel (left column, below the Steam
-launcher) opens your webcam and runs a live TensorFlow.js/COCO-SSD object
-detector over the feed, drawing bounding boxes and labels directly on the
-video — a real-time HUD overlay, not an LLM call. Click **OPEN CAMERA**, or
-say **"open camera"** / **"close camera"** (also understands "start/stop
-camera" and "turn on/off camera"). No API key or setup required — it just
-asks for webcam permission the first time. This is a local, real-time
-detector distinct from **Screen Vision** (`SCREEN_QUERY` — "what's on my
-screen") above, which snapshots the screen and asks an LLM a question about
-it instead of detecting objects live.
+launcher) does two distinct things:
+
+- **Live object detection** — opens your webcam and runs a TensorFlow.js/
+  COCO-SSD detector over the feed, drawing bounding boxes and labels
+  directly on the video in real time. No API key or LLM call involved.
+  Click **OPEN CAMERA**, or say **"open camera"** / **"close camera"**
+  (also understands "start/stop camera" and "turn on/off camera").
+- **Ask a question about what the camera sees** — say things like **"how
+  many fingers am I holding up"**, **"what am I holding"**, or **"what do
+  you see"** and JARVIS captures a single frame and asks it to a
+  vision-capable LLM (same Groq/OpenRouter vision path as Screen Vision
+  below), speaking back the answer. Opens the camera automatically for the
+  question if it wasn't already open, and closes it again afterward if so.
+
+No API key or setup is required for either — just webcam permission the
+first time. This is distinct from **Screen Vision** (`SCREEN_QUERY` —
+"what's on my screen") below, which asks the same kind of question about a
+screenshot of the screen instead of the webcam.
 
 ## Running it
 
