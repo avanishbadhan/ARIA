@@ -2,8 +2,9 @@
 
 A desktop voice assistant with wake-word listening ("Jarvis" / "Hey Jarvis"),
 OpenRouter/Groq-powered conversation, Google search automation, WolframAlpha-
-grounded math, a Steam game launcher, a Spotify launcher, and self-updating
-via GitHub Releases — built as an Electron app with a HUD-style web UI.
+grounded math, a Steam game launcher, a Spotify launcher, read-only Gmail
+access, and self-updating via GitHub Releases — built as an Electron app
+with a HUD-style web UI.
 
 ## Setup
 
@@ -36,6 +37,7 @@ provide keys:
 | `VITE_WOLFRAM_APP_ID` | Optional — grounds math answers in a real computation instead of the LLM guessing | https://products.wolframalpha.com/api |
 | `VITE_STEAM_API_KEY` + `VITE_STEAM_ID` | Optional — launch games from your real library by name | https://steamcommunity.com/dev/apikey and https://steamid.io |
 | `VITE_SPOTIFY_CLIENT_ID` + `VITE_SPOTIFY_CLIENT_SECRET` | Optional — resolves the exact track so "play X on Spotify" auto-plays instead of just opening a search | https://developer.spotify.com/dashboard |
+| `VITE_GOOGLE_CLIENT_ID` + `VITE_GOOGLE_CLIENT_SECRET` | Optional — lets JARVIS check/search/read your Gmail (read-only) | https://console.cloud.google.com/apis/credentials |
 
 Steam credentials have their own setup box in the left panel of the app —
 same idea, paste and save, no `.env` required.
@@ -54,15 +56,17 @@ Click **⚙️ SETTINGS** in the header to configure:
   reactor that reacts while JARVIS is speaking. It approximates loudness
   from speech cadence (word boundaries), not a literal decibel reading —
   browsers don't expose an audio stream for built-in text-to-speech.
-- **API Keys** — OpenRouter, Groq, Deepgram, WolframAlpha, and Spotify, as
-  described above. OpenRouter, Groq, WolframAlpha, and Spotify key changes
-  apply immediately; a newly added Deepgram key requires restarting JARVIS to
-  take effect. Without a WolframAlpha key, math questions ("what is 5 plus 3",
-  "square root of 144") are answered by whichever LLM is active instead —
-  still works, just not guaranteed to be arithmetically correct. Without a
-  Spotify Client ID/Secret (or when running outside the packaged Electron
-  app), "play X on Spotify" opens the Spotify app pre-searched for X instead
-  of auto-playing the exact track.
+- **API Keys** — OpenRouter, Groq, Deepgram, WolframAlpha, Spotify, and
+  Google, as described above. OpenRouter, Groq, WolframAlpha, Spotify, and
+  Google key changes apply immediately; a newly added Deepgram key requires
+  restarting JARVIS to take effect. Without a WolframAlpha key, math
+  questions ("what is 5 plus 3", "square root of 144") are answered by
+  whichever LLM is active instead — still works, just not guaranteed to be
+  arithmetically correct. Without a Spotify Client ID/Secret (or when running
+  outside the packaged Electron app), "play X on Spotify" opens the Spotify
+  app pre-searched for X instead of auto-playing the exact track. Without a
+  connected Google account, Gmail commands ("check my email") prompt you to
+  connect one in Settings instead of failing silently.
 - **Use Groq instead of OpenRouter** — Y/N. Groq's `llama-3.1-8b-instant` is
   much faster than OpenRouter's free model pool. This is only needed to
   *prefer* Groq when you have both keys set — if you only set a Groq key and
@@ -122,6 +126,44 @@ before.
 Either way, if the exact track can't be resolved (typo, obscure title, no
 credentials, API error), JARVIS always falls back to opening Spotify search
 rather than failing silently.
+
+## Google Account / Gmail
+
+JARVIS can check, search, and read your Gmail — read-only, nothing is ever
+sent, deleted, or modified.
+
+**Setup (one-time, in Google Cloud Console):**
+
+1. Create a project at [console.cloud.google.com](https://console.cloud.google.com/projectcreate)
+   (or reuse an existing one).
+2. Enable the **Gmail API** under APIs & Services → Library.
+3. Configure the **OAuth consent screen** (External is fine for personal
+   use) and add your own Google account as a test user.
+4. Under APIs & Services → Credentials, create an **OAuth client ID** of
+   type **Desktop app**. Copy the generated Client ID and Client Secret.
+5. Under that same client's settings, add this exact **Authorized redirect
+   URI**: `http://127.0.0.1:43418/callback`
+6. In JARVIS, open **⚙️ SETTINGS**, paste the Client ID/Secret into the API
+   Keys section, click **SAVE KEYS**, then click **CONNECT GOOGLE ACCOUNT**
+   in the Google Account section and approve access in the browser tab that
+   opens.
+
+**Voice/text commands:**
+
+- **"Check my email"** — reads back a summary of your most recent inbox
+  messages.
+- **"Search my email for the invoice"** — full-text searches your mailbox
+  (same syntax as the Gmail search bar) and summarizes the top matches.
+- **"Read me the email from Sarah"** — finds the best-matching message and
+  reads its full body aloud.
+
+JARVIS can also reach for `list_recent_emails`/`search_emails` on its own
+mid-conversation (e.g. "did I hear back from the recruiter?") the same way
+it already does for WolframAlpha and web search — see **Model Tiers**
+above for which providers support this autonomous tool-calling today.
+
+Without a connected Google account, all three commands respond with a
+prompt to connect one in Settings rather than failing silently.
 
 ## Camera Vision
 
