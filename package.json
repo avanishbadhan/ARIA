@@ -5,7 +5,9 @@
   "main": "src/index.js",
   "type": "module",
   "scripts": {
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "dev": "npm --prefix jarvis run dev",
+    "electron": "npm --prefix jarvis run electron"
   },
   "license": "MIT"
 }
