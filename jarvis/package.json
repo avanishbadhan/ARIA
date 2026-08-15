@@ -1,0 +1,55 @@
+{
+  "name": "jarvis-voice-ai",
+  "private": true,
+  "version": "1.6.4",
+  "description": "JARVIS voice AI desktop assistant",
+  "author": "Jarvis Voice AI",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite --host --port 3000",
+    "build": "vite build && node scripts/check-dist-for-secrets.cjs",
+    "preview": "vite preview",
+    "electron": "electron .",
+    "electron:build": "vite build && node scripts/check-dist-for-secrets.cjs && electron-builder --win",
+    "electron:release": "vite build && node scripts/check-dist-for-secrets.cjs && electron-builder --win --publish always",
+    "test": "node --test \"test/**/*.test.js\""
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9",
+    "lucide": "^0.344.0"
+  },
+  "devDependencies": {
+    "electron": "^43.3.0",
+    "electron-builder": "^24.13.3",
+    "vite": "^5.1.4"
+  },
+  "build": {
+    "appId": "com.jarvis.voiceai",
+    "productName": "JARVIS",
+    "directories": {
+      "output": "release"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "Taksh-Biyani",
+      "repo": "jarvis-voice-ai",
+      "releaseType": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "electron/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}

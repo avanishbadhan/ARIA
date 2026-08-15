@@ -1,0 +1,33 @@
+# Secrets — never commit real credentials
+.env
+.env.local
+.env.*.local
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+release/
+
+# Local tool/agent state (machine-specific, not part of the project)
+.claude/
+.claude-flow/
+.swarm/
+*.db
+*.db-shm
+*.db-wal
+
+# Internal planning docs (superpowers skill specs/plans — not for end users)
+docs/superpowers/
+
+# graphify knowledge graph output (regenerable, machine-specific)
+graphify-out/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS cruft
+.DS_Store
+Thumbs.db

@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>J.A.R.V.I.S. Voice AI System | Swarm & Tool Harness</title>
+  <link rel="stylesheet" href="/src/styles.css">
+</head>
+<body>
+  <div class="grid-bg"></div>
+
+  <div id="app">
+    <!-- Header Navbar -->
+    <header class="hud-header">
+      <div class="brand">
+        <div class="brand-icon">⚡</div>
+        <div>
+          <h1 class="brand-title">J.A.R.V.I.S.</h1>
+          <div class="brand-subtitle">MULTI-AGENT SWARM & AUTOMATION HARNESS</div>
+        </div>
+      </div>
+
+      <div class="tier-control" id="tierControl" title="Groq model tier — drag, or say &quot;switch mode to quick/medium/high/ultra&quot;">
+        <span class="tier-control-icon">🧠</span>
+        <div class="tier-control-track">
+          <input type="range" id="tierSlider" class="tier-slider" min="0" max="3" step="1" value="0" disabled />
+          <div class="tier-control-ticks">
+            <span>Quick</span><span>Medium</span><span>High</span><span>Ultra</span>
+          </div>
+        </div>
+        <span class="tier-control-label" id="tierControlLabel">Add Groq key</span>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <button class="btn-harness" id="settingsBtn" style="border-color: var(--border-cyan); color: var(--cyan-bright); position: relative;" title="Settings">
+          ⚙️ SETTINGS
+          <span class="settings-update-badge" id="settingsUpdateBadge"></span>
+        </button>
+
+        <button class="btn-harness" id="muteBtn" style="border-color: var(--border-gold); color: var(--gold-glow);" title="Toggle Voice Output">
+          🔊 VOICE: ON
+        </button>
+
+        <div class="status-badge" id="statusBadge">
+          <div class="status-dot" id="statusDot"></div>
+          <span id="statusText">SYSTEM ONLINE</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Grid Layout -->
+    <main class="hud-grid">
+      <!-- Left Panel: Swarm Telemetry & Steam Controls -->
+      <section class="panel">
+        <div class="panel-header">
+          <span class="panel-title">🛡️ Swarm Telemetry</span>
+          <span class="agent-badge">6 AGENTS</span>
+        </div>
+
+        <div class="swarm-list" id="swarmList">
+          <!-- Swarm agent cards dynamically populated by JS -->
+        </div>
+
+        <div class="swarm-meta-box">
+          <div style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--cyan-bright); font-weight: 700; margin-bottom: 6px;">
+            SWARM ARCHITECTURE: 6-AGENT MESH
+          </div>
+          <div style="font-family: var(--font-mono); font-size: 0.7rem; color: var(--text-dim); line-height: 1.4;">
+            Topology: Collaborative Swarm<br>
+            Autonomous Reasoner: Active<br>
+            Consensus: Byzantine (ADR-324)<br>
+            Steam Protocol: Enabled
+          </div>
+        </div>
+
+        <!-- Steam Game Launcher Panel -->
+        <div class="steam-panel">
+          <div class="panel-header" style="padding-bottom: 6px;">
+            <span class="panel-title">🎮 Steam Launcher Harness</span>
+            <button class="btn-steam-launch" id="launchSteamBtn">OPEN STEAM 🚀</button>
+          </div>
+
+          <!-- Steam Library Setup -->
+          <div class="steam-setup-box" id="steamSetupBox">
+            <div class="steam-setup-title">🔑 Connect Steam Library</div>
+            <div class="steam-setup-hint">
+              Enter your credentials to launch any owned game by name.<br>
+              <a href="https://steamcommunity.com/dev/apikey" target="_blank">Get API Key</a> ·
+              <a href="https://steamid.io" target="_blank">Find Steam ID</a>
+            </div>
+            <input type="password" id="steamApiKeyInput" class="steam-input" placeholder="Steam Web API Key" autocomplete="off" />
+            <input type="text" id="steamIdInput" class="steam-input" placeholder="Steam ID (17-digit number)" autocomplete="off" />
+            <div style="display: flex; gap: 8px;">
+              <button class="btn-steam-save" id="steamSaveBtn">SAVE & LOAD LIBRARY</button>
+              <button class="btn-steam-clear" id="steamClearBtn">CLEAR</button>
+            </div>
+            <div class="steam-library-status" id="steamLibraryStatus">Not connected</div>
+          </div>
+
+          <div class="steam-games-grid" id="steamGamesGrid">
+            <!-- Game cards populated by JS -->
+          </div>
+        </div>
+      </section>
+
+
+      <!-- Center Stage: Arc Reactor Visualizer & Voice Control -->
+      <section class="center-stage">
+        <div class="arc-reactor-container">
+          <div class="reactor-ring-outer"></div>
+          <div class="reactor-ring"></div>
+          <canvas id="visualizerCanvas" width="280" height="280"></canvas>
+        </div>
+
+        <div class="speech-meter" id="speechMeter" title="Voice output meter — reacts to JARVIS's speech cadence, not a literal decibel reading">
+          <div class="speech-meter-bar"></div>
+          <div class="speech-meter-bar"></div>
+          <div class="speech-meter-bar"></div>
+          <div class="speech-meter-bar"></div>
+          <div class="speech-meter-bar"></div>
+          <div class="speech-meter-bar"></div>
+          <div class="speech-meter-bar"></div>
+          <div class="speech-meter-bar"></div>
+        </div>
+
+        <div class="voice-controls">
+          <button class="mic-button" id="micBtn" title="Click to pause/resume wake-word listening">
+            🎙️
+          </button>
+
+          <div class="transcript-display" id="transcriptDisplay">
+            Say "Jarvis" or "Hey Jarvis" to wake me, then give your command...
+          </div>
+
+          <div class="input-bar">
+            <input type="text" class="text-input" id="textInput" placeholder="Ask JARVIS, search Google, or command Steam..." />
+            <button class="btn-send" id="sendBtn">EXECUTE</button>
+          </div>
+
+          <!-- Quick Action Harness Bar -->
+          <div class="quick-harness-bar">
+            <button class="btn-harness" data-query="Search Google for quantum computing">🔍 Google Quantum</button>
+            <button class="btn-harness" data-query="Play Counter-Strike">🔫 Play Counter-Strike</button>
+            <button class="btn-harness" data-query="Open Steam">🎮 Open Steam</button>
+            <button class="btn-harness" data-query="Search Google for AI Swarms">🐝 Search Swarms</button>
+            <button class="btn-harness" data-query="Play Cyberpunk 2077">🤖 Play Cyberpunk</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Panel: Terminal Console & Google Harness Viewport -->
+      <section class="right-panel">
+        <!-- System Console -->
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">💻 System Console</span>
+            <span style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-dim);" id="tabsOpenedCount">TABS OPENED: 0</span>
+          </div>
+
+          <div class="terminal-box" id="terminalBox">
+            <div class="log-entry JARVIS">[SYSTEM INITIALIZED] JARVIS Voice Core online.</div>
+            <div class="log-entry SUCCESS">[HARNESS READY] Google search & Steam automation active.</div>
+            <div class="log-entry HARNESS">[AUTONOMOUS REASONER] Proactive intent classifier initialized.</div>
+          </div>
+        </div>
+
+        <!-- Harness Search Viewport -->
+        <div class="harness-viewport">
+          <div class="viewport-header">
+            <span id="viewportTitle">🌐 GOOGLE HARNESS VIEWPORT</span>
+            <a href="#" id="viewportExternalLink" target="_blank" style="color: var(--cyan-glow); text-decoration: none; display: none;">OPEN TAB ↗</a>
+          </div>
+
+          <div class="viewport-placeholder" id="viewportPlaceholder">
+            <div style="font-size: 2.2rem;">🌐</div>
+            <div>Google Search Viewport Standby</div>
+            <div style="font-size: 0.75rem; color: var(--text-dim);">
+              Speak or ask JARVIS to search for anything to view live web output here.
+            </div>
+          </div>
+
+          <iframe class="viewport-content" id="viewportFrame" style="display: none;" src="about:blank"></iframe>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="settings-modal" id="settingsModal">
+    <div class="settings-backdrop" id="settingsBackdrop"></div>
+    <div class="settings-panel">
+      <div class="settings-panel-header">
+        <span class="panel-title">⚙️ JARVIS Settings</span>
+        <button class="settings-close-btn" id="settingsCloseBtn" title="Close">✕</button>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">General</div>
+        <label class="settings-row">
+          <span>Open browser tab when searching Google</span>
+          <input type="checkbox" id="openTabToggle" class="settings-switch" />
+        </label>
+        <label class="settings-row">
+          <span>Use Groq (faster) instead of OpenRouter</span>
+          <input type="checkbox" id="useGroqToggle" class="settings-switch" />
+        </label>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">Voice</div>
+        <div class="settings-row">
+          <span>Voice gender</span>
+          <div class="settings-radio-group">
+            <label><input type="radio" name="voiceGender" id="voiceGenderMale" /> Male</label>
+            <label><input type="radio" name="voiceGender" id="voiceGenderFemale" /> Female</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">Voice Output Meter</div>
+        <label class="settings-row">
+          <span>Show meter while JARVIS is speaking</span>
+          <input type="checkbox" id="soundMeterToggle" class="settings-switch" />
+        </label>
+        <div class="settings-hint">
+          Approximates loudness from speech cadence — browsers don't expose real
+          audio levels for built-in text-to-speech.
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">🔑 API Keys</div>
+        <div class="settings-hint">
+          You need at least one of
+          <a href="https://openrouter.ai/keys" target="_blank">OpenRouter</a>
+          or
+          <a href="https://console.groq.com/keys" target="_blank">Groq</a>
+          (faster) for conversational answers ·
+          <a href="https://console.deepgram.com" target="_blank">Get a Deepgram key</a>
+          (optional, improves speech recognition) ·
+          <a href="https://products.wolframalpha.com/api" target="_blank">Get a WolframAlpha AppID</a>
+          (optional, grounds math answers in a real computation) ·
+          <a href="https://developer.spotify.com/dashboard" target="_blank">Get Spotify Client ID/Secret</a>
+          (optional, lets JARVIS play the exact song instead of just opening search)
+        </div>
+        <input type="password" id="openrouterKeyInput" class="steam-input" placeholder="OpenRouter API Key" autocomplete="off" />
+        <input type="password" id="groqKeyInput" class="steam-input" placeholder="Groq API Key (optional, get one at console.groq.com/keys)" autocomplete="off" />
+        <input type="password" id="deepgramKeyInput" class="steam-input" placeholder="Deepgram API Key (optional)" autocomplete="off" />
+        <input type="password" id="wolframKeyInput" class="steam-input" placeholder="WolframAlpha AppID (optional, get one free at products.wolframalpha.com/api)" autocomplete="off" />
+        <input type="password" id="spotifyClientIdInput" class="steam-input" placeholder="Spotify Client ID (optional, developer.spotify.com/dashboard)" autocomplete="off" />
+        <input type="password" id="spotifyClientSecretInput" class="steam-input" placeholder="Spotify Client Secret (optional)" autocomplete="off" />
+        <div class="settings-hint">Restart JARVIS after adding/changing the Deepgram key to activate it.</div>
+        <button class="btn-steam-save" id="apiKeysSaveBtn">SAVE KEYS</button>
+        <div class="steam-library-status" id="apiKeysStatus"></div>
+      </div>
+
+      <div class="settings-section" id="spotifyAccountSection" style="display: none;">
+        <div class="settings-section-title">🎵 Spotify Account</div>
+        <div class="settings-hint">
+          Connect your own Spotify account so JARVIS can play your saved playlists and
+          albums by name (e.g. "play my Chill playlist") and your Liked Songs. Requires a
+          Spotify Client ID/Secret above, and this exact Redirect URI added under your
+          app's settings on the
+          <a href="https://developer.spotify.com/dashboard" target="_blank">Spotify Developer Dashboard</a>:
+          <code>http://127.0.0.1:43417/callback</code>
+        </div>
+        <div class="settings-row">
+          <span id="spotifyAccountStatus">Not connected</span>
+        </div>
+        <button class="btn-steam-save" id="spotifyConnectBtn">CONNECT SPOTIFY ACCOUNT</button>
+        <button class="btn-steam-save" id="spotifyDisconnectBtn" style="display: none;">DISCONNECT</button>
+      </div>
+
+      <div class="settings-section" id="updateSection" style="display: none;">
+        <div class="settings-section-title">🔄 Software Update</div>
+        <div class="settings-row">
+          <span id="updateStatusText">Checking for updates…</span>
+        </div>
+        <div class="update-progress-track" id="updateProgressTrack" style="display: none;">
+          <div class="update-progress-fill" id="updateProgressFill"></div>
+        </div>
+        <button class="btn-steam-save" id="updateActionBtn">CHECK FOR UPDATES</button>
+        <button class="btn-steam-save" id="updateLogBtn">UPDATE LOG</button>
+        <div class="steam-input" id="updateLogBox" style="display: none; height: auto; max-height: 300px; overflow-y: auto; padding: 8px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

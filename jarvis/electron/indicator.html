@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    overflow: hidden;
+  }
+  .dot {
+    width: 12px;
+    height: 12px;
+    margin: 2px;
+    border-radius: 50%;
+    background: #3b82f6;
+    box-shadow: 0 0 6px 2px rgba(59, 130, 246, 0.8);
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.55; transform: scale(0.85); }
+  }
+</style>
+</head>
+<body>
+  <div class="dot"></div>
+</body>
+</html>
