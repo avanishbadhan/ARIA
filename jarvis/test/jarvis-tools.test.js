@@ -4,7 +4,7 @@ import { GROUNDING_TOOLS, createToolExecutor } from '../src/jarvis-tools.js';
 
 test('GROUNDING_TOOLS only lists read-only tools, no action tools', () => {
   const names = GROUNDING_TOOLS.map(t => t.function.name);
-  assert.deepEqual(names, ['solve_math', 'web_search', 'list_recent_emails', 'search_emails']);
+  assert.deepEqual(names, ['solve_math', 'web_search', 'list_recent_emails', 'search_emails', 'list_upcoming_events', 'search_calendar_events']);
 });
 
 test('solve_math delegates to wolfram.solve with the parsed query', async () => {
@@ -126,4 +126,51 @@ test('list_recent_emails and search_emails fall back gracefully when gmail/getGo
 
   assert.match(await executor('list_recent_emails', '{}'), /not connected|no matching/i);
   assert.match(await executor('search_emails', '{"query":"x"}'), /not connected|no matching/i);
+});
+
+test('list_upcoming_events delegates to calendar.listUpcoming using the stored Google credentials', async () => {
+  const calls = [];
+  const calendar = { listUpcoming: async (clientId, clientSecret) => { calls.push({ clientId, clientSecret }); return { success: true, events: [{}], message: 'You have 1 upcoming event. The next is ...' }; } };
+  const executor = createToolExecutor({ wolfram: null, harness: null, calendar, getGoogleCredentials: () => ({ clientId: 'id', clientSecret: 'secret' }) });
+
+  const result = await executor('list_upcoming_events', '{}');
+
+  assert.equal(result, 'You have 1 upcoming event. The next is ...');
+  assert.deepEqual(calls, [{ clientId: 'id', clientSecret: 'secret' }]);
+});
+
+test('list_upcoming_events returns a graceful fallback string when the calendar reports failure', async () => {
+  const calendar = { listUpcoming: async () => ({ success: false, message: 'not connected' }) };
+  const executor = createToolExecutor({ wolfram: null, harness: null, calendar, getGoogleCredentials: () => ({ clientId: '', clientSecret: '' }) });
+
+  const result = await executor('list_upcoming_events', '{}');
+
+  assert.match(result, /not connected|no matching/i);
+});
+
+test('search_calendar_events delegates to calendar.search with the parsed query', async () => {
+  const calls = [];
+  const calendar = { search: async (clientId, clientSecret, query) => { calls.push(query); return { success: true, events: [{}], message: 'Found it.' }; } };
+  const executor = createToolExecutor({ wolfram: null, harness: null, calendar, getGoogleCredentials: () => ({ clientId: 'id', clientSecret: 'secret' }) });
+
+  const result = await executor('search_calendar_events', '{"query":"standup"}');
+
+  assert.equal(result, 'Found it.');
+  assert.deepEqual(calls, ['standup']);
+});
+
+test('search_calendar_events returns a graceful fallback string when calendar.search throws', async () => {
+  const calendar = { search: async () => { throw new Error('network error'); } };
+  const executor = createToolExecutor({ wolfram: null, harness: null, calendar, getGoogleCredentials: () => ({ clientId: 'id', clientSecret: 'secret' }) });
+
+  const result = await executor('search_calendar_events', '{"query":"standup"}');
+
+  assert.match(result, /not connected|no matching/i);
+});
+
+test('list_upcoming_events and search_calendar_events fall back gracefully when calendar/getGoogleCredentials are not wired up', async () => {
+  const executor = createToolExecutor({ wolfram: null, harness: null });
+
+  assert.match(await executor('list_upcoming_events', '{}'), /not connected|no matching/i);
+  assert.match(await executor('search_calendar_events', '{"query":"x"}'), /not connected|no matching/i);
 });

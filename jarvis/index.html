@@ -300,14 +300,17 @@
       <div class="settings-section" id="googleAccountSection" style="display: none;">
         <div class="settings-section-title">📧 Google Account</div>
         <div class="settings-hint">
-          Connect your Google account (read-only) so JARVIS can check, search, and read
-          your Gmail (e.g. "check my email", "read me the email from Sarah"). Requires a
-          Google Client ID/Secret above (Desktop app type), and this exact Redirect URI
-          added under "Authorized redirect URIs" for that OAuth client in the
+          Connect your Google account so JARVIS can check, search, and read your Gmail
+          (e.g. "check my email", "read me the email from Sarah") and list, search, and
+          create events on your Google Calendar (e.g. "what's on my calendar", "schedule
+          a meeting called Standup for tomorrow at 9am"). Requires a Google Client
+          ID/Secret above (Desktop app type), and this exact Redirect URI added under
+          "Authorized redirect URIs" for that OAuth client in the
           <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console</a>:
           <code>http://127.0.0.1:43418/callback</code>
-          Only read access is requested — JARVIS can never send, delete, or modify anything
-          in your mailbox.
+          Gmail stays read-only — JARVIS can never send, delete, or modify your mailbox.
+          If you connected your account before Calendar support shipped, disconnect and
+          reconnect once (Settings → Google Account) so the new Calendar scope takes effect.
         </div>
         <div class="settings-row">
           <span id="googleAccountStatus">Not connected</span>

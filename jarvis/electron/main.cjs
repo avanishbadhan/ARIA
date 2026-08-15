@@ -22,12 +22,16 @@ const SPOTIFY_AUTH_SCOPES = 'playlist-read-private playlist-read-collaborative u
 // Local loopback redirect for Google's OAuth 2.0 Authorization Code + PKCE
 // flow — this exact URI must be added to the "Authorized redirect URIs" of
 // the Desktop-app OAuth client in Google Cloud Console for login to work.
-// Read-only scope only: no send/modify/delete requested, so even a leaked
-// token can't act on the mailbox, only read it (see
-// docs/superpowers/specs/2026-08-15-gmail-google-connector-design.md).
+// Gmail stays read-only (no send/modify/delete requested, so even a leaked
+// token can't act on the mailbox, only read it) while calendar.events grants
+// read + create access to the user's own events only — the minimal scope
+// covering listing/searching events and creating them, without calendar
+// list/settings management. See
+// docs/superpowers/specs/2026-08-15-gmail-google-connector-design.md and
+// docs/superpowers/specs/2026-08-15-google-calendar-harness-design.md.
 const GOOGLE_REDIRECT_PORT = 43418;
 const GOOGLE_REDIRECT_URI = `http://127.0.0.1:${GOOGLE_REDIRECT_PORT}/callback`;
-const GOOGLE_AUTH_SCOPES = 'https://www.googleapis.com/auth/gmail.readonly openid email profile';
+const GOOGLE_AUTH_SCOPES = 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.events openid email profile';
 
 let mainWindow = null;
 let tray = null;
@@ -903,6 +907,87 @@ async function listGmailMessages(accessToken, { q, maxResults = 10 } = {}) {
   return Promise.all(ids.map((id) => fetchGmailMessageSummary(id, accessToken)));
 }
 
+// --- Google Calendar API helpers -----------------------------------------
+// gmailApiGet is generic enough to serve Calendar's authenticated GETs too —
+// deliberately not renamed to avoid an unrelated refactor (the harness calls
+// the same endpoint shape either way).
+
+// Lists upcoming events on the primary calendar starting from now, ordered by
+// start time, with recurring events expanded to individual instances
+// (singleEvents=true). The optional `q` is the Calendar API's own server-side
+// full-text search — same "let the server search" pattern as Gmail.
+function listCalendarEvents(accessToken, { q, maxResults = 10 } = {}) {
+  const params = new URLSearchParams({
+    maxResults: String(maxResults),
+    singleEvents: 'true',
+    orderBy: 'startTime',
+    timeMin: new Date().toISOString()
+  });
+  if (q) params.set('q', q);
+  return gmailApiGet(`https://www.googleapis.com/calendar/v3/calendars/primary/events?${params.toString()}`, accessToken)
+    .then((data) => (data.items || []).map((event) => ({
+      id: event.id,
+      title: event.summary || '(no title)',
+      start: event.start?.dateTime || event.start?.date,
+      end: event.end?.dateTime || event.end?.date,
+      description: event.description || ''
+    })));
+}
+
+// Generic authenticated POST helper — mirrors gmailApiGet's shape (bearer
+// token, JSON body, expects a 200 response) for Calendar event creation.
+function googleApiPost(url, accessToken, bodyObj) {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify(bodyObj);
+    const req = https.request(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body)
+      }
+    }, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        if (res.statusCode !== 200) {
+          let reason = data;
+          try { reason = JSON.parse(data)?.error?.message || data; } catch (e) {}
+          reject(new Error(`Google API HTTP ${res.statusCode}: ${reason}`));
+          return;
+        }
+        try {
+          resolve(JSON.parse(data));
+        } catch (e) {
+          reject(new Error('Invalid Google API response'));
+        }
+      });
+    });
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+}
+
+// Creates a single event on the primary calendar. startISO/endISO are always
+// already-resolved ISO timestamps — the renderer harness owns any
+// natural-language date parsing via chrono-node, the main process never sees
+// raw phrases like "tomorrow at 3pm".
+async function createCalendarEvent(accessToken, { title, description, startISO, endISO }) {
+  const data = await googleApiPost('https://www.googleapis.com/calendar/v3/calendars/primary/events', accessToken, {
+    summary: title,
+    description,
+    start: { dateTime: startISO },
+    end: { dateTime: endISO }
+  });
+  return {
+    id: data.id,
+    title: data.summary || title,
+    start: data.start?.dateTime || data.start?.date,
+    end: data.end?.dateTime || data.end?.date
+  };
+}
+
 function decodeGmailBase64Url(data) {
   return Buffer.from(data.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf-8');
 }
@@ -1063,6 +1148,24 @@ function registerGoogleAuthIpc() {
     const accessToken = await getValidGoogleAccessToken(clientId, clientSecret);
     if (!accessToken) throw new Error('Not connected to Google. Please connect your account first.');
     return fetchGmailFullMessage(id, accessToken);
+  });
+
+  ipcMain.handle('calendar:list-events', async (event, { clientId, clientSecret, maxResults }) => {
+    const accessToken = await getValidGoogleAccessToken(clientId, clientSecret);
+    if (!accessToken) throw new Error('Not connected to Google. Please connect your account first.');
+    return listCalendarEvents(accessToken, { maxResults });
+  });
+
+  ipcMain.handle('calendar:search-events', async (event, { clientId, clientSecret, query, maxResults }) => {
+    const accessToken = await getValidGoogleAccessToken(clientId, clientSecret);
+    if (!accessToken) throw new Error('Not connected to Google. Please connect your account first.');
+    return listCalendarEvents(accessToken, { q: query, maxResults });
+  });
+
+  ipcMain.handle('calendar:create-event', async (event, { clientId, clientSecret, title, description, startISO, endISO }) => {
+    const accessToken = await getValidGoogleAccessToken(clientId, clientSecret);
+    if (!accessToken) throw new Error('Not connected to Google. Please connect your account first.');
+    return createCalendarEvent(accessToken, { title, description, startISO, endISO });
   });
 }
 

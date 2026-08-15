@@ -23,6 +23,7 @@ import { ScreenVisionHarness } from './screen-vision-harness.js';
 import { GROUNDING_TOOLS, createToolExecutor } from './jarvis-tools.js';
 import { GoogleAccountConnector } from './google-account-connector.js';
 import { GmailHarness } from './gmail-harness.js';
+import { GoogleCalendarHarness } from './google-calendar-harness.js';
 
 export class JarvisCore {
   constructor(voiceEngine, harness, options = {}) {
@@ -89,15 +90,27 @@ export class JarvisCore {
       onLog: (logData) => this.onLog(logData)
     });
 
+    // Google Calendar Harness — same account as Gmail, no separate
+    // connection step. Read-only list/search are grounding tools below;
+    // createEvent stays off the grounding list (state-changing, same rule
+    // that excludes Gmail send/draft) and is only reachable via explicit
+    // intent. See
+    // docs/superpowers/specs/2026-08-15-google-calendar-harness-design.md.
+    this.calendarHarness = new GoogleCalendarHarness({
+      onLog: (logData) => this.onLog(logData)
+    });
+
     // Read-only grounding tools (WolframAlpha + web search) exposed to
     // autonomous LLM function-calling for screen vision and general chat —
     // see docs/superpowers/specs/2026-08-14-grounding-tool-calling-design.md.
-    // Action tools (game launch, Spotify, etc.) stay off this list.
+    // Action tools (game launch, Spotify, event creation, etc.) stay off this
+    // list.
     this.groundingTools = GROUNDING_TOOLS;
     this.toolExecutor = createToolExecutor({
       wolfram: this.wolfram,
       harness: this.harness,
       gmail: this.gmailHarness,
+      calendar: this.calendarHarness,
       getGoogleCredentials: () => ({ clientId: this.googleClientId, clientSecret: this.googleClientSecret }),
       onLog: (logData) => this.onLog(logData)
     });
@@ -199,6 +212,7 @@ export class JarvisCore {
       "steam": "Steam launcher harness is ready. I can open the Steam desktop client or launch any of your installed games directly.",
       "spotify": "Spotify harness is ready. I can open the Spotify desktop client, play a specific song if you say \"play <song> on spotify\", or, if your Spotify account is connected in Settings, play your own playlists and albums by name and your Liked Songs.",
       "gmail": "Gmail harness is ready. If your Google account is connected in Settings, I can check your inbox, search your email, or read a specific message by sender or subject.",
+      "calendar": "Calendar harness is ready. If your Google account is connected in Settings, I can list your upcoming events, search your calendar, or schedule a new meeting.",
       "time": () => `The current local time is ${new Date().toLocaleTimeString()}.`,
       "date": () => `Today is ${new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}.`,
       "creator": "I was crafted by your AI pair programmer utilizing multi-agent swarm architecture and high-performance Web APIs."
@@ -730,6 +744,58 @@ export class JarvisCore {
       this.onResponse({ text: result.message, actionType: 'GMAIL_READ_MESSAGE', data: result });
 
       this._updateAgentState("agent-3", "ACTIVE", result.success ? "Gmail message read" : "Gmail unavailable");
+      this._pushHistory(input, result.message);
+      await this.voiceEngine.speak(result.message);
+      return;
+    }
+
+    // 8k. Handle Calendar upcoming-events check ("what's on my calendar")
+    if (decision.toolName === 'CALENDAR_LIST_UPCOMING') {
+      this._updateAgentState("agent-3", "EXECUTING", "Checking calendar");
+      this.voiceEngine.playSearchLaunchSound();
+
+      const result = await this.calendarHarness.listUpcoming(this.googleClientId, this.googleClientSecret);
+
+      this.onResponse({ text: result.message, actionType: 'CALENDAR_LIST_UPCOMING', data: result });
+
+      this._updateAgentState("agent-3", "ACTIVE", result.success ? "Calendar checked" : "Calendar unavailable");
+      this._pushHistory(input, result.message);
+      await this.voiceEngine.speak(result.message);
+      return;
+    }
+
+    // 8l. Handle Calendar search ("search my calendar for the meeting about X")
+    if (decision.toolName === 'CALENDAR_SEARCH') {
+      this._updateAgentState("agent-3", "EXECUTING", `Searching calendar: "${decision.params.query}"`);
+      this.voiceEngine.playSearchLaunchSound();
+
+      const result = await this.calendarHarness.search(this.googleClientId, this.googleClientSecret, decision.params.query);
+
+      this.onResponse({ text: result.message, actionType: 'CALENDAR_SEARCH', data: result });
+
+      this._updateAgentState("agent-3", "ACTIVE", result.success ? "Calendar search complete" : "Calendar unavailable");
+      this._pushHistory(input, result.message);
+      await this.voiceEngine.speak(result.message);
+      return;
+    }
+
+    // 8m. Handle Calendar create event ("schedule a meeting called X for Y").
+    // Only the raw title + when-phrase leave the classifier/reasoner — the
+    // harness owns resolving "when" into a real timestamp via chrono-node.
+    if (decision.toolName === 'CALENDAR_CREATE_EVENT') {
+      this._updateAgentState("agent-3", "EXECUTING", `Scheduling event: "${decision.params.title}"`);
+      this.voiceEngine.playSearchLaunchSound();
+
+      const result = await this.calendarHarness.createEvent(
+        this.googleClientId,
+        this.googleClientSecret,
+        decision.params.title,
+        decision.params.when
+      );
+
+      this.onResponse({ text: result.message, actionType: 'CALENDAR_CREATE_EVENT', data: result });
+
+      this._updateAgentState("agent-3", "ACTIVE", result.success ? "Event scheduled" : "Event scheduling failed");
       this._pushHistory(input, result.message);
       await this.voiceEngine.speak(result.message);
       return;

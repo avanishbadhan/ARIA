@@ -3,8 +3,8 @@
 A desktop voice assistant with wake-word listening ("Jarvis" / "Hey Jarvis"),
 OpenRouter/Groq-powered conversation, Google search automation, WolframAlpha-
 grounded math, a Steam game launcher, a Spotify launcher, read-only Gmail
-access, and self-updating via GitHub Releases — built as an Electron app
-with a HUD-style web UI.
+access, Google Calendar access (list/search/create events), and self-updating
+via GitHub Releases — built as an Electron app with a HUD-style web UI.
 
 ## Setup
 
@@ -37,7 +37,7 @@ provide keys:
 | `VITE_WOLFRAM_APP_ID` | Optional — grounds math answers in a real computation instead of the LLM guessing | https://products.wolframalpha.com/api |
 | `VITE_STEAM_API_KEY` + `VITE_STEAM_ID` | Optional — launch games from your real library by name | https://steamcommunity.com/dev/apikey and https://steamid.io |
 | `VITE_SPOTIFY_CLIENT_ID` + `VITE_SPOTIFY_CLIENT_SECRET` | Optional — resolves the exact track so "play X on Spotify" auto-plays instead of just opening a search | https://developer.spotify.com/dashboard |
-| `VITE_GOOGLE_CLIENT_ID` + `VITE_GOOGLE_CLIENT_SECRET` | Optional — lets JARVIS check/search/read your Gmail (read-only) | https://console.cloud.google.com/apis/credentials |
+| `VITE_GOOGLE_CLIENT_ID` + `VITE_GOOGLE_CLIENT_SECRET` | Optional — lets JARVIS check/search/read your Gmail (read-only) and list/search/create Google Calendar events | https://console.cloud.google.com/apis/credentials |
 
 Steam credentials have their own setup box in the left panel of the app —
 same idea, paste and save, no `.env` required.
@@ -65,8 +65,9 @@ Click **⚙️ SETTINGS** in the header to configure:
   arithmetically correct. Without a Spotify Client ID/Secret (or when running
   outside the packaged Electron app), "play X on Spotify" opens the Spotify
   app pre-searched for X instead of auto-playing the exact track. Without a
-  connected Google account, Gmail commands ("check my email") prompt you to
-  connect one in Settings instead of failing silently.
+  connected Google account, Gmail and Calendar commands ("check my email",
+  "what's on my calendar") prompt you to connect one in Settings instead of
+  failing silently.
 - **Use Groq instead of OpenRouter** — Y/N. Groq's `llama-3.1-8b-instant` is
   much faster than OpenRouter's free model pool. This is only needed to
   *prefer* Groq when you have both keys set — if you only set a Groq key and
@@ -127,16 +128,19 @@ Either way, if the exact track can't be resolved (typo, obscure title, no
 credentials, API error), JARVIS always falls back to opening Spotify search
 rather than failing silently.
 
-## Google Account / Gmail
+## Google Account / Gmail / Calendar
 
 JARVIS can check, search, and read your Gmail — read-only, nothing is ever
-sent, deleted, or modified.
+sent, deleted, or modified — and can list, search, and create events on your
+primary Google Calendar. Both use the same one-time Google account connection
+in Settings (there is no separate "connect Calendar" step).
 
 **Setup (one-time, in Google Cloud Console):**
 
 1. Create a project at [console.cloud.google.com](https://console.cloud.google.com/projectcreate)
    (or reuse an existing one).
-2. Enable the **Gmail API** under APIs & Services → Library.
+2. Enable the **Gmail API** and the **Google Calendar API** under APIs &
+   Services → Library.
 3. Configure the **OAuth consent screen** (External is fine for personal
    use) and add your own Google account as a test user.
 4. Under APIs & Services → Credentials, create an **OAuth client ID** of
@@ -148,7 +152,15 @@ sent, deleted, or modified.
    in the Google Account section and approve access in the browser tab that
    opens.
 
-**Voice/text commands:**
+> **Already connected to Gmail before this Calendar release?** Calendar
+> access is an *incremental* OAuth scope, so an account connected under the
+> old (Gmail-only) scope set has a refresh token that doesn't carry Calendar
+> permission. Your Gmail commands keep working, but Calendar commands will
+> fail with an insufficient-scope error. Fix: in **⚙️ SETTINGS**, click
+> **DISCONNECT GOOGLE ACCOUNT**, then **CONNECT GOOGLE ACCOUNT** again and
+> approve — one-time, and it's required for Calendar commands to work.
+
+**Voice/text commands — Gmail:**
 
 - **"Check my email"** — reads back a summary of your most recent inbox
   messages.
@@ -157,13 +169,26 @@ sent, deleted, or modified.
 - **"Read me the email from Sarah"** — finds the best-matching message and
   reads its full body aloud.
 
-JARVIS can also reach for `list_recent_emails`/`search_emails` on its own
-mid-conversation (e.g. "did I hear back from the recruiter?") the same way
-it already does for WolframAlpha and web search — see **Model Tiers**
-above for which providers support this autonomous tool-calling today.
+**Voice/text commands — Calendar:**
 
-Without a connected Google account, all three commands respond with a
-prompt to connect one in Settings rather than failing silently.
+- **"What's on my calendar"** / **"Any meetings today"** — lists your next
+  upcoming events starting from now and names the next one.
+- **"Search my calendar for the budget meeting"** — full-text searches your
+  calendar (Google's own event search) and summarizes the top matches.
+- **"Schedule a meeting called Standup for tomorrow at 9am"** — creates a
+  single 60-minute event (or say a different length phrase like "next Friday
+  at noon"); natural-language dates are resolved locally via chrono-node.
+
+JARVIS can also reach for `list_recent_emails`/`search_emails` and
+`list_upcoming_events`/`search_calendar_events` on its own mid-conversation
+(e.g. "did I hear back from the recruiter?", "when is my next meeting?") the
+same way it already does for WolframAlpha and web search — see **Model
+Tiers** above for which providers support this autonomous tool-calling today.
+Creating events is deliberately *not* an autonomous capability — like Gmail
+sending, it only ever happens on an explicit voice/text command.
+
+Without a connected Google account, all of these respond with a prompt to
+connect one in Settings rather than failing silently.
 
 ## Camera Vision
 

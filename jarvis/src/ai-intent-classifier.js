@@ -28,6 +28,9 @@ const TOOL_PARAM_REQUIREMENTS = {
   GMAIL_CHECK_INBOX: [],
   GMAIL_SEARCH: ['query'],
   GMAIL_READ_MESSAGE: ['query'],
+  CALENDAR_LIST_UPCOMING: [],
+  CALENDAR_SEARCH: ['query'],
+  CALENDAR_CREATE_EVENT: ['title', 'when'],
   CONVERSATIONAL: []
 };
 
@@ -58,6 +61,9 @@ Available tools and their exact params shape:
 - GMAIL_CHECK_INBOX: {} — user wants to check their email/inbox generally
 - GMAIL_SEARCH: { query: string } — user wants to search their email for something specific
 - GMAIL_READ_MESSAGE: { query: string } — user wants JARVIS to read a specific email (by sender or subject) aloud
+- CALENDAR_LIST_UPCOMING: {} — user wants to know what's on their calendar / upcoming meetings generally
+- CALENDAR_SEARCH: { query: string } — user wants to search their calendar for an event matching something specific
+- CALENDAR_CREATE_EVENT: { title: string, when: string } — user wants to schedule a new event; title is the event name, when is a natural-language time phrase like "tomorrow at 3pm" that the harness resolves into a real timestamp
 - CONVERSATIONAL: {} (default — no tool needed, just answer normally)
 
 If the utterance may be a mis-transcribed version of one of the above

@@ -16,7 +16,7 @@ export class AutonomousToolReasoner {
    * Format returned:
    * {
    *    shouldCallTool: true|false,
-   *    toolName: 'GOOGLE_SEARCH' | 'STEAM_LAUNCH_GAME' | 'STEAM_OPEN_CLIENT' | 'SPOTIFY_PLAY_SONG' | 'SPOTIFY_PLAY_LIBRARY' | 'SPOTIFY_OPEN_CLIENT' | 'EPIC_OPEN_CLIENT' | 'XBOX_OPEN_CLIENT' | 'XBOX_LAUNCH_GAME' | 'EPIC_LAUNCH_GAME' | 'OPEN_SITE' | 'MATH_QUERY' | 'SET_MODEL_TIER' | 'SCREEN_MONITOR_START' | 'SCREEN_MONITOR_STOP' | 'SCREEN_QUERY' | 'CAMERA_START' | 'CAMERA_STOP' | 'CAMERA_QUERY' | 'GMAIL_CHECK_INBOX' | 'GMAIL_SEARCH' | 'GMAIL_READ_MESSAGE' | 'CONVERSATIONAL',
+   *    toolName: 'GOOGLE_SEARCH' | 'STEAM_LAUNCH_GAME' | 'STEAM_OPEN_CLIENT' | 'SPOTIFY_PLAY_SONG' | 'SPOTIFY_PLAY_LIBRARY' | 'SPOTIFY_OPEN_CLIENT' | 'EPIC_OPEN_CLIENT' | 'XBOX_OPEN_CLIENT' | 'XBOX_LAUNCH_GAME' | 'EPIC_LAUNCH_GAME' | 'OPEN_SITE' | 'MATH_QUERY' | 'SET_MODEL_TIER' | 'SCREEN_MONITOR_START' | 'SCREEN_MONITOR_STOP' | 'SCREEN_QUERY' | 'CAMERA_START' | 'CAMERA_STOP' | 'CAMERA_QUERY' | 'GMAIL_CHECK_INBOX' | 'GMAIL_SEARCH' | 'GMAIL_READ_MESSAGE' | 'CALENDAR_LIST_UPCOMING' | 'CALENDAR_SEARCH' | 'CALENDAR_CREATE_EVENT' | 'CONVERSATIONAL',
    *    confidence: 0.0 to 1.0,
    *    params: { ... },
    *    reasoning: "Explanation of autonomous decision"
@@ -338,6 +338,80 @@ export class AutonomousToolReasoner {
         params: { query: gmailReadMatch[1].trim() },
         reasoning: `Autonomous reasoner detected intent to read the email from "${gmailReadMatch[1].trim()}".`
       };
+    }
+
+    // 1i. Check for Google Calendar commands — same thin fallback-net role as
+    // the Gmail/screen/camera checks above. The create-event path only
+    // extracts the raw title + when-phrase; the harness owns turning "when"
+    // into an actual timestamp via chrono-node (see Operations in
+    // docs/superpowers/specs/2026-08-15-google-calendar-harness-design.md).
+    if (text.match(/^(?:what'?s|what is|check|show)\s+(?:on\s+)?(?:my\s+)?(?:calendar|schedule)[.!]?\s*$/i)
+      || text.match(/(?:any|do i have|are there)\s+(?:(?:any|some|upcoming)\s+)?(?:events?|meetings?)(?:\s+(?:today|this week|coming up|tomorrow))?[.!]?\s*$/i)) {
+      return {
+        shouldCallTool: true,
+        toolName: 'CALENDAR_LIST_UPCOMING',
+        confidence: 0.93,
+        params: {},
+        reasoning: "Autonomous reasoner detected intent to check the user's upcoming calendar events."
+      };
+    }
+
+    const calendarSearchMatch = text.match(/(?:search|find|look\s+up)\s+(?:my\s+)?(?:calendar|schedule)\s+for\s+(.+)/i)
+      || text.match(/find\s+(?:the\s+)?(?:meeting|event|appointment)\s+(?:about|for)\s+(.+)/i);
+    if (calendarSearchMatch && calendarSearchMatch[1]) {
+      return {
+        shouldCallTool: true,
+        toolName: 'CALENDAR_SEARCH',
+        confidence: 0.9,
+        params: { query: calendarSearchMatch[1].trim() },
+        reasoning: `Autonomous reasoner detected intent to search the calendar for "${calendarSearchMatch[1].trim()}".`
+      };
+    }
+
+    const calendarCreateTriggerMatch = text.match(/(?:schedule|create|add|set\s+up|book|make)\s+(?:an?\s+)?(?:event|meeting|appointment|reminder)\b/i);
+    if (calendarCreateTriggerMatch) {
+      // Quoted-title heuristic: a quoted phrase is an unambiguous title
+      // regardless of word order ("make a reminder for the 19th at 8am for
+      // "school starting"" vs "schedule a meeting called "standup" for
+      // tomorrow at 9am") — natural speech puts the title before or after
+      // the when-phrase inconsistently, but a quote always marks the title.
+      const quotedTitleMatch = text.match(/["“]([^"”]+)["”]/);
+      if (quotedTitleMatch) {
+        const title = quotedTitleMatch[1].trim();
+        const triggerEnd = calendarCreateTriggerMatch.index + calendarCreateTriggerMatch[0].length;
+        let whenText = text.slice(triggerEnd).replace(quotedTitleMatch[0], '').trim();
+        // Strip connector words from both ends repeatedly — phrasing like
+        // "called <quoted title> for X" or "for X for <quoted title>" can
+        // leave more than one leading/trailing connector after the title is
+        // removed (e.g. "called" then "for").
+        let prevWhenText;
+        do {
+          prevWhenText = whenText;
+          whenText = whenText.replace(/^(?:called|named|titled|for|at|on)\s+/i, '').trim();
+          whenText = whenText.replace(/\s+(?:for|at|on)$/i, '').trim();
+        } while (whenText !== prevWhenText);
+        if (title && whenText) {
+          return {
+            shouldCallTool: true,
+            toolName: 'CALENDAR_CREATE_EVENT',
+            confidence: 0.9,
+            params: { title, when: whenText },
+            reasoning: `Autonomous reasoner detected intent to schedule "${title}" for "${whenText}" (quoted-title heuristic).`
+          };
+        }
+      }
+
+      // Fallback: unquoted "called/named/titled X at/on/for Y" (title-then-when).
+      const calendarCreateMatch = text.match(/(?:called|named|titled)\s+(.+?)\s+(?:at|on|for)\s+(.+)/i);
+      if (calendarCreateMatch && calendarCreateMatch[1] && calendarCreateMatch[2]) {
+        return {
+          shouldCallTool: true,
+          toolName: 'CALENDAR_CREATE_EVENT',
+          confidence: 0.85,
+          params: { title: calendarCreateMatch[1].trim(), when: calendarCreateMatch[2].trim() },
+          reasoning: `Autonomous reasoner detected intent to schedule event "${calendarCreateMatch[1].trim()}" for "${calendarCreateMatch[2].trim()}".`
+        };
+      }
     }
 
     // 2. Check for gaming & Steam launch intents (implicit & explicit)

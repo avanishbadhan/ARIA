@@ -16,6 +16,7 @@
     "test": "node --test \"test/**/*.test.js\""
   },
   "dependencies": {
+    "chrono-node": "^2.10.1",
     "electron-updater": "^6.8.9",
     "lucide": "^0.344.0"
   },

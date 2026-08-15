@@ -135,3 +135,53 @@ test('accepts a GMAIL_READ_MESSAGE decision with its required query param', asyn
   assert.equal(result.toolName, 'GMAIL_READ_MESSAGE');
   assert.deepEqual(result.params, { query: 'sarah' });
 });
+
+test('accepts a CALENDAR_LIST_UPCOMING decision', async () => {
+  const result = await classifyIntentWithAI({
+    input: "what's on my calendar",
+    classifyIntent: async () => JSON.stringify({ toolName: 'CALENDAR_LIST_UPCOMING', params: {} })
+  });
+  assert.equal(result.toolName, 'CALENDAR_LIST_UPCOMING');
+});
+
+test('accepts a CALENDAR_SEARCH decision with its required query param', async () => {
+  const result = await classifyIntentWithAI({
+    input: 'search my calendar for the meeting about budget',
+    classifyIntent: async () => JSON.stringify({ toolName: 'CALENDAR_SEARCH', params: { query: 'budget' } })
+  });
+  assert.equal(result.toolName, 'CALENDAR_SEARCH');
+  assert.deepEqual(result.params, { query: 'budget' });
+});
+
+test('rejects a CALENDAR_SEARCH decision missing the required query param', async () => {
+  const result = await classifyIntentWithAI({
+    input: 'search my calendar',
+    classifyIntent: async () => JSON.stringify({ toolName: 'CALENDAR_SEARCH', params: {} })
+  });
+  assert.equal(result, null);
+});
+
+test('accepts a CALENDAR_CREATE_EVENT decision with title and when params', async () => {
+  const result = await classifyIntentWithAI({
+    input: 'schedule a meeting called standup for tomorrow at 9am',
+    classifyIntent: async () => JSON.stringify({ toolName: 'CALENDAR_CREATE_EVENT', params: { title: 'standup', when: 'tomorrow at 9am' } })
+  });
+  assert.equal(result.toolName, 'CALENDAR_CREATE_EVENT');
+  assert.deepEqual(result.params, { title: 'standup', when: 'tomorrow at 9am' });
+});
+
+test('rejects a CALENDAR_CREATE_EVENT decision missing the when param', async () => {
+  const result = await classifyIntentWithAI({
+    input: 'schedule a meeting called standup',
+    classifyIntent: async () => JSON.stringify({ toolName: 'CALENDAR_CREATE_EVENT', params: { title: 'standup' } })
+  });
+  assert.equal(result, null);
+});
+
+test('rejects a CALENDAR_CREATE_EVENT decision missing the title param', async () => {
+  const result = await classifyIntentWithAI({
+    input: 'schedule a meeting for tomorrow',
+    classifyIntent: async () => JSON.stringify({ toolName: 'CALENDAR_CREATE_EVENT', params: { when: 'tomorrow' } })
+  });
+  assert.equal(result, null);
+});

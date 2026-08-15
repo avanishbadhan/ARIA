@@ -24,6 +24,11 @@ contextBridge.exposeInMainWorld('jarvisElectron', {
     search: (clientId, clientSecret, query, maxResults) => ipcRenderer.invoke('gmail:search-messages', { clientId, clientSecret, query, maxResults }),
     getMessage: (clientId, clientSecret, id) => ipcRenderer.invoke('gmail:get-message', { clientId, clientSecret, id })
   },
+  calendar: {
+    listEvents: (clientId, clientSecret, maxResults) => ipcRenderer.invoke('calendar:list-events', { clientId, clientSecret, maxResults }),
+    search: (clientId, clientSecret, query, maxResults) => ipcRenderer.invoke('calendar:search-events', { clientId, clientSecret, query, maxResults }),
+    createEvent: (clientId, clientSecret, title, description, startISO, endISO) => ipcRenderer.invoke('calendar:create-event', { clientId, clientSecret, title, description, startISO, endISO })
+  },
   mic: {
     start: () => ipcRenderer.invoke('mic:start'),
     stop: () => ipcRenderer.invoke('mic:stop'),
