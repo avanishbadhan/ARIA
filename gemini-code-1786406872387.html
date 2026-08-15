@@ -1,0 +1,1696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>J.A.R.V.I.S. Autonomous AI Engine</title>
+    <!-- Mermaid.js -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <!-- TensorFlow.js & COCO-SSD -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+    <!-- Leaflet.js CSS & JS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    <style>
+        :root {
+            --primary: #00f0ff;
+            --primary-glow: rgba(0, 240, 255, 0.4);
+            --bg-dark: #020710;
+            --panel-bg: rgba(3, 14, 28, 0.85);
+            --border-color: rgba(0, 240, 255, 0.3);
+            --user-color: #70a1ff;
+            --listening-glow: #ffbb00;
+            --thinking-glow: #ff007f;
+            --accent-pink: #ff007f;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Consolas', 'Segoe UI', monospace; }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--primary);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-image: 
+                radial-gradient(circle at 50% 50%, rgba(0, 240, 255, 0.08) 0%, transparent 70%),
+                linear-gradient(rgba(0, 240, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 240, 255, 0.03) 1px, transparent 1px);
+            background-size: 100% 100%, 30px 30px, 30px 30px;
+        }
+
+        #hud-container {
+            position: relative;
+            width: 96vw;
+            height: 94vh;
+            border: 1px solid var(--border-color);
+            background: var(--panel-bg);
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.9), inset 0 0 20px rgba(0, 240, 255, 0.08);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            backdrop-filter: blur(16px);
+            overflow: hidden;
+        }
+
+        #hud-container::before, #hud-container::after {
+            content: ''; position: absolute; width: 24px; height: 24px;
+            border-color: var(--primary); border-style: solid; pointer-events: none; z-index: 10;
+        }
+        #hud-container::before { top: -2px; left: -2px; border-width: 3px 0 0 3px; }
+        #hud-container::after { bottom: -2px; right: -2px; border-width: 0 3px 3px 0; }
+
+        #hud-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 12px;
+            z-index: 10;
+        }
+
+        .hud-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: bold;
+            letter-spacing: 2px;
+            font-size: 14px;
+            text-shadow: 0 0 8px var(--primary-glow);
+        }
+
+        .hud-status-badge {
+            width: 8px; height: 8px;
+            background: var(--primary);
+            border-radius: 50%;
+            box-shadow: 0 0 8px var(--primary);
+            animation: blink 2s infinite;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .api-input-box {
+            background: rgba(0, 10, 25, 0.8);
+            border: 1px solid var(--border-color);
+            color: var(--primary);
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            outline: none;
+            transition: all 0.3s;
+        }
+        .api-input-box:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 10px var(--primary-glow);
+        }
+
+        .btn-toggle {
+            background: rgba(0, 240, 255, 0.08);
+            border: 1px solid var(--primary);
+            color: var(--primary);
+            padding: 8px 16px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-weight: bold;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            font-size: 11px;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 10px rgba(0, 240, 255, 0.1);
+        }
+        .btn-toggle:hover { 
+            background: var(--primary); 
+            color: var(--bg-dark); 
+            box-shadow: 0 0 20px var(--primary);
+        }
+
+        #central-stage {
+            flex-grow: 1;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+        }
+
+        /* Optical Camera Feed */
+        #camera-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 320px;
+            height: 240px;
+            background: rgba(0, 10, 25, 0.95);
+            border: 1px solid var(--primary);
+            border-radius: 6px;
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.3);
+            display: none;
+            flex-direction: column;
+            z-index: 15;
+            overflow: hidden;
+            transition: width 0.35s ease, height 0.35s ease, top 0.35s ease, right 0.35s ease, left 0.35s ease;
+        }
+
+        #camera-panel.active { display: flex; }
+
+        /* Camera Window Resizing Modes */
+        #camera-panel.maximized {
+            top: 15px;
+            right: 15px;
+            width: 68vw;
+            height: calc(100% - 30px);
+            box-shadow: 0 0 40px rgba(0, 240, 255, 0.5);
+        }
+
+        #camera-header {
+            padding: 6px 10px;
+            background: rgba(0, 240, 255, 0.12);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 10px;
+            letter-spacing: 1px;
+        }
+
+        .camera-viewport {
+            position: relative;
+            width: 100%;
+            height: calc(100% - 27px);
+        }
+
+        /* Mirrored Horizontal Flip for Camera & Overlay */
+        #camera-video {
+            width: 100%; height: 100%;
+            object-fit: cover; background: #000;
+            transform: scaleX(-1);
+        }
+
+        #camera-overlay-canvas {
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+            transform: scaleX(-1);
+        }
+
+        /* Tactical Navigation Map Panel */
+        #map-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 560px;
+            height: 440px;
+            background: rgba(0, 10, 25, 0.95);
+            border: 1px solid var(--primary);
+            border-radius: 6px;
+            box-shadow: 0 0 30px rgba(0, 240, 255, 0.4);
+            display: none;
+            flex-direction: column;
+            z-index: 15;
+            overflow: hidden;
+            backdrop-filter: blur(12px);
+            transition: width 0.35s ease, height 0.35s ease, top 0.35s ease, left 0.35s ease;
+        }
+
+        #map-panel.active { display: flex; }
+
+        /* Map Window Resizing Modes */
+        #map-panel.maximized {
+            top: 15px;
+            left: 15px;
+            width: 68vw;
+            height: calc(100% - 30px);
+            box-shadow: 0 0 50px rgba(0, 240, 255, 0.5);
+        }
+
+        #map-header {
+            padding: 8px 12px;
+            background: rgba(0, 240, 255, 0.12);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 11px;
+            letter-spacing: 1px;
+        }
+
+        .map-body-container {
+            display: flex;
+            width: 100%;
+            height: calc(100% - 31px);
+            position: relative;
+        }
+
+        #hud-map {
+            flex-grow: 1;
+            height: 100%;
+            background: #111;
+        }
+
+        #map-info-sidebar {
+            width: 180px;
+            background: rgba(1, 12, 28, 0.95);
+            border-left: 1px solid var(--border-color);
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            font-size: 11px;
+            overflow-y: auto;
+        }
+
+        .info-card {
+            background: rgba(0, 240, 255, 0.04);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 8px;
+        }
+
+        .info-title {
+            font-weight: bold;
+            color: #a0f0ff;
+            margin-bottom: 4px;
+            border-bottom: 1px solid rgba(0,240,255,0.2);
+            padding-bottom: 2px;
+        }
+
+        /* Marker & Radar Effects */
+        .radar-marker-user {
+            width: 16px; height: 16px;
+            background: var(--primary);
+            border-radius: 50%;
+            box-shadow: 0 0 15px var(--primary);
+            border: 2px solid #ffffff;
+            position: relative;
+        }
+        .radar-marker-user::after {
+            content: '';
+            position: absolute;
+            top: -12px; left: -12px;
+            width: 36px; height: 36px;
+            border: 1px solid var(--primary);
+            border-radius: 50%;
+            animation: radar-ping 2s infinite;
+        }
+
+        .radar-marker-poi {
+            width: 14px; height: 14px;
+            background: var(--accent-pink);
+            border-radius: 50%;
+            box-shadow: 0 0 12px var(--accent-pink);
+            border: 2px solid #ffffff;
+        }
+
+        @keyframes radar-ping {
+            0% { transform: scale(0.3); opacity: 1; }
+            100% { transform: scale(1.6); opacity: 0; }
+        }
+
+        /* Leaflet Controls & Popups */
+        .leaflet-tile-container img { filter: none !important; }
+        .leaflet-container { background: #020710 !important; }
+        .leaflet-popup-content-wrapper, .leaflet-popup-tip {
+            background: rgba(2, 10, 25, 0.95) !important;
+            color: var(--primary) !important;
+            border: 1px solid var(--border-color);
+            font-family: 'Consolas', monospace;
+            font-size: 11px;
+        }
+        .leaflet-control-layers {
+            background: rgba(2, 10, 25, 0.9) !important;
+            color: var(--primary) !important;
+            border: 1px solid var(--border-color) !important;
+            font-family: 'Consolas', monospace;
+            font-size: 10px;
+        }
+
+        /* Widget Dock */
+        #widget-dock {
+            position: absolute;
+            left: 0;
+            top: 20px;
+            bottom: 20px;
+            width: 0;
+            opacity: 0;
+            overflow-y: auto;
+            border: 0px solid var(--border-color);
+            background: rgba(1, 10, 25, 0.85);
+            border-radius: 6px;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            z-index: 5;
+        }
+
+        #widget-dock.active {
+            width: 280px;
+            opacity: 1;
+            border-width: 1px;
+            padding: 12px;
+        }
+
+        .hud-card {
+            background: rgba(0, 240, 255, 0.05);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+
+        .hud-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 10px;
+            letter-spacing: 1.5px;
+            border-bottom: 1px solid rgba(0, 240, 255, 0.2);
+            padding-bottom: 4px;
+            margin-bottom: 6px;
+            color: #a0f0ff;
+        }
+
+        .hud-card-body {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .time-digits {
+            font-size: 20px;
+            font-weight: bold;
+            letter-spacing: 2px;
+            text-shadow: 0 0 8px var(--primary-glow);
+        }
+
+        .widget-btn {
+            background: rgba(0, 240, 255, 0.1);
+            border: 1px solid var(--primary);
+            color: var(--primary);
+            padding: 3px 6px;
+            font-size: 9px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .widget-btn:hover { background: var(--primary); color: var(--bg-dark); }
+
+        /* Arc Reactor Focus */
+        #reactor-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            opacity: 1;
+            transform: translateY(0) scale(1);
+            transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1), transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+            z-index: 2;
+        }
+
+        #reactor-wrapper.shifted-up { transform: translateY(-90px) scale(0.9); }
+        #reactor-wrapper.hidden-mode { opacity: 0; transform: translateY(0) scale(0.6); pointer-events: none; }
+
+        #reactor-target {
+            width: 150px; height: 150px;
+            position: relative; cursor: pointer; margin-bottom: 12px;
+        }
+
+        .ring {
+            position: absolute; border-radius: 50%;
+            border: 2px solid var(--primary);
+            box-shadow: 0 0 15px var(--primary-glow);
+        }
+
+        .outer { width: 100%; height: 100%; border-style: dashed; animation: rotate-cw 25s linear infinite; }
+        .middle { width: 76%; height: 76%; top: 12%; left: 12%; border: 1px double var(--primary); animation: rotate-ccw 18s linear infinite; opacity: 0.7; }
+        .inner { width: 56%; height: 56%; top: 22%; left: 22%; border: 2px dotted var(--primary); animation: rotate-cw 12s linear infinite; }
+        .core {
+            width: 36%; height: 36%; top: 32%; left: 32%;
+            background: radial-gradient(circle, #ffffff 0%, var(--primary) 60%, transparent 100%);
+            box-shadow: 0 0 35px var(--primary);
+            animation: pulse 2s ease-in-out infinite;
+            transition: all 0.4s ease;
+        }
+
+        .core.listening { background: radial-gradient(circle, #ffffff 0%, var(--listening-glow) 60%, transparent 100%) !important; box-shadow: 0 0 45px var(--listening-glow) !important; }
+        .core.thinking { background: radial-gradient(circle, #ffffff 0%, var(--thinking-glow) 60%, transparent 100%) !important; box-shadow: 0 0 45px var(--thinking-glow) !important; }
+
+        #audio-waveform {
+            display: flex; align-items: center; gap: 5px; height: 18px; margin-bottom: 8px;
+        }
+
+        .wave-bar {
+            width: 3px; height: 4px; background: var(--primary);
+            border-radius: 2px; transition: height 0.1s ease;
+            box-shadow: 0 0 5px var(--primary);
+        }
+
+        #status-display {
+            text-align: center; font-size: 11px; letter-spacing: 2.5px;
+            color: #80f8ff; text-shadow: 0 0 6px var(--primary-glow); text-transform: uppercase;
+        }
+
+        /* Holographic Media Overlay */
+        #visual-display-panel {
+            position: absolute; top: 5%; bottom: 5%; left: 5%; right: 5%;
+            background: rgba(0, 15, 30, 0.92);
+            border: 1px solid var(--primary);
+            box-shadow: 0 0 40px rgba(0, 240, 255, 0.35), inset 0 0 20px rgba(0, 240, 255, 0.15);
+            border-radius: 8px; padding: 24px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            opacity: 0; transform: scale(0.85);
+            transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1), transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+            pointer-events: none; z-index: 10; overflow: hidden; backdrop-filter: blur(8px);
+        }
+
+        #visual-display-panel.visible { opacity: 1; transform: scale(1); pointer-events: auto; }
+
+        #visual-content {
+            width: 100%; height: 100%; display: flex;
+            align-items: center; justify-content: center; overflow: auto;
+        }
+
+        #visual-content img {
+            max-width: 100%; max-height: 100%; object-fit: contain;
+            border-radius: 6px; border: 1px solid var(--border-color);
+            box-shadow: 0 0 25px rgba(0, 240, 255, 0.3);
+        }
+
+        #visual-subtitle {
+            position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+            background: rgba(0, 10, 25, 0.85); border: 1px solid var(--border-color);
+            padding: 8px 18px; border-radius: 20px; font-size: 13px;
+            letter-spacing: 1px; color: #ffffff; text-shadow: 0 0 8px var(--primary);
+            max-width: 80%; text-align: center; opacity: 0; transition: opacity 0.3s ease;
+            pointer-events: none; z-index: 11;
+        }
+
+        #visual-subtitle.visible { opacity: 1; }
+
+        /* Changelog Modal Overlay */
+        #changelog-panel {
+            position: absolute; top: 10%; bottom: 10%; left: 15%; right: 15%;
+            background: rgba(0, 10, 25, 0.95);
+            border: 1px solid var(--primary);
+            box-shadow: 0 0 50px rgba(0, 240, 255, 0.4);
+            border-radius: 8px; padding: 24px;
+            display: flex; flex-direction: column;
+            opacity: 0; transform: scale(0.9);
+            transition: all 0.3s ease;
+            pointer-events: none; z-index: 30; backdrop-filter: blur(12px);
+        }
+
+        #changelog-panel.visible { opacity: 1; transform: scale(1); pointer-events: auto; }
+
+        .changelog-header {
+            display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 16px;
+            font-size: 14px; font-weight: bold; letter-spacing: 2px;
+        }
+
+        .changelog-body {
+            flex-grow: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; font-size: 12px; line-height: 1.6;
+        }
+
+        .changelog-entry {
+            background: rgba(0, 240, 255, 0.04); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px;
+        }
+
+        .changelog-version { color: var(--accent-pink); font-weight: bold; margin-bottom: 6px; }
+
+        #central-response-overlay {
+            position: absolute; top: 55%; width: 75%; text-align: center;
+            font-size: 20px; line-height: 1.5; font-weight: 600; letter-spacing: 1px;
+            color: #ffffff; text-shadow: 0 0 15px var(--primary), 0 0 30px var(--primary-glow);
+            opacity: 0; transform: translateY(20px); transition: all 0.5s ease;
+            pointer-events: none; z-index: 3;
+        }
+
+        #central-response-overlay.visible { opacity: 1; transform: translateY(0); }
+
+        #chat-drawer {
+            position: absolute; right: -380px; top: 60px; bottom: 70px; width: 360px;
+            background: rgba(1, 10, 25, 0.95); border: 1px solid var(--border-color);
+            border-radius: 8px 0 0 8px; box-shadow: -10px 0 30px rgba(0, 0, 0, 0.8);
+            display: flex; flex-direction: column; transition: right 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            z-index: 20; backdrop-filter: blur(12px);
+        }
+
+        #chat-drawer.open { right: 0; }
+
+        .drawer-header {
+            padding: 12px 16px; border-bottom: 1px solid var(--border-color);
+            display: flex; justify-content: space-between; align-items: center;
+            font-size: 12px; letter-spacing: 1.5px; font-weight: bold;
+        }
+
+        #console-log {
+            flex-grow: 1; overflow-y: auto; padding: 16px;
+            display: flex; flex-direction: column; gap: 12px;
+        }
+
+        .log-entry { line-height: 1.4; opacity: 0; animation: fade-in 0.3s forwards; font-size: 12px; }
+        .user-log { color: var(--user-color); text-align: right; border-right: 2px solid var(--user-color); padding-right: 10px; }
+        .jarvis-log { color: var(--primary); text-align: left; border-left: 2px solid var(--primary); padding-left: 10px; text-shadow: 0 0 4px rgba(0, 240, 255, 0.2); }
+
+        .controls-bar { display: flex; gap: 12px; z-index: 10; }
+
+        .text-cmd-input {
+            flex-grow: 1; background: rgba(0, 10, 25, 0.8);
+            border: 1px solid var(--border-color); color: var(--primary);
+            padding: 12px 18px; border-radius: 4px; outline: none;
+            font-size: 13px; transition: all 0.3s;
+        }
+        .text-cmd-input:focus { border-color: var(--primary); box-shadow: 0 0 12px var(--primary-glow); }
+
+        @keyframes rotate-cw { to { transform: rotate(360deg); } }
+        @keyframes rotate-ccw { to { transform: rotate(-360deg); } }
+        @keyframes pulse { 0%, 100% { transform: scale(0.95); opacity: 0.85; } 50% { transform: scale(1.08); opacity: 1; } }
+        @keyframes fade-in { to { opacity: 1; } }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+        #console-log::-webkit-scrollbar, #widget-dock::-webkit-scrollbar, #visual-content::-webkit-scrollbar, #map-info-sidebar::-webkit-scrollbar, .changelog-body::-webkit-scrollbar { width: 4px; }
+        #console-log::-webkit-scrollbar-thumb, #widget-dock::-webkit-scrollbar-thumb, #visual-content::-webkit-scrollbar-thumb, #map-info-sidebar::-webkit-scrollbar-thumb, .changelog-body::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 2px; }
+    </style>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🤖</text></svg>">
+</head>
+<body>
+
+    <div id="hud-container">
+        <!-- Header Controls -->
+        <div id="hud-header">
+            <div class="hud-title">
+                <div class="hud-status-badge"></div>
+                <strong>J.A.R.V.I.S.</strong>
+            </div>
+            <div class="header-actions">
+                <select id="voice-select" class="api-input-box" style="width: 180px;" onchange="updateSelectedVoice()"></select>
+                <input type="password" id="api-key" class="api-input-box" placeholder="Gemini API Key" onchange="saveKey()">
+                <button class="btn-toggle" onclick="toggleChangelog()">CHANGELOG</button>
+                <button class="btn-toggle" onclick="toggleMap()">MAP</button>
+                <button class="btn-toggle" onclick="toggleCamera()">CAM</button>
+                <button class="btn-toggle" onclick="toggleChatDrawer()">LOGS</button>
+                <button class="btn-toggle" id="power-btn" onclick="toggleSystem()">INITIALIZE</button>
+            </div>
+        </div>
+
+        <!-- Main Viewport Stage -->
+        <div id="central-stage">
+            <!-- Camera Display Window -->
+            <div id="camera-panel">
+                <div id="camera-header">
+                    <span>📹 OPTICAL FEED</span>
+                    <div>
+                        <button class="widget-btn" title="Toggle Maximize/Minimize" onclick="toggleMaximizeWindow('camera-panel')">🗖</button>
+                        <button class="widget-btn" onclick="toggleCamera(false)">✕</button>
+                    </div>
+                </div>
+                <div class="camera-viewport">
+                    <video id="camera-video" autoplay playsinline muted></video>
+                    <canvas id="camera-overlay-canvas"></canvas>
+                </div>
+            </div>
+
+            <!-- Detailed Tactical Navigation Map Window -->
+            <div id="map-panel">
+                <div id="map-header">
+                    <span>🌐 ROAD-NETWORK TACTICAL MAP</span>
+                    <div>
+                        <button class="widget-btn" onclick="recenterUserMap()">CENTER</button>
+                        <button class="widget-btn" onclick="clearMapMarkers()">CLEAR</button>
+                        <button class="widget-btn" title="Toggle Maximize/Minimize" onclick="toggleMaximizeWindow('map-panel')">🗖</button>
+                        <button class="widget-btn" onclick="toggleMap(false)">✕</button>
+                    </div>
+                </div>
+                <div class="map-body-container">
+                    <div id="hud-map"></div>
+                    <div id="map-info-sidebar">
+                        <div class="info-card">
+                            <div class="info-title">CURRENT LOCK</div>
+                            <div id="sidebar-user-pos">Lat: --, Lon: --</div>
+                        </div>
+                        <div class="info-card">
+                            <div class="info-title">TARGET DATA</div>
+                            <div id="sidebar-target-info">No active target lock.</div>
+                        </div>
+                        <div class="info-card">
+                            <div class="info-title">ESTIMATES</div>
+                            <div id="sidebar-route-info">Drive: -- min<br>Distance: -- mi</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Left Utilities Dock -->
+            <div id="widget-dock"></div>
+
+            <!-- Central Arc Reactor Focus -->
+            <div id="reactor-wrapper">
+                <div id="reactor-target" onclick="triggerManualListen()">
+                    <div class="ring outer"></div>
+                    <div class="ring middle"></div>
+                    <div class="ring inner"></div>
+                    <div class="ring core" id="reactor-core"></div>
+                </div>
+
+                <div id="audio-waveform">
+                    <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+                    <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+                    <div class="wave-bar"></div><div class="wave-bar"></div>
+                </div>
+
+                <div id="status-display">SYSTEM OFFLINE — INITIALIZE TO START</div>
+            </div>
+
+            <!-- Holographic Visual Canvas Overlay -->
+            <div id="visual-display-panel">
+                <div id="visual-content"></div>
+                <div id="visual-subtitle"></div>
+                <button class="widget-btn" style="position: absolute; top: 14px; right: 14px; font-size: 11px; padding: 6px 12px;" onclick="closeVisualPanel()">✕ CLOSE</button>
+            </div>
+
+            <!-- Updates & Changelog Modal Panel -->
+            <div id="changelog-panel">
+                <div class="changelog-header">
+                    <span>📋 SYSTEM UPDATES & CHANGELOG</span>
+                    <button class="widget-btn" onclick="toggleChangelog(false)">✕ CLOSE</button>
+                </div>
+                <div class="changelog-body">
+                    <div class="changelog-entry">
+                        <div class="changelog-version">v12.8 — LATEST UPDATE</div>
+                        <ul>
+                            <li>Cleaned up main header title to minimal 'J.A.R.V.I.S.' identifier.</li>
+                            <li>Integrated dedicated System Updates & Changelog interface into top navigation.</li>
+                            <li>Optimized window resize handling and viewport sync across map and camera feeds.</li>
+                        </ul>
+                    </div>
+                    <div class="changelog-entry">
+                        <div class="changelog-version">v12.7 — OPTICS & CONTROL IMPROVEMENTS</div>
+                        <ul>
+                            <li>Implemented horizontally mirrored camera feed and overlay bounding box canvas.</li>
+                            <li>Single-button window maximize and minimize square toggle.</li>
+                            <li>Enhanced local Overpass and OpenStreetMap route calculation tools.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Centered Response Overlay Display -->
+            <div id="central-response-overlay"></div>
+        </div>
+
+        <!-- Slide-out Side Console History -->
+        <div id="chat-drawer">
+            <div class="drawer-header">
+                <span>CONVERSATION LOGS</span>
+                <button class="widget-btn" onclick="toggleChatDrawer()">✕ CLOSE</button>
+            </div>
+            <div id="console-log">
+                <div class="log-entry jarvis-log">> Optical camera mirrored and window controls updated to single toggle square button.</div>
+            </div>
+        </div>
+
+        <!-- Direct Directives Input Bar -->
+        <div class="controls-bar">
+            <input type="text" id="manual-cmd" class="text-cmd-input" placeholder="Type a directive, e.g., 'Show satellite view', 'Find coffee shops nearby', or 'Route to nearest airport'" onkeypress="handleKeyPress(event)">
+            <button class="btn-toggle" onclick="sendManualCommand()">EXECUTE</button>
+        </div>
+    </div>
+
+    <script>
+        mermaid.initialize({ startOnLoad: false, theme: 'dark' });
+
+        const core = document.getElementById('reactor-core');
+        const reactorWrapper = document.getElementById('reactor-wrapper');
+        const centralOverlay = document.getElementById('central-response-overlay');
+        const statusDisplay = document.getElementById('status-display');
+        const consoleLog = document.getElementById('console-log');
+        const chatDrawer = document.getElementById('chat-drawer');
+        const apiKeyInput = document.getElementById('api-key');
+        const voiceSelect = document.getElementById('voice-select');
+        const manualCmdInput = document.getElementById('manual-cmd');
+        const waveBars = document.querySelectorAll('.wave-bar');
+        const widgetDock = document.getElementById('widget-dock');
+        const visualPanel = document.getElementById('visual-display-panel');
+        const visualContent = document.getElementById('visual-content');
+        const visualSubtitle = document.getElementById('visual-subtitle');
+        const cameraPanel = document.getElementById('camera-panel');
+        const cameraVideo = document.getElementById('camera-video');
+        const overlayCanvas = document.getElementById('camera-overlay-canvas');
+        const overlayCtx = overlayCanvas.getContext('2d');
+        const mapPanel = document.getElementById('map-panel');
+        const changelogPanel = document.getElementById('changelog-panel');
+
+        const sidebarUserPos = document.getElementById('sidebar-user-pos');
+        const sidebarTargetInfo = document.getElementById('sidebar-target-info');
+        const sidebarRouteInfo = document.getElementById('sidebar-route-info');
+
+        const hiddenCanvas = document.createElement('canvas');
+        const hiddenContext = hiddenCanvas.getContext('2d');
+
+        let isSystemActive = false;
+        let isProcessing = false;
+        let recognition = null;
+        let selectedVoice = null;
+        let lastCallTime = 0;
+        let waveInterval = null;
+        let chatHistory = [];
+        let cameraStream = null;
+
+        // Multi-Layer Leaflet Map State
+        let map = null;
+        let userMarker = null;
+        let routeLayer = null;
+        let poiMarkers = [];
+        let userCoords = { lat: 30.5083, lon: -97.7424 }; // Round Rock / Avery Ranch
+        let userLocationString = "GPS acquiring location...";
+        let googleRoadmap, googleSatellite, osmDetailed, darkVector;
+
+        // Bounding Box Tracking State
+        let cocoModel = null;
+        let isDetectionActive = false;
+        let detectionAnimId = null;
+
+        // Utilities State
+        let activeTimers = [];
+        let activeAlarms = [];
+        let stopwatch = { running: false, startTime: 0, elapsed: 0 };
+
+        if (localStorage.getItem('gemini_key')) {
+            apiKeyInput.value = localStorage.getItem('gemini_key');
+        }
+
+        cocoSsd.load().then(model => {
+            cocoModel = model;
+            log("J.A.R.V.I.S.", "Bounding Box Engine initialized.", "jarvis-log");
+        }).catch(err => console.error(err));
+
+        function saveKey() { localStorage.setItem('gemini_key', apiKeyInput.value.trim()); }
+        function toggleChatDrawer() { chatDrawer.classList.toggle('open'); }
+
+        function toggleChangelog(forceState) {
+            const shouldOpen = forceState !== undefined ? forceState : !changelogPanel.classList.contains('visible');
+            if (shouldOpen) {
+                changelogPanel.classList.add('visible');
+            } else {
+                changelogPanel.classList.remove('visible');
+            }
+        }
+
+        /* Unified Window Maximize/Minimize Toggle */
+        function toggleMaximizeWindow(panelId) {
+            const panel = document.getElementById(panelId);
+            if (!panel) return;
+            panel.classList.toggle('maximized');
+            
+            // Recalculate viewports dynamically
+            if (panelId === 'map-panel' && map) {
+                setTimeout(() => { map.invalidateSize(); }, 360);
+            }
+            if (panelId === 'camera-panel' && cameraVideo) {
+                setTimeout(() => {
+                    overlayCanvas.width = cameraVideo.clientWidth;
+                    overlayCanvas.height = cameraVideo.clientHeight;
+                }, 360);
+            }
+        }
+
+        /* Full-Detail Map Engine Initialization */
+        function initMap() {
+            if (map) return;
+
+            googleRoadmap = L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+                maxZoom: 20, attribution: '&copy; Google Maps'
+            });
+
+            googleSatellite = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+                maxZoom: 20, attribution: '&copy; Google Maps'
+            });
+
+            osmDetailed = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
+            });
+
+            darkVector = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                maxZoom: 19, attribution: '&copy; CARTO'
+            });
+
+            map = L.map('hud-map', {
+                center: [userCoords.lat, userCoords.lon],
+                zoom: 13,
+                layers: [googleRoadmap]
+            });
+
+            const baseMaps = {
+                "Google Maps (Full Detail)": googleRoadmap,
+                "Google Satellite": googleSatellite,
+                "OpenStreetMap Standard": osmDetailed,
+                "Voyager Tactical": darkVector
+            };
+
+            L.control.layers(baseMaps, null, { position: 'topright' }).addTo(map);
+
+            const userIcon = L.divIcon({
+                className: 'custom-user-radar',
+                html: `<div class="radar-marker-user"></div>`,
+                iconSize: [16, 16]
+            });
+
+            userMarker = L.marker([userCoords.lat, userCoords.lon], { icon: userIcon }).addTo(map)
+                .bindPopup("<b>USER GPS TARGET</b><br>Coordinates Locked");
+
+            sidebarUserPos.innerText = `Lat: ${userCoords.lat.toFixed(4)}\nLon: ${userCoords.lon.toFixed(4)}`;
+        }
+
+        function toggleMap(forceState) {
+            const shouldOpen = forceState !== undefined ? forceState : !mapPanel.classList.contains('active');
+            if (shouldOpen) {
+                mapPanel.classList.add('active');
+                if (!map) initMap();
+                setTimeout(() => { map.invalidateSize(); }, 200);
+                return "Detailed Navigation Map active.";
+            } else {
+                mapPanel.classList.remove('active');
+                return "Map panel hidden.";
+            }
+        }
+
+        function recenterUserMap() {
+            if (map) {
+                map.setView([userCoords.lat, userCoords.lon], 14);
+                if (userMarker) userMarker.openPopup();
+            }
+        }
+
+        function clearMapMarkers() {
+            if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
+            poiMarkers.forEach(m => map.removeLayer(m));
+            poiMarkers = [];
+            sidebarTargetInfo.innerText = "No active target lock.";
+            sidebarRouteInfo.innerHTML = "Drive: -- min<br>Distance: -- mi";
+        }
+
+        function requestLocation() {
+            if ("geolocation" in navigator) {
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                        userCoords.lat = pos.coords.latitude;
+                        userCoords.lon = pos.coords.longitude;
+                        userLocationString = `Lat: ${userCoords.lat.toFixed(4)}, Lon: ${userCoords.lon.toFixed(4)}`;
+                        sidebarUserPos.innerText = `Lat: ${userCoords.lat.toFixed(4)}\nLon: ${userCoords.lon.toFixed(4)}`;
+                        
+                        if (map) {
+                            map.setView([userCoords.lat, userCoords.lon], 14);
+                            if (userMarker) userMarker.setLatLng([userCoords.lat, userCoords.lon]);
+                        }
+                    },
+                    (err) => { userLocationString = "Location permission denied."; },
+                    { enableHighAccuracy: true, timeout: 10000 }
+                );
+            }
+        }
+
+        async function toggleCamera(forceState) {
+            const shouldOpen = forceState !== undefined ? forceState : !cameraPanel.classList.contains('active');
+            if (shouldOpen) {
+                try {
+                    cameraStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    cameraVideo.srcObject = cameraStream;
+                    cameraPanel.classList.add('active');
+                    cameraVideo.onloadedmetadata = () => {
+                        overlayCanvas.width = cameraVideo.clientWidth;
+                        overlayCanvas.height = cameraVideo.clientHeight;
+                        startObjectDetection();
+                    };
+                    return "Optical feed active.";
+                } catch (err) {
+                    return "Unable to access optical sensor.";
+                }
+            } else {
+                stopObjectDetection();
+                if (cameraStream) { cameraStream.getTracks().forEach(track => track.stop()); cameraStream = null; }
+                cameraVideo.srcObject = null;
+                cameraPanel.classList.remove('active');
+                return "Optical feed deactivated.";
+            }
+        }
+
+        function startObjectDetection() { isDetectionActive = true; detectFrame(); }
+        function stopObjectDetection() { isDetectionActive = false; if (detectionAnimId) cancelAnimationFrame(detectionAnimId); overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height); }
+
+        async function detectFrame() {
+            if (!isDetectionActive || !cocoModel || !cameraVideo.videoWidth) {
+                detectionAnimId = requestAnimationFrame(detectFrame);
+                return;
+            }
+            try {
+                const predictions = await cocoModel.detect(cameraVideo);
+                drawHUDOverlays(predictions);
+            } catch (err) {}
+            detectionAnimId = requestAnimationFrame(detectFrame);
+        }
+
+        function drawHUDOverlays(predictions) {
+            overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+            const scaleX = overlayCanvas.width / cameraVideo.videoWidth;
+            const scaleY = overlayCanvas.height / cameraVideo.videoHeight;
+
+            predictions.forEach(p => {
+                const [x, y, width, height] = p.bbox;
+                const sx = x * scaleX, sy = y * scaleY, sw = width * scaleX, sh = height * scaleY;
+
+                overlayCtx.strokeStyle = '#00f0ff';
+                overlayCtx.lineWidth = 2;
+                overlayCtx.shadowColor = '#00f0ff';
+                overlayCtx.shadowBlur = 8;
+                overlayCtx.strokeRect(sx, sy, sw, sh);
+
+                const label = `${p.class.toUpperCase()} ${Math.round(p.score * 100)}%`;
+                overlayCtx.fillStyle = 'rgba(0, 240, 255, 0.85)';
+                overlayCtx.fillRect(sx, sy - 20, overlayCtx.measureText(label).width + 12, 20);
+
+                overlayCtx.fillStyle = '#020710';
+                overlayCtx.font = 'bold 10px Consolas, monospace';
+                overlayCtx.shadowBlur = 0;
+                
+                // Un-flip text rendered on canvas so it reads naturally left-to-right
+                overlayCtx.save();
+                overlayCtx.scale(-1, 1);
+                overlayCtx.fillText(label, -(sx + overlayCtx.measureText(label).width + 6), sy - 6);
+                overlayCtx.restore();
+            });
+        }
+
+        function captureCameraFrame() {
+            if (!cameraStream || !cameraVideo.videoWidth) return null;
+            hiddenCanvas.width = cameraVideo.videoWidth;
+            hiddenCanvas.height = cameraVideo.videoHeight;
+            
+            // Mirror frame buffer prior to multi-modal AI submission
+            hiddenContext.save();
+            hiddenContext.scale(-1, 1);
+            hiddenContext.drawImage(cameraVideo, -hiddenCanvas.width, 0, hiddenCanvas.width, hiddenCanvas.height);
+            hiddenContext.restore();
+            
+            return hiddenCanvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+        }
+
+        function closeVisualPanel() {
+            visualPanel.classList.remove('visible');
+            visualSubtitle.classList.remove('visible');
+            reactorWrapper.classList.remove('hidden-mode');
+        }
+
+        function displayVisualMedia(htmlContent) {
+            visualContent.innerHTML = htmlContent;
+            reactorWrapper.classList.add('hidden-mode');
+            setTimeout(() => { visualPanel.classList.add('visible'); }, 150);
+        }
+
+        function setWaveform(active) {
+            clearInterval(waveInterval);
+            if (active) {
+                waveInterval = setInterval(() => {
+                    waveBars.forEach(bar => {
+                        bar.style.height = `${Math.floor(Math.random() * 18) + 3}px`;
+                    });
+                }, 100);
+            } else {
+                waveBars.forEach(bar => bar.style.height = '4px');
+            }
+        }
+
+        function loadVoices() {
+            const voices = window.speechSynthesis.getVoices();
+            if (!voices.length) return;
+            voiceSelect.innerHTML = '';
+            const preferences = ["Google UK English Male", "Microsoft Ryan Online (Natural)", "Microsoft George", "Daniel", "en-GB", "en-US"];
+            voices.forEach((v, index) => {
+                const opt = document.createElement('option');
+                opt.value = index; opt.textContent = `${v.name} (${v.lang})`;
+                voiceSelect.appendChild(opt);
+            });
+
+            for (let pref of preferences) {
+                const idx = voices.findIndex(v => v.name.includes(pref) || v.lang === pref);
+                if (idx !== -1) { voiceSelect.value = idx; selectedVoice = voices[idx]; break; }
+            }
+            if (!selectedVoice && voices.length > 0) { selectedVoice = voices[0]; voiceSelect.value = 0; }
+        }
+
+        function updateSelectedVoice() {
+            selectedVoice = window.speechSynthesis.getVoices()[voiceSelect.value];
+            speak("Voice synthesizer modified.");
+        }
+
+        window.speechSynthesis.onvoiceschanged = loadVoices;
+        loadVoices();
+
+        function speak(text, callback) {
+            window.speechSynthesis.cancel();
+            if (visualPanel.classList.contains('visible')) {
+                visualSubtitle.innerText = text; visualSubtitle.classList.add('visible');
+            } else {    
+                reactorWrapper.classList.add('shifted-up');
+                centralOverlay.innerText = text; centralOverlay.classList.add('visible');
+            }
+
+            const utterance = new SpeechSynthesisUtterance(text);
+            if (selectedVoice) utterance.voice = selectedVoice;
+            utterance.rate = 1.2;
+
+            utterance.onstart = () => setWaveform(true);
+            utterance.onend = () => { 
+                setWaveform(false);
+                setTimeout(() => {
+                    centralOverlay.classList.remove('visible');
+                    visualSubtitle.classList.remove('visible');
+                    reactorWrapper.classList.remove('shifted-up');
+                }, 1200);
+                if (callback) callback(); 
+            };
+
+            window.speechSynthesis.speak(utterance);
+        }
+
+        function log(sender, message, type) {
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.innerText = `${sender}: ${message}`;
+            consoleLog.appendChild(entry);
+            consoleLog.scrollTop = consoleLog.scrollHeight;
+        }
+
+        function triggerAlarmSound() {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const now = audioCtx.currentTime;
+                for (let i = 0; i < 3; i++) {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'sine'; osc.frequency.setValueAtTime(880, now + (i * 0.25));
+                    gain.gain.setValueAtTime(0.3, now + (i * 0.25));
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + (i * 0.25) + 0.18);
+                    osc.connect(gain); gain.connect(audioCtx.destination);
+                    osc.start(now + (i * 0.25)); osc.stop(now + (i * 0.25) + 0.2);
+                }
+            } catch(e) {}
+        }
+
+        function renderWidgetDock() {
+            widgetDock.innerHTML = '';
+            let hasWidgets = false;
+
+            if (stopwatch.running || stopwatch.elapsed > 0) {
+                hasWidgets = true;
+                const totalSecs = Math.floor(stopwatch.elapsed / 1000);
+                const mins = Math.floor(totalSecs / 60);
+                const secs = totalSecs % 60;
+                const ms = Math.floor((stopwatch.elapsed % 1000) / 100);
+
+                const card = document.createElement('div');
+                card.className = 'hud-card';
+                card.innerHTML = `
+                    <div class="hud-card-header">
+                        <span>⏱ STOPWATCH</span>
+                        <button class="widget-btn" onclick="stopStopwatch()">CLEAR</button>
+                    </div>
+                    <div class="hud-card-body">
+                        <div class="time-digits">${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${ms}</div>
+                        <button class="widget-btn" onclick="toggleStopwatchState()">${stopwatch.running ? 'PAUSE' : 'START'}</button>
+                    </div>
+                `;
+                widgetDock.appendChild(card);
+            }
+
+            activeTimers.forEach((t, idx) => {
+                hasWidgets = true;
+                const remainingSecs = Math.max(0, Math.ceil((t.endTime - Date.now()) / 1000));
+                const mins = Math.floor(remainingSecs / 60);
+                const secs = remainingSecs % 60;
+
+                const card = document.createElement('div');
+                card.className = 'hud-card';
+                card.innerHTML = `
+                    <div class="hud-card-header">
+                        <span>⏳ TIMER [${t.label.toUpperCase()}]</span>
+                        <button class="widget-btn" onclick="cancelTimer(${idx})">CANCEL</button>
+                    </div>
+                    <div class="hud-card-body">
+                        <div class="time-digits">${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}</div>
+                    </div>
+                `;
+                widgetDock.appendChild(card);
+            });
+
+            activeAlarms.forEach((a, idx) => {
+                hasWidgets = true;
+                const card = document.createElement('div');
+                card.className = 'hud-card';
+                card.innerHTML = `
+                    <div class="hud-card-header">
+                        <span>⏰ ALARM [${a.label.toUpperCase()}]</span>
+                        <button class="widget-btn" onclick="cancelAlarm(${idx})">DEL</button>
+                    </div>
+                    <div class="hud-card-body">
+                        <div class="time-digits">${a.timeString}</div>
+                    </div>
+                `;
+                widgetDock.appendChild(card);
+            });
+
+            if (hasWidgets) widgetDock.classList.add('active');
+            else widgetDock.classList.remove('active');
+        }
+
+        function cancelTimer(i) { clearTimeout(activeTimers[i].timeoutId); activeTimers.splice(i, 1); renderWidgetDock(); }
+        function cancelAlarm(i) { activeAlarms.splice(i, 1); renderWidgetDock(); }
+        function stopStopwatch() { stopwatch.running = false; stopwatch.elapsed = 0; renderWidgetDock(); }
+        function toggleStopwatchState() {
+            if (stopwatch.running) { stopwatch.elapsed = Date.now() - stopwatch.startTime; stopwatch.running = false; }
+            else { stopwatch.startTime = Date.now() - stopwatch.elapsed; stopwatch.running = true; }
+            renderWidgetDock();
+        }
+
+        setInterval(() => {
+            const now = new Date();
+            const currentHHMM = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+            activeAlarms.forEach((alarm, idx) => {
+                if (alarm.timeString === currentHHMM && !alarm.triggered) {
+                    alarm.triggered = true;
+                    triggerAlarmSound();
+                    log("J.A.R.V.I.S.", `Alarm triggered: ${alarm.label}`, "jarvis-log");
+                    speak(`Alarm ringing for ${alarm.label}, sir.`);
+                    activeAlarms.splice(idx, 1);
+                }
+            });
+            if (stopwatch.running) stopwatch.elapsed = Date.now() - stopwatch.startTime;
+            renderWidgetDock();
+        }, 200);
+
+        function initSpeechEngine() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) return;
+
+            recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.interimResults = false;
+            recognition.lang = 'en-US';
+
+            recognition.onresult = (event) => {
+                if (isProcessing) return;
+                const transcript = event.results[0][0].transcript.toLowerCase().trim();
+                if (transcript.includes("hey jarvis") || transcript.includes("jarvis")) {
+                    let cmd = transcript.split(/hey jarvis|jarvis/i).pop().trim();
+                    if (cmd.length > 2) processUserCommand(cmd);
+                    else {
+                        statusDisplay.innerText = "STANDBY: WAKE WORD DETECTED";
+                        core.className = "ring core listening";
+                    }
+                } else processUserCommand(transcript);
+            };
+
+            recognition.onerror = () => { if (isSystemActive && !isProcessing) setTimeout(() => { try { recognition.start(); } catch(e){} }, 1000); };
+            recognition.onend = () => { if (isSystemActive && !isProcessing) setTimeout(() => { try { recognition.start(); } catch(e){} }, 500); };
+        }
+
+        function triggerManualListen() {
+            if (!isSystemActive) { toggleSystem(); return; }
+            statusDisplay.innerText = "LISTENING...";
+            core.className = "ring core listening";
+            try { recognition.start(); } catch(e){}
+        }
+
+        async function toggleSystem() {
+            if (!isSystemActive) {
+                const key = apiKeyInput.value.trim();
+                if (!key) { alert("Please enter a valid Gemini API Key."); return; }
+                saveKey();
+                requestLocation();
+                isSystemActive = true;
+                document.getElementById('power-btn').innerText = "SHUTDOWN";
+                statusDisplay.innerText = "ONLINE: LISTENING FOR VOICE...";
+                core.className = "ring core";
+                if (!recognition) initSpeechEngine();
+                try { recognition.start(); } catch(e) {}
+                speak("Welcome back, sir. Interface updated.");
+                log("J.A.R.V.I.S.", "System online.", "jarvis-log");
+            } else {
+                isSystemActive = false;
+                document.getElementById('power-btn').innerText = "INITIALIZE";
+                statusDisplay.innerText = "SYSTEM OFFLINE";
+                core.className = "ring core";
+                if (recognition) recognition.stop();
+                window.speechSynthesis.cancel();
+                setWaveform(false);
+                chatHistory = [];
+                activeTimers.forEach(t => clearTimeout(t.timeoutId));
+                activeTimers = []; activeAlarms = [];
+                stopwatch = { running: false, startTime: 0, elapsed: 0 };
+                toggleCamera(false);
+                toggleMap(false);
+                toggleChangelog(false);
+                renderWidgetDock();
+                closeVisualPanel();
+                reactorWrapper.classList.remove('shifted-up');
+                log("J.A.R.V.I.S.", "System offline.", "jarvis-log");
+            }
+        }
+
+        function handleKeyPress(e) { if (e.key === 'Enter') sendManualCommand(); }
+        function sendManualCommand() {
+            const cmd = manualCmdInput.value.trim();
+            if (cmd) { manualCmdInput.value = ''; processUserCommand(cmd); }
+        }
+
+        /* Tool Handler Execution Layer */
+        async function executeLocalTool(toolCall) {
+            const name = toolCall.name;
+            const args = toolCall.args || {};
+
+            if (name === "update_code") {
+                const newCode = args.html_code;
+                if (!newCode || typeof newCode !== "string" || !newCode.trim()) {
+                    return "Update failed: Invalid or empty code provided.";
+                }
+                try {
+                    document.open();
+                    document.write(newCode);
+                    document.close();
+                    return "System code updated and reloaded successfully.";
+                } catch (err) {
+                    return `Update failed with error: ${err.message}`;
+                }
+            }
+
+            if (name === "get_user_location") {
+                toggleMap(true);
+                recenterUserMap();
+                return `Current GPS coordinates locked: ${userCoords.lat}, ${userCoords.lon}. Centered on map.`;
+            }
+
+            if (name === "search_nearby") {
+                toggleMap(true);
+                clearMapMarkers();
+                const category = args.category || "cafe";
+
+                try {
+                    const overpassUrl = `https://overpass-api.de/api/interpreter?data=[out:json];node(around:4000,${userCoords.lat},${userCoords.lon})["amenity"="${category}"];out 12;`;
+                    const res = await fetch(overpassUrl);
+                    const data = await res.json();
+
+                    if (data.elements && data.elements.length > 0) {
+                        const poiList = [];
+                        data.elements.forEach((el, idx) => {
+                            const name = el.tags.name || `${category.toUpperCase()} Spot #${idx+1}`;
+                            poiList.push(name);
+
+                            const poiIcon = L.divIcon({
+                                className: 'custom-poi-radar',
+                                html: `<div class="radar-marker-poi"></div>`,
+                                iconSize: [14, 14]
+                            });
+
+                            const marker = L.marker([el.lat, el.lon], { icon: poiIcon }).addTo(map)
+                                .bindPopup(`<b>${name}</b><br>Click to calculate road route.`);
+                            
+                            marker.on('click', () => {
+                                executeLocalTool({ name: "calculate_route", args: { destination_name: name, destination_lat: el.lat, destination_lon: el.lon } });
+                            });
+
+                            poiMarkers.push(marker);
+                        });
+
+                        map.fitBounds(L.featureGroup([userMarker, ...poiMarkers]).getBounds().pad(0.2));
+                        sidebarTargetInfo.innerText = `Found ${data.elements.length} nearby '${category}' spots.`;
+                        return `Found ${data.elements.length} nearby spots for '${category}': ${poiList.slice(0, 3).join(', ')}. Plotted on map.`;
+                    } else {
+                        return `No nearby locations found for '${category}' in range.`;
+                    }
+                } catch (e) {
+                    return `Error fetching nearby places for ${category}.`;
+                }
+            }
+
+            if (name === "calculate_route") {
+                toggleMap(true);
+                clearMapMarkers();
+
+                let destLat = args.destination_lat;
+                let destLon = args.destination_lon;
+                const destName = args.destination_name || "Target Spot";
+
+                if (!destLat || !destLon) {
+                    try {
+                        const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(destName)}`);
+                        const geoData = await geoRes.json();
+                        if (geoData && geoData.length > 0) {
+                            destLat = parseFloat(geoData[0].lat);
+                            destLon = parseFloat(geoData[0].lon);
+                        } else {
+                            destLat = userCoords.lat + 0.025;
+                            destLon = userCoords.lon + 0.025;
+                        }
+                    } catch(e) {
+                        destLat = userCoords.lat + 0.025;
+                        destLon = userCoords.lon + 0.025;
+                    }
+                }
+
+                const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${userCoords.lon},${userCoords.lat};${destLon},${destLat}?overview=full&geometries=geojson`;
+
+                try {
+                    const response = await fetch(osrmUrl);
+                    const routeData = await response.json();
+
+                    if (routeData.routes && routeData.routes.length > 0) {
+                        const route = routeData.routes[0];
+                        const routeCoordinates = route.geometry.coordinates.map(coord => [coord[1], coord[0]]);
+                        const distanceMiles = (route.distance / 1609.34).toFixed(2);
+                        const driveTimeMins = Math.round(route.duration / 60);
+
+                        routeLayer = L.polyline(routeCoordinates, {
+                            color: '#00f0ff',
+                            weight: 5,
+                            opacity: 0.85,
+                            lineJoin: 'round'
+                        }).addTo(map);
+
+                        const destIcon = L.divIcon({
+                            className: 'custom-dest-radar',
+                            html: `<div class="radar-marker-poi"></div>`,
+                            iconSize: [14, 14]
+                        });
+
+                        const targetMarker = L.marker([destLat, destLon], { icon: destIcon }).addTo(map)
+                            .bindPopup(`<b>${destName}</b><br>Road Dist: ${distanceMiles} mi<br>Drive: ~${driveTimeMins} mins`)
+                            .openPopup();
+                        poiMarkers.push(targetMarker);
+
+                        map.fitBounds(routeLayer.getBounds().pad(0.2));
+
+                        sidebarTargetInfo.innerText = `${destName}\nDist: ${distanceMiles} mi`;
+                        sidebarRouteInfo.innerHTML = `Drive: ~${driveTimeMins} min<br>Distance: ${distanceMiles} mi`;
+
+                        return `Road route locked to ${destName}. Distance: ${distanceMiles} miles. Estimated driving time: ~${driveTimeMins} minutes.`;
+                    }
+                } catch (err) {
+                    return `Route calculation error. Destination set to ${destName}.`;
+                }
+            }
+
+            if (name === "switch_map_layer") {
+                toggleMap(true);
+                const layer = (args.layer_type || "google").toLowerCase();
+                if (layer.includes("sat") || layer.includes("hybrid")) {
+                    map.eachLayer(l => { if (l !== userMarker && !poiMarkers.includes(l) && l !== routeLayer) map.removeLayer(l); });
+                    googleSatellite.addTo(map);
+                    return "Switched map feed to Google Satellite.";
+                } else if (layer.includes("osm") || layer.includes("street")) {
+                    map.eachLayer(l => { if (l !== userMarker && !poiMarkers.includes(l) && l !== routeLayer) map.removeLayer(l); });
+                    osmDetailed.addTo(map);
+                    return "Switched map feed to OpenStreetMap Standard.";
+                } else {
+                    map.eachLayer(l => { if (l !== userMarker && !poiMarkers.includes(l) && l !== routeLayer) map.removeLayer(l); });
+                    googleRoadmap.addTo(map);
+                    return "Switched map feed to Detailed Google Roadmap.";
+                }
+            }
+
+            if (name === "open_app") {
+                const targetApp = (args.app_name || "").toLowerCase();
+                const appSchemes = { spotify: "spotify:", steam: "steam:", xbox: "xbox:", discord: "discord:" };
+                if (appSchemes[targetApp]) { window.location.href = appSchemes[targetApp]; return `Launching ${targetApp.toUpperCase()}...`; }
+                return `Application ${targetApp} is not configured.`;
+            }
+
+            if (name === "control_camera") {
+                const action = args.action || "toggle";
+                if (action === "open") return await toggleCamera(true);
+                if (action === "close") return await toggleCamera(false);
+                return await toggleCamera();
+            }
+
+            if (name === "set_timer") {
+                const seconds = args.seconds || 0;
+                const label = args.label || "Timer";
+                const endTime = Date.now() + (seconds * 1000);
+                const timeoutId = setTimeout(() => {
+                    triggerAlarmSound();
+                    log("J.A.R.V.I.S.", `Timer complete: ${label}`, "jarvis-log");
+                    speak(`Timer for ${label} has elapsed, sir.`);
+                    activeTimers = activeTimers.filter(t => t.timeoutId !== timeoutId);
+                    renderWidgetDock();
+                }, seconds * 1000);
+                activeTimers.push({ label, endTime, timeoutId });
+                renderWidgetDock();
+                return `Timer set for ${seconds} seconds.`;
+            }
+
+            if (name === "set_alarm") {
+                activeAlarms.push({ timeString: args.time, label: args.label || "Alarm", triggered: false });
+                renderWidgetDock();
+                return `Alarm set for ${args.time}.`;
+            }
+
+            if (name === "control_stopwatch") {
+                if (args.action === "start") { if (!stopwatch.running) { stopwatch.startTime = Date.now() - stopwatch.elapsed; stopwatch.running = true; } }
+                else if (args.action === "stop") { if (stopwatch.running) { stopwatch.elapsed = Date.now() - stopwatch.startTime; stopwatch.running = false; } }
+                else if (args.action === "reset") { stopwatch.running = false; stopwatch.elapsed = 0; }
+                renderWidgetDock();
+                return `Stopwatch ${args.action}ed.`;
+            }
+
+            if (name === "render_diagram") {
+                displayVisualMedia(`<div class="mermaid" style="width:100%; text-align:center;">${args.mermaid_code}</div>`);
+                setTimeout(() => { mermaid.run(); }, 100);
+                return `Diagram rendered on HUD.`;
+            }
+
+            if (name === "show_image") {
+                const imgUrl = `https://source.unsplash.com/featured/?${encodeURIComponent(args.query)}`;
+                displayVisualMedia(`<img src="${imgUrl}" alt="${args.query}" onerror="this.onerror=null; this.src='https://dummyimage.com/600x400/001020/00f0ff&text=Image+Unavailable';">`);
+                return `Displaying visual schematic for ${args.query}.`;
+            }
+
+            return "Command executed.";
+        }
+
+        async function processUserCommand(command) {
+            const rawKey = apiKeyInput.value.trim();
+            if (!rawKey) return;
+
+            const now = Date.now();
+            if (now - lastCallTime < 2500) return;
+            lastCallTime = now;
+
+            isProcessing = true;
+            try { recognition.stop(); } catch(e) {}
+
+            log("You", command, "user-log");
+            statusDisplay.innerText = "PROCESSING...";
+            core.className = "ring core thinking";
+
+            const userParts = [{ text: command }];
+            if (cameraPanel.classList.contains('active')) {
+                const base64Image = captureCameraFrame();
+                if (base64Image) userParts.push({ inlineData: { mimeType: "image/jpeg", data: base64Image } });
+            }
+
+            chatHistory.push({ role: "user", parts: userParts });
+            if (chatHistory.length > 20) chatHistory = chatHistory.slice(-20);
+
+            const modelNames = [
+                'gemini-3.6-flash',
+                'gemini-3.5-flash',
+                'gemini-3.5-flash-lite',
+                'gemini-3.1-pro-preview',
+                'gemini-3-flash-preview',
+                'gemini-2.5-pro',
+                'gemini-2.5-flash',
+                'gemini-2.5-flash-lite',
+                'gemini-2.0-flash',
+                'gemini-1.5-flash',
+                'gemini-1.5-pro'
+            ];
+
+            const currentTimeStr = new Date().toLocaleString();
+            const systemPrompt = `You are J.A.R.V.I.S., an extraordinarily intelligent, concise, and loyal AI assistant.
+Current Time: ${currentTimeStr}
+Current Coordinates: ${userLocationString}
+Capabilities:
+- Self Code Update: Modify or reprogram your own application interface dynamically using 'update_code'.
+- Location & Map: Retrieve GPS user location via 'get_user_location'.
+- Nearby Places: Search cafes, gas stations, hospitals, etc., via 'search_nearby'.
+- Road Routing: Calculate turn-by-turn road routes and driving estimates via 'calculate_route'.
+- Map Feeds: Toggle between Google Roadmap, Satellite, and OpenStreetMap via 'switch_map_layer'.
+- Visual Processing: Inspect attached camera images.
+- Launch desktop applications (spotify, steam, xbox, discord) via 'open_app'.
+- Control camera feed (open, close, toggle) via 'control_camera'.
+- Timers, alarms, stopwatches, diagrams, and image renders via tools.
+Keep spoken responses under 2 sentences. No markdown formatting in speech.`;
+
+            const tools = [{
+                function_declarations: [
+                    {
+                        name: "update_code",
+                        description: "Updates and replaces the system's entire application HTML/JS/CSS code live to add features or fix issues.",
+                        parameters: {
+                            type: "OBJECT",
+                            properties: { html_code: { type: "STRING", description: "The full HTML string containing the complete updated web application code." } },
+                            required: ["html_code"]
+                        }
+                    },
+                    {
+                        name: "get_user_location",
+                        description: "Retrieves current user GPS coordinates and centers the HUD map.",
+                        parameters: { type: "OBJECT", properties: {} }
+                    },
+                    {
+                        name: "search_nearby",
+                        description: "Searches for nearby places (cafe, restaurant, fuel, hospital, bank) around current coordinates.",
+                        parameters: {
+                            type: "OBJECT",
+                            properties: { category: { type: "STRING", description: "Search keyword, e.g. cafe, fuel, hospital, restaurant, bank" } },
+                            required: ["category"]
+                        }
+                    },
+                    {
+                        name: "calculate_route",
+                        description: "Calculates turn-by-turn road directions and driving time to a target location.",
+                        parameters: {
+                            type: "OBJECT",
+                            properties: {
+                                destination_name: { type: "STRING", description: "Name or query of target location" },
+                                destination_lat: { type: "NUMBER" },
+                                destination_lon: { type: "NUMBER" }
+                            },
+                            required: ["destination_name"]
+                        }
+                    },
+                    {
+                        name: "switch_map_layer",
+                        description: "Switches the map layer view between google, satellite, and osm.",
+                        parameters: {
+                            type: "OBJECT",
+                            properties: { layer_type: { type: "STRING", enum: ["google", "satellite", "osm"] } },
+                            required: ["layer_type"]
+                        }
+                    },
+                    {
+                        name: "open_app",
+                        description: "Launches a desktop application on the target machine.",
+                        parameters: {
+                            type: "OBJECT",
+                            properties: { app_name: { type: "STRING", enum: ["spotify", "steam", "xbox", "discord"] } },
+                            required: ["app_name"]
+                        }
+                    },
+                    {
+                        name: "control_camera",
+                        description: "Opens, closes, or toggles optical camera feed.",
+                        parameters: {
+                            type: "OBJECT",
+                            properties: { action: { type: "STRING", enum: ["open", "close", "toggle"] } },
+                            required: ["action"]
+                        }
+                    },
+                    {
+                        name: "set_timer",
+                        description: "Sets a countdown timer in seconds.",
+                        parameters: { type: "OBJECT", properties: { seconds: { type: "NUMBER" }, label: { type: "STRING" } }, required: ["seconds"] }
+                    },
+                    {
+                        name: "set_alarm",
+                        description: "Sets an alarm for a specific time.",
+                        parameters: { type: "OBJECT", properties: { time: { type: "STRING" }, label: { type: "STRING" } }, required: ["time"] }
+                    },
+                    {
+                        name: "control_stopwatch",
+                        description: "Controls the stopwatch.",
+                        parameters: { type: "OBJECT", properties: { action: { type: "STRING", enum: ["start", "stop", "reset"] } }, required: ["action"] }
+                    },
+                    {
+                        name: "render_diagram",
+                        description: "Renders a Mermaid.js diagram or flowchart on screen.",
+                        parameters: {
+                            type: "OBJECT",
+                            properties: { mermaid_code: { type: "STRING" }, title: { type: "STRING" } },
+                            required: ["mermaid_code"]
+                        }
+                    },
+                    {
+                        name: "show_image",
+                        description: "Fetches and displays an image or schematic on HUD.",
+                        parameters: {
+                            type: "OBJECT",
+                            properties: { query: { type: "STRING" } },
+                            required: ["query"]
+                        }
+                    }
+                ]
+            }];
+
+            let success = false;
+            for (const model of modelNames) {
+                try {
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(rawKey)}`;
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            system_instruction: { parts: [{ text: systemPrompt }] },
+                            tools: tools,
+                            contents: chatHistory
+                        })
+                    });
+
+                    if (response.status === 404 || response.status === 429) continue;
+
+                    const data = await response.json();
+                    if (response.ok && data.candidates && data.candidates[0]) {
+                        const candidatePart = data.candidates[0].content.parts[0];
+
+                        if (candidatePart.functionCall) {
+                            const resultMsg = await executeLocalTool(candidatePart.functionCall);
+                            chatHistory.push({ role: "model", parts: [{ functionCall: candidatePart.functionCall }] });
+                            log("J.A.R.V.I.S.", resultMsg, "jarvis-log");
+                            speak(resultMsg, () => { resumeListening(); });
+                            success = true;
+                            break;
+                        } else if (candidatePart.text) {
+                            const reply = candidatePart.text.replace(/[*#]/g, '');
+                            chatHistory.push({ role: "model", parts: [{ text: reply }] });
+                            log("J.A.R.V.I.S.", reply, "jarvis-log");
+                            speak(reply, () => { resumeListening(); });
+                            success = true;
+                            break;
+                        }
+                    }
+                } catch (err) { console.error("Fetch error:", err); }
+            }
+
+            if (!success) {
+                chatHistory.pop();
+                log("J.A.R.V.I.S.", "Connection error or quota limit reached across fallback models.", "jarvis-log");
+                speak("Connection error or rate limit reached, sir.", () => { resumeListening(); });
+            }
+        }
+
+        function resumeListening() {
+            isProcessing = false;
+            core.className = "ring core";
+            statusDisplay.innerText = "ONLINE: LISTENING FOR VOICE...";
+            if (isSystemActive) { try { recognition.start(); } catch(e) {} }
+        }
+    </script>
+</body>
+</html>
