@@ -19,6 +19,16 @@ const SPOTIFY_REDIRECT_PORT = 43417;
 const SPOTIFY_REDIRECT_URI = `http://127.0.0.1:${SPOTIFY_REDIRECT_PORT}/callback`;
 const SPOTIFY_AUTH_SCOPES = 'playlist-read-private playlist-read-collaborative user-library-read';
 
+// Local loopback redirect for Google's OAuth 2.0 Authorization Code + PKCE
+// flow — this exact URI must be added to the "Authorized redirect URIs" of
+// the Desktop-app OAuth client in Google Cloud Console for login to work.
+// Read-only scope only: no send/modify/delete requested, so even a leaked
+// token can't act on the mailbox, only read it (see
+// docs/superpowers/specs/2026-08-15-gmail-google-connector-design.md).
+const GOOGLE_REDIRECT_PORT = 43418;
+const GOOGLE_REDIRECT_URI = `http://127.0.0.1:${GOOGLE_REDIRECT_PORT}/callback`;
+const GOOGLE_AUTH_SCOPES = 'https://www.googleapis.com/auth/gmail.readonly openid email profile';
+
 let mainWindow = null;
 let tray = null;
 let micProcess = null;
@@ -754,6 +764,308 @@ function registerSpotifyAuthIpc() {
   });
 }
 
+// --- Google account connection (Authorization Code + PKCE OAuth) ---------
+// Gives JARVIS read access to the user's own Gmail — see
+// docs/superpowers/specs/2026-08-15-gmail-google-connector-design.md.
+// Tokens are encrypted at rest via Electron's safeStorage, same as Spotify.
+function googleTokensPath() {
+  return path.join(app.getPath('userData'), 'google-tokens.bin');
+}
+
+function loadGoogleTokens() {
+  try {
+    const tokenPath = googleTokensPath();
+    if (!fs.existsSync(tokenPath) || !safeStorage.isEncryptionAvailable()) return null;
+    const decrypted = safeStorage.decryptString(fs.readFileSync(tokenPath));
+    return JSON.parse(decrypted);
+  } catch (e) {
+    return null;
+  }
+}
+
+function saveGoogleTokens(tokens) {
+  if (!safeStorage.isEncryptionAvailable()) return;
+  fs.writeFileSync(googleTokensPath(), safeStorage.encryptString(JSON.stringify(tokens)));
+}
+
+function clearGoogleTokens() {
+  try {
+    const tokenPath = googleTokensPath();
+    if (fs.existsSync(tokenPath)) fs.unlinkSync(tokenPath);
+  } catch (e) {}
+}
+
+// Google's token endpoint takes client_id/client_secret as plain POST body
+// fields (unlike Spotify's HTTP Basic auth header).
+function googleTokenRequest(bodyParams) {
+  const body = new URLSearchParams(bodyParams).toString();
+
+  return new Promise((resolve, reject) => {
+    const req = https.request('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Length': Buffer.byteLength(body)
+      }
+    }, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        let parsed;
+        try {
+          parsed = JSON.parse(data);
+        } catch (e) {
+          reject(new Error('Invalid Google token response'));
+          return;
+        }
+        if (res.statusCode !== 200) {
+          reject(new Error(parsed?.error_description || parsed?.error || `Google token exchange HTTP ${res.statusCode}`));
+          return;
+        }
+        resolve(parsed);
+      });
+    });
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+}
+
+async function getValidGoogleAccessToken(clientId, clientSecret) {
+  const tokens = loadGoogleTokens();
+  if (!tokens || !tokens.refresh_token) return null;
+
+  if (tokens.access_token && tokens.expires_at && Date.now() < tokens.expires_at - 60000) {
+    return tokens.access_token;
+  }
+
+  const refreshed = await googleTokenRequest({
+    grant_type: 'refresh_token',
+    refresh_token: tokens.refresh_token,
+    client_id: clientId,
+    client_secret: clientSecret
+  });
+
+  const updated = {
+    access_token: refreshed.access_token,
+    refresh_token: tokens.refresh_token, // Google does not re-issue this on refresh
+    expires_at: Date.now() + refreshed.expires_in * 1000
+  };
+  saveGoogleTokens(updated);
+  return updated.access_token;
+}
+
+function gmailApiGet(url, accessToken) {
+  return new Promise((resolve, reject) => {
+    https.get(url, { headers: { Authorization: `Bearer ${accessToken}` } }, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        if (res.statusCode !== 200) {
+          let reason = data;
+          try { reason = JSON.parse(data)?.error?.message || data; } catch (e) {}
+          reject(new Error(`Gmail API HTTP ${res.statusCode}: ${reason}`));
+          return;
+        }
+        try {
+          resolve(JSON.parse(data));
+        } catch (e) {
+          reject(new Error('Invalid Gmail API response'));
+        }
+      });
+    }).on('error', reject);
+  });
+}
+
+function extractGmailHeader(headers, name) {
+  const found = (headers || []).find((h) => h.name.toLowerCase() === name.toLowerCase());
+  return found ? found.value : '';
+}
+
+async function fetchGmailMessageSummary(id, accessToken) {
+  const url = `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`;
+  const data = await gmailApiGet(url, accessToken);
+  const headers = data.payload?.headers || [];
+  return {
+    id: data.id,
+    from: extractGmailHeader(headers, 'From'),
+    subject: extractGmailHeader(headers, 'Subject'),
+    date: extractGmailHeader(headers, 'Date'),
+    snippet: data.snippet || ''
+  };
+}
+
+async function listGmailMessages(accessToken, { q, maxResults = 10 } = {}) {
+  const params = new URLSearchParams({ maxResults: String(maxResults) });
+  if (q) params.set('q', q);
+  const listData = await gmailApiGet(`https://gmail.googleapis.com/gmail/v1/users/me/messages?${params.toString()}`, accessToken);
+  const ids = (listData.messages || []).map((m) => m.id);
+  return Promise.all(ids.map((id) => fetchGmailMessageSummary(id, accessToken)));
+}
+
+function decodeGmailBase64Url(data) {
+  return Buffer.from(data.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf-8');
+}
+
+// Recursively finds the first text/plain part in a (possibly multipart)
+// Gmail message payload; falls back to a stripped text/html part if no
+// plain-text part exists.
+function findGmailPlainTextPart(payload) {
+  if (!payload) return '';
+  if (payload.mimeType === 'text/plain' && payload.body?.data) return decodeGmailBase64Url(payload.body.data);
+  if (payload.parts) {
+    for (const part of payload.parts) {
+      const found = findGmailPlainTextPart(part);
+      if (found) return found;
+    }
+  }
+  if (payload.mimeType === 'text/html' && payload.body?.data) {
+    return decodeGmailBase64Url(payload.body.data).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+  return '';
+}
+
+async function fetchGmailFullMessage(id, accessToken) {
+  const data = await gmailApiGet(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=full`, accessToken);
+  const headers = data.payload?.headers || [];
+  const body = findGmailPlainTextPart(data.payload) || data.snippet || '';
+  return {
+    id: data.id,
+    from: extractGmailHeader(headers, 'From'),
+    subject: extractGmailHeader(headers, 'Subject'),
+    date: extractGmailHeader(headers, 'Date'),
+    // Truncated so a long email doesn't get read back verbatim word-for-word.
+    body: body.length > 2000 ? body.slice(0, 2000) + '…' : body
+  };
+}
+
+function registerGoogleAuthIpc() {
+  ipcMain.handle('google:auth-status', () => {
+    const tokens = loadGoogleTokens();
+    return { authenticated: !!(tokens && tokens.refresh_token) };
+  });
+
+  ipcMain.handle('google:logout', () => {
+    clearGoogleTokens();
+    return { success: true };
+  });
+
+  // Authorization Code + PKCE flow via a local loopback HTTP server, same
+  // pattern as Spotify above. access_type=offline + prompt=consent guarantee
+  // a refresh_token comes back (Google only issues one on first consent
+  // otherwise). code_verifier/code_challenge are PKCE — Google's Desktop-app
+  // OAuth clients get a client_secret too, but Google's own docs note it
+  // isn't a true secret for installed apps, so PKCE is the real protection.
+  ipcMain.handle('google:authorize', (event, { clientId, clientSecret }) => {
+    if (!clientId || !clientSecret) {
+      return Promise.reject(new Error('Google Client ID and Secret are required to connect your account.'));
+    }
+
+    return new Promise((resolve, reject) => {
+      const state = crypto.randomBytes(16).toString('hex');
+      const codeVerifier = crypto.randomBytes(32).toString('base64url');
+      const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
+      let settled = false;
+      let server;
+
+      const finish = (fn, arg) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        try { server.close(); } catch (e) {}
+        fn(arg);
+      };
+
+      const timeout = setTimeout(() => {
+        finish(reject, new Error('Google login timed out. Please try again.'));
+      }, 120000);
+
+      server = http.createServer((req, res) => {
+        const reqUrl = new URL(req.url, `http://127.0.0.1:${GOOGLE_REDIRECT_PORT}`);
+        if (reqUrl.pathname !== '/callback') {
+          res.writeHead(404);
+          res.end();
+          return;
+        }
+
+        const code = reqUrl.searchParams.get('code');
+        const returnedState = reqUrl.searchParams.get('state');
+        const authError = reqUrl.searchParams.get('error');
+        const ok = !authError && code && returnedState === state;
+
+        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.end(
+          `<html><body style="font-family:sans-serif;background:#05070c;color:${ok ? '#39ff14' : '#ff3b3b'};text-align:center;padding-top:80px">` +
+          `<h2>JARVIS: Google account ${ok ? 'connected' : 'connection failed'}.</h2>` +
+          `<p style="color:#8899aa">You can close this tab and return to JARVIS.</p></body></html>`
+        );
+
+        if (!ok) {
+          finish(reject, new Error(authError ? `Google authorization denied: ${authError}` : 'Invalid Google authorization response.'));
+          return;
+        }
+
+        googleTokenRequest({
+          grant_type: 'authorization_code',
+          code,
+          redirect_uri: GOOGLE_REDIRECT_URI,
+          client_id: clientId,
+          client_secret: clientSecret,
+          code_verifier: codeVerifier
+        }).then((tokenResp) => {
+          if (!tokenResp.refresh_token) {
+            finish(reject, new Error("Google did not return a refresh token. Remove JARVIS from your Google Account's connected apps and try again."));
+            return;
+          }
+          saveGoogleTokens({
+            access_token: tokenResp.access_token,
+            refresh_token: tokenResp.refresh_token,
+            expires_at: Date.now() + tokenResp.expires_in * 1000
+          });
+          finish(resolve, { success: true });
+        }).catch((err) => finish(reject, err));
+      });
+
+      server.on('error', (err) => {
+        finish(reject, new Error(`Could not start local Google login server: ${err.message}`));
+      });
+
+      server.listen(GOOGLE_REDIRECT_PORT, '127.0.0.1', () => {
+        const authUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' + new URLSearchParams({
+          client_id: clientId,
+          response_type: 'code',
+          redirect_uri: GOOGLE_REDIRECT_URI,
+          scope: GOOGLE_AUTH_SCOPES,
+          access_type: 'offline',
+          prompt: 'consent',
+          code_challenge: codeChallenge,
+          code_challenge_method: 'S256',
+          state
+        }).toString();
+        shell.openExternal(authUrl);
+      });
+    });
+  });
+
+  ipcMain.handle('gmail:list-messages', async (event, { clientId, clientSecret, maxResults }) => {
+    const accessToken = await getValidGoogleAccessToken(clientId, clientSecret);
+    if (!accessToken) throw new Error('Not connected to Google. Please connect your account first.');
+    return listGmailMessages(accessToken, { maxResults });
+  });
+
+  ipcMain.handle('gmail:search-messages', async (event, { clientId, clientSecret, query, maxResults }) => {
+    const accessToken = await getValidGoogleAccessToken(clientId, clientSecret);
+    if (!accessToken) throw new Error('Not connected to Google. Please connect your account first.');
+    return listGmailMessages(accessToken, { q: query, maxResults });
+  });
+
+  ipcMain.handle('gmail:get-message', async (event, { clientId, clientSecret, id }) => {
+    const accessToken = await getValidGoogleAccessToken(clientId, clientSecret);
+    if (!accessToken) throw new Error('Not connected to Google. Please connect your account first.');
+    return fetchGmailFullMessage(id, accessToken);
+  });
+}
+
 function sendUpdateState(state) {
   if (mainWindow) mainWindow.webContents.send('update:state', state);
 }
@@ -872,6 +1184,7 @@ app.whenReady().then(() => {
   registerWolframIpc();
   registerSpotifyIpc();
   registerSpotifyAuthIpc();
+  registerGoogleAuthIpc();
   registerUpdaterEvents();
   registerUpdateIpc();
   createWindow();
