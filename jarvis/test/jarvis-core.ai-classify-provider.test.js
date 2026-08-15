@@ -22,7 +22,7 @@ test('_classifyIntentWithAI prefers Groq when useGroq is on and it succeeds', as
   assert.equal(result, '{"toolName":"CONVERSATIONAL","params":{}}');
   assert.equal(groqCalls.length, 1);
   assert.equal(groqCalls[0].options.temperature, 0.1);
-  assert.equal(groqCalls[0].options.maxTokens, 200);
+  assert.equal(groqCalls[0].options.maxTokens, 600);
   const systemMessage = groqCalls[0].messages.find(m => m.role === 'system');
   assert.match(systemMessage.content, /STEAM_LAUNCH_GAME/);
   const userMessage = groqCalls[0].messages.find(m => m.role === 'user');

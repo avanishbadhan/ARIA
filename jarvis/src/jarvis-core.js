@@ -920,7 +920,13 @@ export class JarvisCore {
       { role: 'system', content: INTENT_CLASSIFIER_SYSTEM_PROMPT },
       { role: 'user', content: input }
     ];
-    const options = { temperature: 0.1, maxTokens: 200 };
+    // maxTokens is generous, not just enough for the short JSON answer: High
+    // tier's openai/gpt-oss-120b is a genuine reasoning model that emits a
+    // <think> block before its real output, and a tight budget gets consumed
+    // by that reasoning before the JSON ever gets written, truncating it
+    // mid-string (llm-completion.js's stripThinkTags only helps when the
+    // <think> block actually closes within budget).
+    const options = { temperature: 0.1, maxTokens: 600 };
     const preferGroq = loadSettings().useGroq || !this.openRouter.apiKey;
 
     const tryGroq = async () => {
