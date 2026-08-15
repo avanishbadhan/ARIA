@@ -21,6 +21,8 @@ import { loadSettings, saveSettings } from './settings.js';
 import { classifyIntentWithAI, INTENT_CLASSIFIER_SYSTEM_PROMPT } from './ai-intent-classifier.js';
 import { ScreenVisionHarness } from './screen-vision-harness.js';
 import { GROUNDING_TOOLS, createToolExecutor } from './jarvis-tools.js';
+import { GoogleAccountConnector } from './google-account-connector.js';
+import { GmailHarness } from './gmail-harness.js';
 
 export class JarvisCore {
   constructor(voiceEngine, harness, options = {}) {
@@ -71,6 +73,22 @@ export class JarvisCore {
       onLog: (logData) => this.onLog(logData)
     });
 
+    // Google account credentials are optional — without them connected,
+    // GmailHarness methods return a "connect your account in Settings"
+    // message instead of hitting the network. Instantiated before
+    // toolExecutor below since it captures this.gmailHarness by value. See
+    // docs/superpowers/specs/2026-08-15-gmail-google-connector-design.md.
+    this.googleClientId = localStorage.getItem('jarvis_google_client_id') || '';
+    this.googleClientSecret = localStorage.getItem('jarvis_google_client_secret') || '';
+
+    this.googleAccountConnector = new GoogleAccountConnector({
+      onLog: (logData) => this.onLog(logData)
+    });
+
+    this.gmailHarness = new GmailHarness({
+      onLog: (logData) => this.onLog(logData)
+    });
+
     // Read-only grounding tools (WolframAlpha + web search) exposed to
     // autonomous LLM function-calling for screen vision and general chat —
     // see docs/superpowers/specs/2026-08-14-grounding-tool-calling-design.md.
@@ -79,6 +97,8 @@ export class JarvisCore {
     this.toolExecutor = createToolExecutor({
       wolfram: this.wolfram,
       harness: this.harness,
+      gmail: this.gmailHarness,
+      getGoogleCredentials: () => ({ clientId: this.googleClientId, clientSecret: this.googleClientSecret }),
       onLog: (logData) => this.onLog(logData)
     });
 
@@ -178,6 +198,7 @@ export class JarvisCore {
       "status": "All core modules online. OpenRouter LLM active. Voice synthesis active. Speech recognition online. Google harness standby. Steam and Spotify protocol handlers ready. 7-agent swarm operational.",
       "steam": "Steam launcher harness is ready. I can open the Steam desktop client or launch any of your installed games directly.",
       "spotify": "Spotify harness is ready. I can open the Spotify desktop client, play a specific song if you say \"play <song> on spotify\", or, if your Spotify account is connected in Settings, play your own playlists and albums by name and your Liked Songs.",
+      "gmail": "Gmail harness is ready. If your Google account is connected in Settings, I can check your inbox, search your email, or read a specific message by sender or subject.",
       "time": () => `The current local time is ${new Date().toLocaleTimeString()}.`,
       "date": () => `Today is ${new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}.`,
       "creator": "I was crafted by your AI pair programmer utilizing multi-agent swarm architecture and high-performance Web APIs."
@@ -664,6 +685,51 @@ export class JarvisCore {
       this.onResponse({ text: result.message, actionType: 'CAMERA_QUERY', data: result });
 
       this._updateAgentState("agent-3", "ACTIVE", result.success ? "Camera question answered" : "Camera capture failed");
+      this._pushHistory(input, result.message);
+      await this.voiceEngine.speak(result.message);
+      return;
+    }
+
+    // 8h. Handle Gmail Inbox Check ("check my email")
+    if (decision.toolName === 'GMAIL_CHECK_INBOX') {
+      this._updateAgentState("agent-3", "EXECUTING", "Checking Gmail inbox");
+      this.voiceEngine.playSearchLaunchSound();
+
+      const result = await this.gmailHarness.listRecent(this.googleClientId, this.googleClientSecret);
+
+      this.onResponse({ text: result.message, actionType: 'GMAIL_CHECK_INBOX', data: result });
+
+      this._updateAgentState("agent-3", "ACTIVE", result.success ? "Inbox checked" : "Gmail unavailable");
+      this._pushHistory(input, result.message);
+      await this.voiceEngine.speak(result.message);
+      return;
+    }
+
+    // 8i. Handle Gmail Search ("search my email for the invoice")
+    if (decision.toolName === 'GMAIL_SEARCH') {
+      this._updateAgentState("agent-3", "EXECUTING", `Searching Gmail: "${decision.params.query}"`);
+      this.voiceEngine.playSearchLaunchSound();
+
+      const result = await this.gmailHarness.search(this.googleClientId, this.googleClientSecret, decision.params.query);
+
+      this.onResponse({ text: result.message, actionType: 'GMAIL_SEARCH', data: result });
+
+      this._updateAgentState("agent-3", "ACTIVE", result.success ? "Gmail search complete" : "Gmail unavailable");
+      this._pushHistory(input, result.message);
+      await this.voiceEngine.speak(result.message);
+      return;
+    }
+
+    // 8j. Handle Gmail Read Message ("read me the email from Sarah")
+    if (decision.toolName === 'GMAIL_READ_MESSAGE') {
+      this._updateAgentState("agent-3", "EXECUTING", `Reading Gmail message: "${decision.params.query}"`);
+      this.voiceEngine.playSearchLaunchSound();
+
+      const result = await this.gmailHarness.readMessage(this.googleClientId, this.googleClientSecret, decision.params.query);
+
+      this.onResponse({ text: result.message, actionType: 'GMAIL_READ_MESSAGE', data: result });
+
+      this._updateAgentState("agent-3", "ACTIVE", result.success ? "Gmail message read" : "Gmail unavailable");
       this._pushHistory(input, result.message);
       await this.voiceEngine.speak(result.message);
       return;
