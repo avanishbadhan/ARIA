@@ -203,12 +203,27 @@ export class CameraVisionHarness {
       ctx.strokeRect(scaledX, scaledY, scaledW, scaledH);
 
       const labelText = `${prediction.class.toUpperCase()} ${Math.round(prediction.score * 100)}%`;
-      ctx.fillStyle = 'rgba(0, 240, 255, 0.85)';
-      ctx.fillRect(scaledX, scaledY - 16, ctx.measureText(labelText).width + 10, 16);
 
       ctx.fillStyle = '#020710';
       ctx.font = 'bold 10px Consolas, monospace';
-      ctx.fillText(labelText, scaledX + 5, scaledY - 4);
+      const labelWidth = ctx.measureText(labelText).width + 10;
+
+      ctx.fillStyle = 'rgba(0, 240, 255, 0.85)';
+      ctx.fillRect(scaledX, scaledY - 16, labelWidth, 16);
+
+      ctx.fillStyle = '#020710';
+
+      // The overlay canvas is CSS-mirrored (scaleX(-1)) so the bounding boxes
+      // stay aligned with the mirrored video feed. Mirror the label back out so
+      // it reads left-to-right after the CSS flip instead of appearing backwards.
+      // NOTE: order matters — canvas transforms are post-multiplied, so
+      // translate() must come BEFORE scale() here (translate-then-scale gives
+      // canvasX = width - textX; the reverse order sends the text off-canvas).
+      ctx.save();
+      ctx.translate(this.canvasEl.width, 0);
+      ctx.scale(-1, 1);
+      ctx.fillText(labelText, this.canvasEl.width - scaledX - labelWidth + 5, scaledY - 4);
+      ctx.restore();
     });
   }
 }

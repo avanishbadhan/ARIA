@@ -93,10 +93,21 @@ function createWindow() {
     });
   }
 
-  // steam:// (and any other non-http) links must go to the OS, not Electron's
-  // own navigation — Electron won't resolve custom protocols like a real browser.
+  // Keep the window pinned to the app: never let in-page links (Leaflet map
+  // attributions, <a href>, etc.) navigate the Electron window away from JARVIS.
+  // Non-app URLs go to the OS default browser; steam:// and other custom
+  // protocols also go to the OS since Electron can't resolve them.
+  const APP_ORIGIN = app.isPackaged
+    ? 'file://'
+    : new URL(DEV_URL).origin;
+
   mainWindow.webContents.on('will-navigate', (event, url) => {
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      event.preventDefault();
+      shell.openExternal(url);
+      return;
+    }
+    if (!url.startsWith(APP_ORIGIN)) {
       event.preventDefault();
       shell.openExternal(url);
     }

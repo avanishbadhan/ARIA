@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>J.A.R.V.I.S. Voice AI System | Swarm & Tool Harness</title>
+  <title>J.A.R.V.I.S. Autonomous AI Engine</title>
   <!-- TensorFlow.js + COCO-SSD for the Camera Vision Harness's live bounding-box overlay -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
@@ -12,35 +12,21 @@
 <body>
   <div class="grid-bg"></div>
 
-  <div id="app">
-    <!-- Header Navbar -->
-    <header class="hud-header">
-      <div class="brand">
-        <div class="brand-icon">⚡</div>
-        <div>
-          <h1 class="brand-title">J.A.R.V.I.S.</h1>
-          <div class="brand-subtitle">MULTI-AGENT SWARM & AUTOMATION HARNESS</div>
-        </div>
+  <div id="hud-container">
+    <!-- HUD Header -->
+    <div id="hud-header">
+      <div class="hud-title">
+        <div class="hud-status-badge"></div>
+        <strong>J.A.R.V.I.S.</strong>
       </div>
 
-      <div class="tier-control" id="tierControl" title="Model tier — Quick/Medium/High run on Groq, Ultra runs on Gemini. Drag, or say &quot;switch mode to quick/medium/high/ultra&quot;">
-        <span class="tier-control-icon">🧠</span>
-        <div class="tier-control-track">
-          <input type="range" id="tierSlider" class="tier-slider" min="0" max="3" step="1" value="0" disabled />
-          <div class="tier-control-ticks">
-            <span>Quick</span><span>Medium</span><span>High</span><span>Ultra</span>
-          </div>
-        </div>
-        <span class="tier-control-label" id="tierControlLabel">Add Groq or Gemini key</span>
-      </div>
-
-      <div style="display: flex; align-items: center; gap: 12px;">
-        <button class="btn-harness" id="settingsBtn" style="border-color: var(--border-cyan); color: var(--cyan-bright); position: relative;" title="Settings">
-          ⚙️ SETTINGS
+      <div class="header-actions">
+        <button class="btn-toggle" id="settingsBtn" style="position: relative;" title="Settings">
+          ⚙ SETTINGS
           <span class="settings-update-badge" id="settingsUpdateBadge"></span>
         </button>
 
-        <button class="btn-harness" id="muteBtn" style="border-color: var(--border-gold); color: var(--gold-glow);" title="Toggle Voice Output">
+        <button class="btn-toggle" id="muteBtn" style="border-color: var(--border-gold); color: var(--gold-glow);" title="Toggle Voice Output">
           🔊 VOICE: ON
         </button>
 
@@ -49,97 +35,105 @@
           <span id="statusText">SYSTEM ONLINE</span>
         </div>
       </div>
-    </header>
+    </div>
 
-    <!-- Main Grid Layout -->
-    <main class="hud-grid">
-      <!-- Left Panel: Swarm Telemetry & Steam Controls -->
-      <section class="panel">
-        <div class="panel-header">
-          <span class="panel-title">🛡️ Swarm Telemetry</span>
-          <span class="agent-badge">6 AGENTS</span>
+    <!-- Model Tier Bar (designated space for the Quick→Ultra slider) -->
+    <div class="tier-bar">
+      <span class="tier-bar-icon">🧠</span>
+      <div class="tier-control-track">
+        <input type="range" id="tierSlider" class="tier-slider" min="0" max="3" step="1" value="0" disabled />
+        <div class="tier-control-ticks">
+          <span>Quick</span><span>Medium</span><span>High</span><span>Ultra</span>
         </div>
+      </div>
+      <span class="tier-control-label" id="tierControlLabel">Add Groq or Gemini key</span>
+    </div>
 
-        <div class="swarm-list" id="swarmList">
-          <!-- Swarm agent cards dynamically populated by JS -->
-        </div>
-
-        <div class="swarm-meta-box">
-          <div style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--cyan-bright); font-weight: 700; margin-bottom: 6px;">
-            SWARM ARCHITECTURE: 6-AGENT MESH
-          </div>
-          <div style="font-family: var(--font-mono); font-size: 0.7rem; color: var(--text-dim); line-height: 1.4;">
-            Topology: Collaborative Swarm<br>
-            Autonomous Reasoner: Active<br>
-            Consensus: Byzantine (ADR-324)<br>
-            Steam Protocol: Enabled
-          </div>
-        </div>
-
-        <!-- Steam Game Launcher Panel -->
-        <div class="steam-panel">
-          <div class="panel-header" style="padding-bottom: 6px;">
-            <span class="panel-title">🎮 Steam Launcher Harness</span>
-            <button class="btn-steam-launch" id="launchSteamBtn">OPEN STEAM 🚀</button>
-          </div>
-
-          <!-- Steam Library Setup -->
-          <div class="steam-setup-box" id="steamSetupBox">
-            <div class="steam-setup-title">🔑 Connect Steam Library</div>
-            <div class="steam-setup-hint">
-              Enter your credentials to launch any owned game by name.<br>
-              <a href="https://steamcommunity.com/dev/apikey" target="_blank">Get API Key</a> ·
-              <a href="https://steamid.io" target="_blank">Find Steam ID</a>
+    <!-- Main Viewport Stage -->
+    <div id="central-stage">
+      <!-- Left Utilities Dock -->
+      <div id="widget-dock">
+        <div class="hud-card collapsed" id="card-swarm" data-click-toggle>
+          <div class="hud-card-header">
+            <span>🛡️ SWARM TELEMETRY</span>
+            <div class="card-controls">
+              <span class="agent-badge">6 AGENTS</span>
+              <button class="window-btn" data-toggle="collapse" title="Minimize">▁</button>
+              <button class="window-btn" data-toggle="maximize" title="Maximize">▢</button>
             </div>
-            <input type="password" id="steamApiKeyInput" class="steam-input" placeholder="Steam Web API Key" autocomplete="off" />
-            <input type="text" id="steamIdInput" class="steam-input" placeholder="Steam ID (17-digit number)" autocomplete="off" />
-            <div style="display: flex; gap: 8px;">
-              <button class="btn-steam-save" id="steamSaveBtn">SAVE & LOAD LIBRARY</button>
-              <button class="btn-steam-clear" id="steamClearBtn">CLEAR</button>
+          </div>
+          <div class="hud-card-body">
+            <div class="swarm-list" id="swarmList">
+              <!-- Swarm agent cards dynamically populated by JS -->
             </div>
-            <div class="steam-library-status" id="steamLibraryStatus">Not connected</div>
-          </div>
-
-          <div class="steam-games-grid" id="steamGamesGrid">
-            <!-- Game cards populated by JS -->
+            <div class="swarm-meta-box">
+              <div class="swarm-meta-title">SWARM ARCHITECTURE: 6-AGENT MESH</div>
+              <div class="swarm-meta-body">
+                Topology: Collaborative Swarm<br>
+                Autonomous Reasoner: Active<br>
+                Consensus: Byzantine (ADR-324)<br>
+                Steam Protocol: Enabled
+              </div>
+            </div>
           </div>
         </div>
 
-        <!-- Camera Vision Harness Panel -->
-        <div class="camera-panel">
-          <div class="panel-header" style="padding-bottom: 6px;">
-            <span class="panel-title">📷 Camera Vision Harness</span>
-            <button class="btn-steam-launch" id="cameraToggleBtn">OPEN CAMERA 📷</button>
+        <div class="hud-card" id="card-steam" data-click-toggle>
+          <div class="hud-card-header">
+            <span>🎮 STEAM LAUNCHER HARNESS</span>
+            <div class="card-controls">
+              <button class="btn-toggle" id="launchSteamBtn" title="Open Steam">OPEN STEAM 🚀</button>
+              <button class="window-btn" data-toggle="collapse" title="Minimize">▁</button>
+              <button class="window-btn" data-toggle="maximize" title="Maximize">▢</button>
+            </div>
           </div>
+          <div class="hud-card-body">
+            <div class="steam-setup-box" id="steamSetupBox">
+              <div class="steam-setup-title">🔑 CONNECT STEAM LIBRARY</div>
+              <div class="steam-setup-hint">
+                Enter your credentials to launch any owned game by name.<br>
+                <a href="https://steamcommunity.com/dev/apikey" target="_blank">Get API Key</a> ·
+                <a href="https://steamid.io" target="_blank">Find Steam ID</a>
+              </div>
+              <input type="password" id="steamApiKeyInput" class="steam-input" placeholder="Steam Web API Key" autocomplete="off" />
+              <input type="text" id="steamIdInput" class="steam-input" placeholder="Steam ID (17-digit number)" autocomplete="off" />
+              <div style="display: flex; gap: 8px;">
+                <button class="btn-steam-save" id="steamSaveBtn">SAVE & LOAD LIBRARY</button>
+                <button class="btn-steam-clear" id="steamClearBtn">CLEAR</button>
+              </div>
+              <div class="steam-library-status" id="steamLibraryStatus">Not connected</div>
+            </div>
 
-          <div class="camera-viewport" id="cameraViewport">
-            <video class="camera-video" id="cameraVideo" autoplay playsinline muted></video>
-            <canvas class="camera-overlay-canvas" id="cameraOverlayCanvas"></canvas>
+            <div class="steam-games-grid" id="steamGamesGrid">
+              <!-- Game cards populated by JS -->
+            </div>
           </div>
-
-          <div class="steam-library-status" id="cameraStatus">Camera inactive — say "open camera" or click OPEN CAMERA</div>
         </div>
 
-        <!-- Location Harness Panel -->
-        <div class="location-panel">
-          <div class="panel-header" style="padding-bottom: 6px;">
-            <span class="panel-title">🛰️ Location</span>
+        <div class="hud-card collapsed" id="card-location" data-click-toggle>
+          <div class="hud-card-header">
+            <span>🛰️ LOCATION</span>
+            <div class="card-controls">
+              <button class="window-btn" data-toggle="collapse" title="Minimize">▁</button>
+              <button class="window-btn" data-toggle="maximize" title="Maximize">▢</button>
+            </div>
           </div>
-
-          <div class="location-map" id="locationMap"></div>
-
-          <div class="steam-library-status" id="locationStatus">Acquiring your position...</div>
+          <div class="hud-card-body">
+            <div class="location-map" id="locationMap"></div>
+            <div class="steam-library-status" id="locationStatus">Acquiring your position...</div>
+          </div>
         </div>
-      </section>
+      </div>
 
-
-      <!-- Center Stage: Arc Reactor Visualizer & Voice Control -->
-      <section class="center-stage">
+      <!-- Central Arc Reactor Focus -->
+      <div id="reactor-wrapper" class="arc-reactor-container">
         <div class="spoken-line" id="spokenLine"></div>
 
-        <div class="arc-reactor-container">
-          <div class="reactor-ring-outer"></div>
-          <div class="reactor-ring"></div>
+        <div id="reactor-target">
+          <div class="ring outer"></div>
+          <div class="ring middle"></div>
+          <div class="ring inner"></div>
+          <div class="ring core" id="reactor-core"></div>
           <canvas id="visualizerCanvas" width="280" height="280"></canvas>
         </div>
 
@@ -154,6 +148,8 @@
           <div class="speech-meter-bar"></div>
         </div>
 
+        <div id="status-display" class="hud-status-display">SYSTEM ONLINE</div>
+
         <div class="voice-controls">
           <button class="mic-button" id="micBtn" title="Click to pause/resume wake-word listening">
             🎙️
@@ -165,7 +161,7 @@
 
           <div class="input-bar">
             <input type="text" class="text-input" id="textInput" placeholder="Ask JARVIS, search Google, or command Steam..." />
-            <button class="btn-send" id="sendBtn">EXECUTE</button>
+            <button class="btn-toggle" id="sendBtn">EXECUTE</button>
           </div>
 
           <!-- Quick Action Harness Bar -->
@@ -177,43 +173,72 @@
             <button class="btn-harness" data-query="Play Cyberpunk 2077">🤖 Play Cyberpunk</button>
           </div>
         </div>
-      </section>
+      </div>
 
-      <!-- Right Panel: Terminal Console & Google Harness Viewport -->
-      <section class="right-panel">
-        <!-- System Console -->
-        <div class="panel">
-          <div class="panel-header">
-            <span class="panel-title">💻 System Console</span>
-            <span style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-dim);" id="tabsOpenedCount">TABS OPENED: 0</span>
-          </div>
-
-          <div class="terminal-box" id="terminalBox">
-            <div class="log-entry JARVIS">[SYSTEM INITIALIZED] JARVIS Voice Core online.</div>
-            <div class="log-entry SUCCESS">[HARNESS READY] Google search & Steam automation active.</div>
-            <div class="log-entry HARNESS">[AUTONOMOUS REASONER] Proactive intent classifier initialized.</div>
-          </div>
-        </div>
-
-        <!-- Harness Search Viewport -->
-        <div class="harness-viewport">
-          <div class="viewport-header">
-            <span id="viewportTitle">🌐 GOOGLE HARNESS VIEWPORT</span>
-            <a href="#" id="viewportExternalLink" target="_blank" style="color: var(--cyan-glow); text-decoration: none; display: none;">OPEN TAB ↗</a>
-          </div>
-
-          <div class="viewport-placeholder" id="viewportPlaceholder">
-            <div style="font-size: 2.2rem;">🌐</div>
-            <div>Google Search Viewport Standby</div>
-            <div style="font-size: 0.75rem; color: var(--text-dim);">
-              Speak or ask JARVIS to search for anything to view live web output here.
+      <!-- Right Console & Viewport -->
+      <div id="console-dock">
+        <div class="hud-card" id="card-console" data-click-toggle>
+          <div class="hud-card-header">
+            <span>💻 SYSTEM CONSOLE</span>
+            <div class="card-controls">
+              <span style="font-family: var(--font-mono); font-size: 0.6rem; color: var(--text-dim);" id="tabsOpenedCount">TABS OPENED: 0</span>
+              <button class="window-btn" data-toggle="collapse" title="Minimize">▁</button>
+              <button class="window-btn" data-toggle="maximize" title="Maximize">▢</button>
             </div>
           </div>
-
-          <iframe class="viewport-content" id="viewportFrame" style="display: none;" src="about:blank"></iframe>
+          <div class="hud-card-body">
+            <div class="terminal-box" id="terminalBox">
+              <div class="log-entry JARVIS">[SYSTEM INITIALIZED] JARVIS Voice Core online.</div>
+              <div class="log-entry SUCCESS">[HARNESS READY] Google search & Steam automation active.</div>
+              <div class="log-entry HARNESS">[AUTONOMOUS REASONER] Proactive intent classifier initialized.</div>
+            </div>
+          </div>
         </div>
-      </section>
-    </main>
+
+        <div class="hud-card harness-viewport" id="card-viewport" data-click-toggle>
+          <div class="hud-card-header">
+            <span id="viewportTitle">🌐 GOOGLE HARNESS VIEWPORT</span>
+            <div class="card-controls">
+              <a href="#" id="viewportExternalLink" target="_blank" style="color: var(--cyan-bright); text-decoration: none; display: none;">OPEN TAB ↗</a>
+              <button class="window-btn" data-toggle="collapse" title="Minimize">▁</button>
+              <button class="window-btn" data-toggle="maximize" title="Maximize">▢</button>
+            </div>
+          </div>
+          <div class="hud-card-body">
+            <div class="viewport-placeholder" id="viewportPlaceholder">
+              <div style="font-size: 2.2rem;">🌐</div>
+              <div>Google Search Viewport Standby</div>
+              <div style="font-size: 0.7rem; color: var(--text-dim);">
+                Speak or ask JARVIS to search for anything to view live web output here.
+              </div>
+            </div>
+            <iframe class="viewport-content" id="viewportFrame" style="display: none;" src="about:blank"></iframe>
+          </div>
+        </div>
+      </div>
+
+      <!-- Floating Camera Window (bottom right) -->
+      <div class="hud-card camera-float" id="card-camera" data-click-toggle>
+        <div class="hud-card-header">
+          <span>📷 CAMERA VISION HARNESS</span>
+          <div class="card-controls">
+            <button class="btn-toggle" id="cameraToggleBtn" title="Toggle camera feed">OPEN CAMERA 📷</button>
+            <button class="window-btn" data-toggle="collapse" title="Minimize">▁</button>
+            <button class="window-btn" data-toggle="maximize" title="Maximize">▢</button>
+          </div>
+        </div>
+        <div class="hud-card-body">
+          <div class="camera-viewport" id="cameraViewport">
+            <video class="camera-video" id="cameraVideo" autoplay playsinline muted></video>
+            <canvas class="camera-overlay-canvas" id="cameraOverlayCanvas"></canvas>
+          </div>
+          <div class="steam-library-status" id="cameraStatus">Camera inactive — say "open camera" or click OPEN CAMERA</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Window backdrop shown when a hud-card is maximized -->
+    <div id="window-backdrop"></div>
   </div>
 
   <!-- Settings Modal -->
@@ -350,6 +375,70 @@
       </div>
     </div>
   </div>
+
+  <!-- Window controls: collapse / maximize every hud-card like a browser tab -->
+  <script>
+    (function () {
+      var BACKDROP = 'window-backdrop';
+
+      function allCards() {
+        return Array.from(document.querySelectorAll('#widget-dock .hud-card, #console-dock .hud-card, .camera-float'));
+      }
+
+      function syncBackdrop() {
+        var body = document.body;
+        var anyMax = allCards().some(function (c) { return c.classList.contains('maximized'); });
+        body.classList.toggle('has-maximized', anyMax);
+        var bd = document.getElementById(BACKDROP);
+        if (bd) bd.classList.toggle('visible', anyMax);
+      }
+
+      function minimizeCard(card) {
+        card.classList.add('collapsed');
+        card.classList.remove('maximized');
+      }
+
+      function toggleCard(card, action) {
+        if (!card) return;
+        if (action === 'collapse') {
+          card.classList.toggle('collapsed');
+          if (card.classList.contains('maximized')) card.classList.remove('maximized');
+        } else if (action === 'maximize') {
+          // Exclusive maximize: any other maximized window is minimized first
+          // so two floating windows never overlap.
+          allCards().forEach(function (c) {
+            if (c !== card && c.classList.contains('maximized')) minimizeCard(c);
+          });
+          card.classList.remove('collapsed');
+          card.classList.toggle('maximized');
+        }
+        syncBackdrop();
+      }
+
+      document.addEventListener('click', function (e) {
+        var toggle = e.target.closest('[data-toggle]');
+        if (toggle) {
+          e.stopPropagation();
+          toggleCard(toggle.closest('.hud-card'), toggle.getAttribute('data-toggle'));
+          return;
+        }
+        var card = e.target.closest('[data-click-toggle]');
+        if (card && !e.target.closest('button, a, input, iframe, select, .window-btn, .card-controls')) {
+          if (card.classList.contains('maximized')) return;
+          card.classList.toggle('collapsed');
+          syncBackdrop();
+        }
+      });
+
+      // Clicking the backdrop un-maximizes the floating window.
+      document.addEventListener('click', function (e) {
+        if (e.target.id === BACKDROP) {
+          allCards().forEach(function (c) { c.classList.remove('maximized'); });
+          syncBackdrop();
+        }
+      });
+    })();
+  </script>
 
   <script type="module" src="/src/main.js"></script>
 </body>

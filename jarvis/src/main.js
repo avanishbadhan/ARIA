@@ -7,8 +7,6 @@ import { isUpdateSupported, getCurrentVersion, checkForUpdate, downloadUpdate, i
 import { MODEL_TIERS, TIER_ORDER } from './model-tiers.js';
 import { CameraVisionHarness } from './camera-vision-harness.js';
 import { LocationHarness } from './location-harness.js';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
 
 // DOM Element References
 const micBtn = document.getElementById('micBtn');
@@ -1193,10 +1191,11 @@ function initCameraVisionPanel() {
 /**
  * Wires the Location panel: on load, asks LocationHarness for the user's
  * position once (not watchPosition — one-shot only, per the spec's scope
- * decision). On success it initializes a Leaflet map centered on those
- * coords with an OSM tile layer and a single marker; on failure it leaves
- * the map container empty and shows the harness's graceful message, the
- * same degradation pattern as the Steam/Spotify "not connected" states.
+ * decision). On success it embeds a Google Maps iframe (keyless embed —
+ * free, detailed, higher quality than the old Leaflet/OSM tiles) centered
+ * on those coords; on failure it leaves the map container empty and shows
+ * the harness's graceful message, the same degradation pattern as the
+ * Steam/Spotify "not connected" states.
  */
 function initLocationPanel() {
   const mapEl = document.getElementById('locationMap');
@@ -1211,14 +1210,17 @@ function initLocationPanel() {
       return;
     }
 
-    const map = L.map(mapEl).setView([result.lat, result.lon], 13);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
-    L.marker([result.lat, result.lon]).addTo(map);
+    const lat = result.lat.toFixed(5);
+    const lon = result.lon.toFixed(5);
+    const frame = document.createElement('iframe');
+    frame.className = 'google-map-frame';
+    frame.loading = 'lazy';
+    frame.allowFullscreen = true;
+    frame.referrerPolicy = 'no-referrer-when-downgrade';
+    frame.src = `https://www.google.com/maps?q=${lat},${lon}&z=13&output=embed`;
+    mapEl.replaceChildren(frame);
 
-    statusEl.textContent = `Position locked at ${result.lat.toFixed(5)}, ${result.lon.toFixed(5)}.`;
+    statusEl.textContent = `Position locked at ${lat}, ${lon}.`;
     statusEl.style.color = 'var(--cyan-bright)';
   });
 }
