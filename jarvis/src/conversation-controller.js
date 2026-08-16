@@ -1,6 +1,6 @@
 const WAKE_WORD_REGEX = /^(?:hey[,]?\s+)?jarvis\b[,!.\s]*/i;
 const STOP_PHRASE_REGEX =
-  /^(?:(?:hey[,]?\s+)?jarvis[,!.\s]*)?(?:stop(?: the)? conversation|end(?: the)? conversation|that['’]?s all|goodbye jarvis)[.!]?\s*$/i;
+  /^(?:(?:hey[,]?\s+)?jarvis[,!.\s]*)?(?:stop(?: the)? conversation|stop(?: listening)?|end(?: the)? conversation|end|that['’]?s all|goodbye jarvis|goodbye)[.,!?\s]*$/i;
 
 export class ConversationController {
   constructor({ wakeTimeoutMs = 8000, conversationTimeoutMs = 120000 } = {}) {
@@ -18,15 +18,32 @@ export class ConversationController {
     return this._conversationActive;
   }
 
+  /**
+   * True when the utterance is an end-conversation phrase ("end conversation",
+   * "stop", "goodbye", etc.), regardless of whether a conversation is active.
+   * Used by the manual text-input path (main.js) so typed "stop"/"end
+   * conversation" also end the session instead of being sent to the LLM.
+   */
+  isStopPhrase(text) {
+    return STOP_PHRASE_REGEX.test(String(text || '').trim());
+  }
+
   handleTranscript(text, alternatives = []) {
     const stripWake = (s) => s.replace(WAKE_WORD_REGEX, '').trim() || s.trim();
     const cleanedAlternatives = alternatives.map(stripWake).filter(Boolean);
+    const wakeMatch = text.match(WAKE_WORD_REGEX);
+
+    // End-conversation phrases end an active conversation, and also end a
+    // just-addressed one ("Hey Jarvis, stop"). While idle with no wake word,
+    // a bare "stop conversation" is ignored (ambient speech, not addressed to
+    // JARVIS) so passive listening doesn't react to background chatter.
+    if ((this._conversationActive || wakeMatch) && this.isStopPhrase(text)) {
+      this._conversationActive = false;
+      this._awaitingCommand = false;
+      return { action: 'END_CONVERSATION' };
+    }
 
     if (this._conversationActive) {
-      if (STOP_PHRASE_REGEX.test(text.trim())) {
-        this._conversationActive = false;
-        return { action: 'END_CONVERSATION' };
-      }
       const command = stripWake(text);
       return { action: 'DISPATCH_COMMAND', command, alternatives: cleanedAlternatives, conversationStarting: false, chime: false };
     }
@@ -38,7 +55,6 @@ export class ConversationController {
       return { action: 'DISPATCH_COMMAND', command, alternatives: cleanedAlternatives, conversationStarting: true, chime: false };
     }
 
-    const wakeMatch = text.match(WAKE_WORD_REGEX);
     if (!wakeMatch) {
       return { action: 'IGNORE' };
     }

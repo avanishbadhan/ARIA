@@ -16,6 +16,8 @@
     "test": "node --test \"test/**/*.test.js\""
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@playwright/mcp": "^0.0.29",
     "chrono-node": "^2.10.1",
     "electron-updater": "^6.8.9",
     "leaflet": "^1.9.4",

@@ -191,3 +191,125 @@ test('fetchChatCompletion does not attempt tool execution when tools are passed 
   assert.equal(result, 'I cannot look that up, Sir.');
   assert.equal(calls.length, 1);
 });
+
+test('multi-round tool calling chains get_location then get_weather across 3 API calls', async () => {
+  const calls = [];
+  let call = 0;
+  global.fetch = async (url, init) => {
+    call += 1;
+    calls.push({ url, body: JSON.parse(init.body) });
+    if (call === 1) {
+      return {
+        ok: true,
+        json: async () => ({
+          choices: [{
+            message: {
+              role: 'assistant',
+              content: null,
+              tool_calls: [{ id: 'loc_1', type: 'function', function: { name: 'get_location', arguments: '{}' } }]
+            }
+          }]
+        })
+      };
+    }
+    if (call === 2) {
+      return {
+        ok: true,
+        json: async () => ({
+          choices: [{
+            message: {
+              role: 'assistant',
+              content: null,
+              tool_calls: [{ id: 'w_1', type: 'function', function: { name: 'get_weather', arguments: '{"lat":37.77,"lon":-122.41}' } }]
+            }
+          }]
+        })
+      };
+    }
+    return { ok: true, json: async () => ({ choices: [{ message: { content: 'It is 22°C and partly cloudy, Sir.' } }] }) };
+  };
+
+  const toolCallsMade = [];
+  const toolExecutor = async (name, argsJson) => {
+    toolCallsMade.push({ name, argsJson });
+    if (name === 'get_location') return 'latitude 37.7749, longitude -122.4194';
+    if (name === 'get_weather') return '22°C, partly cloudy, 62% humidity';
+    return 'unknown tool';
+  };
+
+  const result = await fetchChatCompletion({
+    baseUrl: 'https://example.test/chat',
+    headers: {},
+    modelQueue: ['some-model'],
+    messages: [{ role: 'user', content: 'what is the temperature here' }],
+    logPrefix: 'TEST',
+    tools: [
+      { type: 'function', function: { name: 'get_location' } },
+      { type: 'function', function: { name: 'get_weather' } }
+    ],
+    toolExecutor
+  });
+
+  assert.equal(result, 'It is 22°C and partly cloudy, Sir.');
+  assert.equal(calls.length, 3);
+  assert.deepEqual(toolCallsMade, [
+    { name: 'get_location', argsJson: '{}' },
+    { name: 'get_weather', argsJson: '{"lat":37.77,"lon":-122.41}' }
+  ]);
+
+  // Second request carries the original user message + get_location call + tool result
+  const round1Messages = calls[1].body.messages;
+  assert.equal(round1Messages.length, 3);
+  assert.equal(round1Messages.at(-2).tool_calls[0].function.name, 'get_location');
+  assert.equal(round1Messages.at(-1).role, 'tool');
+  assert.equal(round1Messages.at(-1).tool_call_id, 'loc_1');
+  assert.equal(round1Messages.at(-1).content, 'latitude 37.7749, longitude -122.4194');
+
+  // Third request carries everything: user + get_location pair + get_weather pair
+  const round2Messages = calls[2].body.messages;
+  assert.equal(round2Messages.length, 5);
+  assert.equal(round2Messages.at(-2).tool_calls[0].function.name, 'get_weather');
+  assert.equal(round2Messages.at(-1).role, 'tool');
+  assert.equal(round2Messages.at(-1).tool_call_id, 'w_1');
+  assert.equal(round2Messages.at(-1).content, '22°C, partly cloudy, 62% humidity');
+});
+
+test('multi-round tool calling stops after MAX_TOOL_ROUNDS and falls through to the next model when the final message is still a tool call', async () => {
+  const calls = [];
+  global.fetch = async (url, init) => {
+    calls.push(JSON.parse(init.body));
+    return {
+      ok: true,
+      json: async () => ({
+        choices: [{
+          message: {
+            role: 'assistant',
+            content: null,
+            tool_calls: [{ id: `c${calls.length}`, type: 'function', function: { name: 'ping', arguments: '{}' } }]
+          }
+        }]
+      })
+    };
+  };
+
+  const toolCallsMade = [];
+  let threw = false;
+  try {
+    await fetchChatCompletion({
+      baseUrl: 'https://example.test/chat',
+      headers: {},
+      modelQueue: ['stuck-loop-model'],
+      messages: [{ role: 'user', content: 'hi' }],
+      logPrefix: 'TEST',
+      tools: [{ type: 'function', function: { name: 'ping' } }],
+      toolExecutor: async (name) => { toolCallsMade.push(name); return 'pong'; }
+    });
+  } catch (err) {
+    threw = true;
+    assert.match(err.message, /Empty completion/);
+  }
+
+  assert.equal(threw, true, 'should throw after exhausting the model queue on a stuck tool loop');
+  assert.equal(toolCallsMade.length, 4, 'should execute at most MAX_TOOL_ROUNDS tool calls');
+  assert.equal(calls.length, 5, '1 initial + 4 follow-up calls across the one model');
+});

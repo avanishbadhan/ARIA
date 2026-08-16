@@ -60,3 +60,19 @@ test('chatWithJarvis forwards options.tools/toolExecutor through to generateComp
 
   assert.equal(calls[0].body.tools[0].function.name, 'solve_math');
 });
+
+test('constructor accepts an explicit modelQueue override, used instead of the default free pool', async () => {
+  const calls = mockFetchOnce({ choices: [{ message: { content: 'Hermes answer.' } }] });
+  const client = new OpenRouterClient('fake-key', { modelQueue: ['nousresearch/hermes-4-405b', 'nousresearch/hermes-4-70b'] });
+
+  assert.deepEqual(client.modelQueue, ['nousresearch/hermes-4-405b', 'nousresearch/hermes-4-70b']);
+
+  await client.generateCompletion([{ role: 'user', content: 'hi' }]);
+
+  assert.equal(calls[0].body.model, 'nousresearch/hermes-4-405b');
+});
+
+test('constructor falls back to the default free-model queue when no modelQueue option is given', () => {
+  const client = new OpenRouterClient('fake-key');
+  assert.equal(client.modelQueue[0], 'openrouter/free');
+});

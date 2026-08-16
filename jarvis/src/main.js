@@ -384,10 +384,21 @@ function initApp() {
   const handleManualInput = () => {
     if (!textInput) return;
     const val = textInput.value.trim();
-    if (val) {
-      textInput.value = '';
-      jarvis.processUserInput(val);
+    if (!val) return;
+    textInput.value = '';
+
+    // Typed "end conversation"/"stop"/"goodbye" end the session here rather
+    // than being sent to the LLM as a chat prompt (the voice path handles
+    // this in ConversationController.handleTranscript — see its stop check).
+    if (conversationController.isStopPhrase(val)) {
+      clearTimeout(conversationTimeoutId);
+      conversationController.reset();
+      voiceEngine.playBeep(500, 0.12, 'sine');
+      if (transcriptDisplay) transcriptDisplay.textContent = 'Conversation ended. Say "Jarvis" to start.';
+      return;
     }
+
+    jarvis.processUserInput(val);
   };
 
   if (sendBtn) {
@@ -622,6 +633,7 @@ function initSettingsPanel() {
   const voiceGenderFemale = document.getElementById('voiceGenderFemale');
   const soundMeterToggle = document.getElementById('soundMeterToggle');
   const useGroqToggle = document.getElementById('useGroqToggle');
+  const useHermesToggle = document.getElementById('useHermesToggle');
   const openrouterKeyInput = document.getElementById('openrouterKeyInput');
   const groqKeyInput = document.getElementById('groqKeyInput');
   const geminiKeyInput = document.getElementById('geminiKeyInput');
@@ -642,6 +654,7 @@ function initSettingsPanel() {
   if (voiceGenderFemale) voiceGenderFemale.checked = settings.voiceGender === 'female';
   if (soundMeterToggle) soundMeterToggle.checked = settings.soundMeterEnabled;
   if (useGroqToggle) useGroqToggle.checked = settings.useGroq;
+  if (useHermesToggle) useHermesToggle.checked = settings.useHermes;
   applySoundMeterVisibility(settings.soundMeterEnabled);
 
   if (openrouterKeyInput && localStorage.getItem('jarvis_openrouter_api_key')) {
@@ -716,6 +729,12 @@ function initSettingsPanel() {
     });
   }
 
+  if (useHermesToggle) {
+    useHermesToggle.addEventListener('change', () => {
+      saveSettings({ useHermes: useHermesToggle.checked });
+    });
+  }
+
   if (apiKeysSaveBtn) {
     apiKeysSaveBtn.addEventListener('click', () => {
       const openrouterKey = openrouterKeyInput ? openrouterKeyInput.value.trim() : '';
@@ -730,7 +749,10 @@ function initSettingsPanel() {
 
       if (openrouterKey) {
         localStorage.setItem('jarvis_openrouter_api_key', openrouterKey);
-        if (jarvis) jarvis.openRouter.apiKey = openrouterKey;
+        if (jarvis) {
+          jarvis.openRouter.apiKey = openrouterKey;
+          jarvis.hermes.apiKey = openrouterKey; // separate client instance, same key
+        }
         openrouterKeyInput.value = '';
         openrouterKeyInput.placeholder = '••••••••••••••••• (saved)';
       }

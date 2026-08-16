@@ -7,6 +7,9 @@ contextBridge.exposeInMainWorld('jarvisElectron', {
   xboxGetInstalledGames: () => ipcRenderer.invoke('xbox:get-installed-games'),
   xboxLaunchApp: (appId) => ipcRenderer.invoke('xbox:launch-app', { appId }),
   solveMath: (appId, query) => ipcRenderer.invoke('wolfram:solve', { appId, query }),
+  weather: {
+    current: (lat, lon) => ipcRenderer.invoke('weather:current', { lat, lon })
+  },
   spotifyResolveTrack: (clientId, clientSecret, query) => ipcRenderer.invoke('spotify:resolve-track', { clientId, clientSecret, query }),
   spotifyAuth: {
     status: () => ipcRenderer.invoke('spotify:auth-status'),
@@ -28,6 +31,10 @@ contextBridge.exposeInMainWorld('jarvisElectron', {
     listEvents: (clientId, clientSecret, maxResults) => ipcRenderer.invoke('calendar:list-events', { clientId, clientSecret, maxResults }),
     search: (clientId, clientSecret, query, maxResults) => ipcRenderer.invoke('calendar:search-events', { clientId, clientSecret, query, maxResults }),
     createEvent: (clientId, clientSecret, title, description, startISO, endISO) => ipcRenderer.invoke('calendar:create-event', { clientId, clientSecret, title, description, startISO, endISO })
+  },
+  mcp: {
+    fetchWebpage: (url) => ipcRenderer.invoke('mcp:fetch-webpage', { url }),
+    browseWebpage: (url, linkText) => ipcRenderer.invoke('mcp:browse-webpage', { url, linkText })
   },
   mic: {
     start: () => ipcRenderer.invoke('mic:start'),

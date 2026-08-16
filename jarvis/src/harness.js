@@ -107,7 +107,7 @@ export class BrowserHarness {
   /**
    * Opens targeted popular websites
    */
-  openWebsite(siteName) {
+  openWebsite(rawSiteName) {
     const siteMap = {
       youtube: 'https://www.youtube.com',
       github: 'https://github.com',
@@ -119,10 +119,23 @@ export class BrowserHarness {
       maps: 'https://maps.google.com',
       gmail: 'https://mail.google.com',
       amazon: 'https://www.amazon.com',
-      news: 'https://news.google.com'
+      news: 'https://news.google.com',
+      browser: 'https://www.google.com'
     };
 
-    const targetUrl = siteMap[siteName] || `https://www.google.com/search?q=${encodeURIComponent(siteName)}`;
+    // Normalize the site name (classifier output can be "HTTPS://WWW.IEA.ORG/...",
+    // "DEFAULT", "FIRST LINK", etc.). Lowercase it before the site-map lookup.
+    const siteName = String(rawSiteName || '').trim().toLowerCase();
+
+    // A full URL (e.g. "https://www.iea.org/topics/oil/") is opened verbatim —
+    // never re-encoded into a Google search query, which would mangle it into
+    // "?q=https%3A%2F%2Fwww.iea.org...".
+    let targetUrl;
+    if (/^https?:\/\//i.test(siteName)) {
+      targetUrl = siteName;
+    } else {
+      targetUrl = siteMap[siteName] || `https://www.google.com/search?q=${encodeURIComponent(siteName)}`;
+    }
     
     this.onLog({
       type: 'HARNESS',

@@ -7,6 +7,7 @@ const http = require('http');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
 const { classifyUpdate } = require('./update-classify.cjs');
+const mcpManager = require('./mcp-manager.cjs');
 
 const DEV_URL = 'http://localhost:3000';
 const ICON_PATH = path.join(__dirname, 'icon.png');
@@ -425,6 +426,36 @@ function registerGameLibraryIpc() {
         // explorer.exe as the real failure signal, not its exit code.
         resolve({ success: true });
       });
+    });
+  });
+}
+
+function registerWeatherIpc() {
+  // Same plain-Node-HTTPS-in-main-process trick as registerWolframIpc, to avoid
+  // browser CORS entirely for the packaged app. Open-Meteo is a free, keyless
+  // weather API — no credentials needed. Takes lat/lon from the renderer's
+  // geolocation and returns the current conditions.
+  ipcMain.handle('weather:current', (event, { lat, lon }) => {
+    const url =
+      `https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(lat)}` +
+      `&longitude=${encodeURIComponent(lon)}` +
+      `&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,is_day`;
+    return new Promise((resolve, reject) => {
+      https.get(url, (res) => {
+        let data = '';
+        res.on('data', (chunkData) => { data += chunkData; });
+        res.on('end', () => {
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            try {
+              resolve(JSON.parse(data));
+            } catch (err) {
+              reject(new Error(`Invalid Open-Meteo response: ${err.message}`));
+            }
+          } else {
+            reject(new Error(`Open-Meteo API HTTP ${res.statusCode}`));
+          }
+        });
+      }).on('error', reject);
     });
   });
 }
@@ -1169,6 +1200,16 @@ function registerGoogleAuthIpc() {
   });
 }
 
+function registerMcpIpc() {
+  ipcMain.handle('mcp:fetch-webpage', async (event, { url }) => {
+    return mcpManager.fetchWebpageText(url);
+  });
+
+  ipcMain.handle('mcp:browse-webpage', async (event, { url, linkText }) => {
+    return mcpManager.browseAndExtract(url, linkText);
+  });
+}
+
 function sendUpdateState(state) {
   if (mainWindow) mainWindow.webContents.send('update:state', state);
 }
@@ -1289,9 +1330,11 @@ app.whenReady().then(() => {
   registerScreenCaptureIpc();
   registerScreenMonitorIpc();
   registerWolframIpc();
+  registerWeatherIpc();
   registerSpotifyIpc();
   registerSpotifyAuthIpc();
   registerGoogleAuthIpc();
+  registerMcpIpc();
   registerUpdaterEvents();
   registerUpdateIpc();
   createWindow();

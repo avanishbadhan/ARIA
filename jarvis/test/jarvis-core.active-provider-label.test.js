@@ -79,3 +79,20 @@ test('processUserInput reports the real active provider in its initial status me
   assert.ok(statusMessages.some(m => m.includes('Gemini')), `expected a status message mentioning Gemini, got: ${JSON.stringify(statusMessages)}`);
   assert.ok(!statusMessages.some(m => m.includes('OpenRouter')), `status should not claim OpenRouter when Gemini is active, got: ${JSON.stringify(statusMessages)}`);
 });
+
+test('reports Hermes when useHermes is on and a key is configured', () => {
+  saveSettings({ useHermes: true });
+  const jarvis = createJarvis();
+  jarvis.hermes.apiKey = 'fake-openrouter-key';
+
+  assert.equal(jarvis._activeProviderLabel(), 'Hermes');
+});
+
+test('does not report Hermes when useHermes is on but no key is configured', () => {
+  saveSettings({ useHermes: true });
+  const jarvis = createJarvis();
+  jarvis.hermes.apiKey = '';
+  jarvis.groq.apiKey = 'fake-groq-key';
+
+  assert.equal(jarvis._activeProviderLabel(), 'Groq');
+});

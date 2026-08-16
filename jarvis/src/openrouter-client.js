@@ -15,7 +15,11 @@ export class OpenRouterClient {
 
     // Ordered list of verified working free models (as of Aug 2026)
     // openrouter/free = OpenRouter's own dynamic free model router (best first-try)
-    this.modelQueue = [
+    // options.modelQueue overrides this — used by JarvisCore to build a
+    // second OpenRouterClient instance pinned to Hermes models instead of
+    // the free pool (same API key/transport, different queue). See
+    // docs/superpowers/specs/2026-08-15-hermes-mcp-web-access-design.md.
+    this.modelQueue = options.modelQueue || [
       'openrouter/free',
       'nvidia/nemotron-nano-9b-v2:free',
       'nvidia/nemotron-nano-12b-v2-vl:free',

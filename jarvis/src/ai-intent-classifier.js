@@ -52,7 +52,7 @@ Available tools and their exact params shape:
 - EPIC_LAUNCH_GAME: { gameQuery: string }
 - XBOX_OPEN_CLIENT: {}
 - XBOX_LAUNCH_GAME: { gameQuery: string }
-- OPEN_SITE: { siteName: string }
+- OPEN_SITE: { siteName: string } — ONLY when the user names a specific real site (e.g. "open YouTube", "go to github.com") or gives a full URL. Do NOT use OPEN_SITE for "open my browser", "open a new tab", "click on the first link", or vague browsing — those are GOOGLE_SEARCH or CONVERSATIONAL, not OPEN_SITE.
 - MATH_QUERY: { query: string }
 - SET_MODEL_TIER: { tier: "quick"|"medium"|"high"|"ultra" }
 - SCREEN_MONITOR_START: {}

@@ -61,13 +61,25 @@ export async function fetchChatCompletion({ baseUrl, headers, modelQueue, messag
       let data = await postChatCompletion({ baseUrl, headers, model, messages, temperature, maxTokens, tools, extraBody });
       let message = data.choices?.[0]?.message;
 
-      if (tools && toolExecutor && message?.tool_calls?.length) {
-        const followUpMessages = [...messages, message];
+      // Multi-round tool-calling loop — the model can chain tools
+      // (e.g. get_location → get_weather) across up to MAX_TOOL_ROUNDS
+      // sequential invocations. Each round: execute the tool calls in the
+      // current message, feed results back, and if the next message also
+      // contains tool_calls repeat. Capped to prevent infinite loops.
+      const MAX_TOOL_ROUNDS = 4;
+      const toolMessages = [];
+      for (let round = 0; tools && toolExecutor && message?.tool_calls?.length && round < MAX_TOOL_ROUNDS; round++) {
+        toolMessages.push(message);
         for (const call of message.tool_calls) {
-          const result = await toolExecutor(call.function?.name, call.function?.arguments);
-          followUpMessages.push({ role: 'tool', tool_call_id: call.id, content: String(result) });
+          try {
+            const result = await toolExecutor(call.function?.name, call.function?.arguments);
+            toolMessages.push({ role: 'tool', tool_call_id: call.id, content: String(result) });
+          } catch (err) {
+            onLog({ type: 'WARNING', message: `[${logPrefix}] Tool ${call.function?.name} failed: ${err.message}` });
+            toolMessages.push({ role: 'tool', tool_call_id: call.id, content: `Tool call failed: ${err.message}` });
+          }
         }
-        data = await postChatCompletion({ baseUrl, headers, model, messages: followUpMessages, temperature, maxTokens, tools, extraBody });
+        data = await postChatCompletion({ baseUrl, headers, model, messages: [...messages, ...toolMessages], temperature, maxTokens, tools, extraBody });
         message = data.choices?.[0]?.message;
       }
 

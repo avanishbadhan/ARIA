@@ -144,3 +144,33 @@ test('generateVisionCompletion returns the model answer on success', async () =>
 
   assert.equal(result, 'Three fingers.');
 });
+
+test('generateCompletion executes a function call, feeds the result back, then returns the final answer', async () => {
+  const responses = [
+    { candidates: [{ content: { parts: [{ functionCall: { name: 'get_location', args: {} } }] } }] },
+    { candidates: [{ content: { parts: [{ text: 'You are at lat 40.7, lon -74.0.' }] } }] }
+  ];
+  const calls = [];
+  global.fetch = async (url, init) => {
+    calls.push({ url, body: JSON.parse(init.body) });
+    return { ok: true, json: async () => responses[calls.length - 1] };
+  };
+  const toolCalls = [];
+  const client = new GeminiClient('fake-key');
+
+  const result = await client.generateCompletion(
+    [{ role: 'user', content: 'weather here?' }],
+    {
+      tools: [{ type: 'function', function: { name: 'get_location', description: 'coords', parameters: { type: 'object', properties: {} } } }],
+      toolExecutor: async (name, argsJson) => { toolCalls.push({ name, argsJson }); return 'latitude 40.71280, longitude -74.00600'; }
+    }
+  );
+
+  assert.equal(result, 'You are at lat 40.7, lon -74.0.');
+  assert.deepEqual(toolCalls, [{ name: 'get_location', argsJson: '{}' }]);
+  // Request must declare the function and feed the functionResponse back.
+  assert.ok(JSON.stringify(calls[0].body).includes('functionDeclarations'));
+  assert.ok(JSON.stringify(calls[1].body).includes('functionResponse'));
+  assert.ok(calls[1].body.contents.some((c) => c.role === 'model' && c.parts.some((p) => p.functionCall)));
+  assert.ok(calls[1].body.contents.some((c) => c.role === 'user' && c.parts.some((p) => p.functionResponse)));
+});

@@ -53,6 +53,8 @@ Mirror the existing per-feature test-file pattern exactly:
 - Google OAuth scope in `main.cjs` now includes `calendar.events` (incremental). Accounts connected before that change need a one-time disconnect/reconnect — a stale token authenticates but Calendar calls 403. New scope additions carry the same consequence.
 - `.env*`, `dist/`, `release/` are gitignored; never commit real credentials.
 - The Location panel needs `navigator.geolocation`, which Electron **silently denies** by default when no `setPermissionRequestHandler` is registered (no native OS prompt appears — `getCurrentPosition` just errors). `main.cjs` auto-approves `'geolocation'` (alongside `'media'`); if you remove or replace that handler, the Location map will break without any visible error.
+- The `web_search`/`browse_webpage` grounding tools need Playwright's browser binary downloaded once: `npx playwright install chromium` (from `jarvis/`, after `npm install`). Without it, `electron/mcp-manager.cjs`'s spawned `@playwright/mcp` process fails on first navigation and both tools degrade to their "unable to read" fallback message — no crash, but silently useless until the binary is installed.
+- Hermes (`useHermes` setting) is **not** part of the free-model pool like everything else in this app — it's a real paid OpenRouter model (`nousresearch/hermes-4-405b`). It reuses the existing OpenRouter API key (no new key to configure), but toggling it on spends OpenRouter credits on every request.
 
 ## Git conventions (from both `CLAUDE.md` files — preserve)
 

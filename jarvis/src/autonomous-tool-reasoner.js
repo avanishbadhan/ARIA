@@ -414,6 +414,34 @@ export class AutonomousToolReasoner {
       }
     }
 
+    // 1x. Web browser / new-tab intents — checked before the broad gaming
+    // "open <anything>" fallback (section 2b) so vague browsing commands never
+    // get routed to Steam ("open my browser" -> launch game "my browser").
+    // A bare "open my browser" / "open a tab" opens the browser itself;
+    // "open a new tab with/for/about <topic>" is a web search for that topic.
+    const bareBrowser = text.match(/^(?:open|start|launch)\s+(?:(?:my|the|a|your|our)\s+)?(?:web\s+)?browser[.!]?\s*$/i);
+    const newTabOpen = text.match(/^(?:open|start)\s+(?:a\s+)?new\s+tab[.!]?\s*$/i);
+    const tabOpen = text.match(/^(?:open|start)\s+a\s+tab[.!]?\s*$/i);
+    const tabTopic = text.match(/^(?:open|start)\s+(?:a\s+)?new\s+tab\s+(?:with|about|for|on)\s+(.+)$/i);
+    if (bareBrowser || newTabOpen || tabOpen) {
+      return {
+        shouldCallTool: true,
+        toolName: 'OPEN_SITE',
+        confidence: 0.95,
+        params: { siteName: 'browser' },
+        reasoning: "Autonomous reasoner identified intent to open the user's web browser."
+      };
+    }
+    if (tabTopic) {
+      return {
+        shouldCallTool: true,
+        toolName: 'GOOGLE_SEARCH',
+        confidence: 0.9,
+        params: { query: tabTopic[1].trim() },
+        reasoning: `Autonomous reasoner identified intent to open a new tab and search for "${tabTopic[1].trim()}".`
+      };
+    }
+
     // 2. Check for gaming & Steam launch intents (implicit & explicit)
     const gamingKeywords = ['play', 'game', 'gaming', 'steam', 'csgo', 'cs2', 'dota', 'cyberpunk', 'elden ring', 'gta', 'apex', 'tf2', 'helldivers', 'pubg', 'rust', 'baldurs gate'];
     const gamingIntentDetected = gamingKeywords.some(kw => text.includes(kw));

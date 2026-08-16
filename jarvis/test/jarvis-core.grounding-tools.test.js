@@ -1,8 +1,9 @@
 /**
- * Tests that read-only grounding tools (WolframAlpha, web search — see
- * src/jarvis-tools.js) are wired into screen vision and general chat, and
- * deliberately NOT wired into the MATH_QUERY/GOOGLE_SEARCH paths that already
- * have their own dedicated grounding logic.
+ * Tests that read-only grounding tools (WolframAlpha, web search, location —
+ * see src/jarvis-tools.js) are wired into screen vision, general chat, and
+ * the GOOGLE_SEARCH paths (so the model can pull the user's location for
+ * location-dependent answers like weather), while deliberately NOT wired into
+ * the MATH_QUERY fallback, which has its own dedicated grounding logic.
  * See docs/superpowers/specs/2026-08-14-grounding-tool-calling-design.md.
  */
 import test, { beforeEach } from 'node:test';
@@ -56,7 +57,7 @@ test('MATH_QUERY LLM fallback (WolframAlpha already returned nothing) does not g
   assert.equal(jarvis.groqCalls[0].tools, undefined);
 });
 
-test('GOOGLE_SEARCH grounded-prompt path does not get the grounding tools', async () => {
+test('GOOGLE_SEARCH grounded-prompt path passes the grounding tools', async () => {
   const jarvis = createJarvis({
     executeGoogleSearch: async () => ({ summary: 'Paris is the capital of France.' })
   });
@@ -68,10 +69,11 @@ test('GOOGLE_SEARCH grounded-prompt path does not get the grounding tools', asyn
   await jarvis.processUserInput('What is the capital of France?');
 
   assert.equal(jarvis.groqCalls.length, 1);
-  assert.equal(jarvis.groqCalls[0].tools, undefined);
+  assert.equal(jarvis.groqCalls[0].tools, jarvis.groundingTools);
+  assert.equal(jarvis.groqCalls[0].toolExecutor, jarvis.toolExecutor);
 });
 
-test('GOOGLE_SEARCH "answer from own knowledge" path (High/Ultra tier) does not get the grounding tools', async () => {
+test('GOOGLE_SEARCH "answer from own knowledge" path (High/Ultra tier) passes the grounding tools', async () => {
   const jarvis = createJarvis();
   jarvis.groq.setTier('high');
   saveSettings({ useGroq: true });
@@ -82,5 +84,6 @@ test('GOOGLE_SEARCH "answer from own knowledge" path (High/Ultra tier) does not 
   await jarvis.processUserInput('What is the capital of France?');
 
   assert.equal(jarvis.groqCalls.length, 1);
-  assert.equal(jarvis.groqCalls[0].tools, undefined);
+  assert.equal(jarvis.groqCalls[0].tools, jarvis.groundingTools);
+  assert.equal(jarvis.groqCalls[0].toolExecutor, jarvis.toolExecutor);
 });

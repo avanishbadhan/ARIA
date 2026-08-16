@@ -110,6 +110,33 @@ test('stop phrases are ignored while no conversation is active', () => {
   assert.deepEqual(result, { action: 'IGNORE' });
 });
 
+test('bare "stop" and trailing-comma variants end an active conversation', () => {
+  const phrases = ['stop', 'Stop.', 'stop,', 'end conversation,', 'end,', 'goodbye'];
+  for (const phrase of phrases) {
+    const controller = new ConversationController();
+    controller.handleTranscript('Hey Jarvis, play Dota');
+    const result = controller.handleTranscript(phrase);
+    assert.deepEqual(result, { action: 'END_CONVERSATION' }, `"${phrase}" should end the conversation`);
+    assert.equal(controller.isConversationActive, false, `"${phrase}" should clear isConversationActive`);
+  }
+});
+
+test('a just-addressed "Hey Jarvis, stop" ends even without an active conversation', () => {
+  const controller = new ConversationController();
+  const result = controller.handleTranscript('Hey Jarvis, stop');
+  assert.deepEqual(result, { action: 'END_CONVERSATION' });
+  assert.equal(controller.isConversationActive, false);
+});
+
+test('isStopPhrase recognizes end-conversation phrases for the typed-input path', () => {
+  const controller = new ConversationController();
+  assert.equal(controller.isStopPhrase('end conversation'), true);
+  assert.equal(controller.isStopPhrase('End conversation,'), true);
+  assert.equal(controller.isStopPhrase('Stop.'), true);
+  assert.equal(controller.isStopPhrase('We install'), false);
+  assert.equal(controller.isStopPhrase('End is a conversation'), false);
+});
+
 test('ambient speech with no wake word is ignored while idle', () => {
   const controller = new ConversationController();
 

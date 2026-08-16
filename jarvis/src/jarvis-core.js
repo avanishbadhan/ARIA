@@ -24,6 +24,14 @@ import { GROUNDING_TOOLS, createToolExecutor } from './jarvis-tools.js';
 import { GoogleAccountConnector } from './google-account-connector.js';
 import { GmailHarness } from './gmail-harness.js';
 import { GoogleCalendarHarness } from './google-calendar-harness.js';
+import { LocationHarness } from './location-harness.js';
+import { WeatherHarness } from './weather-harness.js';
+import { McpWebHarness } from './mcp-web-harness.js';
+
+// Only questions that reference the actual screen/display are treated as
+// screen-vision (SCREEN_QUERY) questions. Anything else tagged SCREEN_QUERY
+// by the AI classifier is re-routed to web search — see processUserInput.
+const SCREEN_QUERY_PATTERN = /screen|display|monitor|screenshot|desktop|window|browser|page|tab|what am i looking at|what do(?:es)? (?:this|that) say|what'?s on (?:my|the) screen|describe (?:my|the) screen/i;
 
 export class JarvisCore {
   constructor(voiceEngine, harness, options = {}) {
@@ -65,6 +73,17 @@ export class JarvisCore {
       onLog: (logData) => this.onLog(logData)
     });
 
+    // Hermes (Nous Research) — same OpenRouter connection/key as
+    // this.openRouter, just a different pinned model queue. NOT part of the
+    // free pool (see docs/superpowers/specs/2026-08-15-hermes-mcp-web-access-design.md)
+    // — only ever tried when useHermes is explicitly switched on, and every
+    // call spends OpenRouter credits. Hermes 4 405B first (best tool-use),
+    // Hermes 4 70B (cheaper, same family) as fallback.
+    this.hermes = new OpenRouterClient(openRouterApiKey, {
+      onLog: (logData) => this.onLog(logData),
+      modelQueue: ['nousresearch/hermes-4-405b', 'nousresearch/hermes-4-70b']
+    });
+
     // Instantiate WolframAlpha Client (optional — grounds math answers in a
     // real computation instead of the LLM guessing; no key means MATH_QUERY
     // just falls through to the normal LLM chat path)
@@ -100,9 +119,37 @@ export class JarvisCore {
       onLog: (logData) => this.onLog(logData)
     });
 
-    // Read-only grounding tools (WolframAlpha + web search) exposed to
-    // autonomous LLM function-calling for screen vision and general chat —
-    // see docs/superpowers/specs/2026-08-14-grounding-tool-calling-design.md.
+    // Location Harness — resolves the user's current coordinates on demand
+    // via navigator.geolocation (read-only, one-shot). Exposed as the
+    // get_location grounding tool below so the LLM can answer location-aware
+    // questions. Same no-IPC nature as the renderer's map panel.
+    this.locationHarness = new LocationHarness({
+      onLog: (logData) => this.onLog(logData)
+    });
+
+    // MCP Web Harness — real webpage reading via the Playwright MCP server
+    // spawned in the Electron main process (electron/mcp-manager.cjs). No
+    // credentials, no account connection. Exposed as the web_search
+    // (upgraded from the old DuckDuckGo-only lookup) and browse_webpage
+    // grounding tools below. See
+    // docs/superpowers/specs/2026-08-15-hermes-mcp-web-access-design.md.
+    this.mcpWebHarness = new McpWebHarness({
+      onLog: (logData) => this.onLog(logData)
+    });
+
+    // Weather Harness — live conditions at a lat/lon via Open-Meteo, with the
+    // actual request proxied through the Electron main process
+    // (registerWeatherIpc in electron/main.cjs) so the renderer holds no
+    // credentials and makes no CORS-prone call. Exposed as the get_weather
+    // grounding tool; pair it with get_location for "weather here".
+    this.weatherHarness = new WeatherHarness({
+      onLog: (logData) => this.onLog(logData)
+    });
+
+    // Read-only grounding tools (WolframAlpha + web search + location +
+    // weather + webpage browsing) exposed to autonomous LLM function-calling
+    // for screen vision and general chat — see
+    // docs/superpowers/specs/2026-08-14-grounding-tool-calling-design.md.
     // Action tools (game launch, Spotify, event creation, etc.) stay off this
     // list.
     this.groundingTools = GROUNDING_TOOLS;
@@ -111,6 +158,9 @@ export class JarvisCore {
       harness: this.harness,
       gmail: this.gmailHarness,
       calendar: this.calendarHarness,
+      location: this.locationHarness,
+      weather: this.weatherHarness,
+      mcpWeb: this.mcpWebHarness,
       getGoogleCredentials: () => ({ clientId: this.googleClientId, clientSecret: this.googleClientSecret }),
       onLog: (logData) => this.onLog(logData)
     });
@@ -272,6 +322,36 @@ export class JarvisCore {
     });
     if (!decision) {
       decision = this.toolReasoner.evaluateIntent(input);
+    }
+
+    // Guard against the AI classifier over-eagerly tagging a non-screen
+    // question (e.g. "what is the weather in my location") as SCREEN_QUERY,
+    // which would send it to screen vision to read a screenshot instead of
+    // answering from live data. Only questions that actually reference the
+    // screen/display stay on SCREEN_QUERY; everything else is redirected to
+    // GOOGLE_SEARCH, which carries the get_location grounding tool.
+    if (decision.toolName === 'SCREEN_QUERY') {
+      // Test the FULL user input for a screen reference, not just the
+      // classifier-extracted subject. The classifier often reduces a question
+      // like "what's the temperature based on my screen?" down to the bare
+      // word "temperature"; testing that against the screen pattern would
+      // wrongly strip the "my screen" context and yank a genuine screen query
+      // onto web search. When re-routing, use the full input as the search
+      // query so context ("here", location, etc.) isn't lost to a bare word.
+      if (!SCREEN_QUERY_PATTERN.test(input)) {
+        this.onLog({ type: 'HARNESS', message: `[INTENT] Reclassified "${input}" from SCREEN_QUERY to GOOGLE_SEARCH (no screen reference).` });
+        decision = {
+          toolName: 'GOOGLE_SEARCH',
+          params: { query: input },
+          shouldCallTool: true,
+          confidence: 0.9,
+          reasoning: 'Reclassified non-screen question to web search.'
+        };
+      } else if (decision.params?.question !== input) {
+        // Keep the full user question for the screen-vision call too, so the
+        // model isn't handed just the classifier's bare subject ("temperature").
+        decision.params = { ...decision.params, question: input };
+      }
     }
 
     this.onLog({
@@ -530,8 +610,9 @@ export class JarvisCore {
         });
 
         const llmAnswer = await this._chatWithActiveLLM(
-          `Answer this question using your own knowledge, as JARVIS, in 2-3 sentences. Do not say you're searching or mention any browser. If you're not confident of the answer, say so honestly instead of guessing: ${decision.params.query}`,
-          this.conversationHistory
+          `Answer this question using your own knowledge, as JARVIS, in 2-3 sentences. Do not say you're searching or mention any browser. If you're not confident of the answer, say so honestly instead of guessing. IMPORTANT: If the question asks about the current weather or temperature somewhere, you MUST call get_location (when the user means 'here') then get_weather to retrieve the real data — do NOT ask the user to confirm, just call the tools and report the result. If the question depends on where the user is for any other reason (what's nearby, distances, directions), call get_location first: ${decision.params.query}`,
+          this.conversationHistory,
+          { tools: this.groundingTools, toolExecutor: this.toolExecutor }
         );
         const spokenResponse = llmAnswer || `I don't have a confident answer to that from memory alone, Sir.`;
 
@@ -554,11 +635,17 @@ export class JarvisCore {
       // of guessing from its own (possibly stale/wrong) training knowledge.
       const searchResult = await this.harness.executeGoogleSearch(decision.params.query, loadSettings().openTabOnSearch);
 
+      const weatherNudge = /weather|temperature|how (?:hot|cold) is it|feels like|forecast/i.test(decision.params.query)
+        ? " IMPORTANT: The user is asking about the weather or current temperature. Ignore the search results above — you MUST call get_location first (for 'here' coordinates), then call get_weather to retrieve the real weather data. Do NOT ask the user to confirm — just call both tools and report the temperature. "
+        : '';
       const llmPrompt = searchResult.summary
-        ? `Live web search results for "${decision.params.query}":\n${searchResult.summary}\n\nUsing ONLY the information above, answer the user's question in 1-3 sentences as JARVIS. Do not say you're searching or mention any browser. If the results above don't actually answer the question, say so honestly instead of guessing.`
-        : `Answer this question briefly in 2-3 sentences. Do not say you're searching or mention any browser. Just give the answer clearly: ${decision.params.query}`;
+        ? `Live web search results for "${decision.params.query}":\n${searchResult.summary}\n\nUsing ONLY the information above, answer the user's question in 1-3 sentences as JARVIS. Do not say you're searching or mention any browser. If the results above don't actually answer the question, say so honestly instead of guessing.${weatherNudge}`
+        : `Answer this question briefly in 2-3 sentences. Do not say you're searching or mention any browser. Just give the answer clearly: ${decision.params.query}${weatherNudge}`;
 
-      const llmAnswer = await this._chatWithActiveLLM(llmPrompt, this.conversationHistory);
+      const llmAnswer = await this._chatWithActiveLLM(llmPrompt, this.conversationHistory, {
+        tools: this.groundingTools,
+        toolExecutor: this.toolExecutor
+      });
 
       // Priority: grounded LLM answer > raw web summary > minimal fallback
       let spokenResponse;
@@ -891,6 +978,7 @@ export class JarvisCore {
    */
   _activeProviderLabel() {
     if (this.groq.currentTier === 'ultra' && this.gemini.apiKey) return 'Gemini';
+    if (loadSettings().useHermes && this.hermes.apiKey) return 'Hermes';
     const preferGroq = loadSettings().useGroq || !this.openRouter.apiKey;
     if (preferGroq && this.groq.apiKey) return 'Groq';
     if (this.openRouter.apiKey) return 'OpenRouter';
@@ -898,12 +986,22 @@ export class JarvisCore {
   }
 
   async _chatWithActiveLLM(userInput, context, options = {}) {
-    // Ultra tier routes to Gemini first, regardless of the Groq/OpenRouter
+    // Ultra tier routes to Gemini first, regardless of the Hermes/Groq/OpenRouter
     // preference below — if it has no key or fails, fall through to the
-    // normal Groq/OpenRouter chain exactly as any other tier would.
+    // normal chain exactly as any other tier would.
     let answer;
     if (this.groq.currentTier === 'ultra' && this.gemini.apiKey) {
       answer = await this.gemini.chatWithJarvis(userInput, context, options);
+      if (answer) return this._cleanLlmText(answer);
+    }
+
+    // Hermes — tried next when explicitly switched on and a key is
+    // configured, ahead of the Groq/OpenRouter preference below, since it's
+    // the more capable/agentic model for tool-calling (see
+    // docs/superpowers/specs/2026-08-15-hermes-mcp-web-access-design.md).
+    // Falls through on failure like every other provider.
+    if (loadSettings().useHermes && this.hermes.apiKey) {
+      answer = await this.hermes.chatWithJarvis(userInput, context, options);
       if (answer) return this._cleanLlmText(answer);
     }
 

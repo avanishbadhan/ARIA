@@ -14,7 +14,8 @@ export const DEFAULT_SETTINGS = {
   voiceGender: 'male',
   soundMeterEnabled: true,
   useGroq: false,
-  groqModelTier: 'quick'
+  groqModelTier: 'quick',
+  useHermes: false
 };
 
 export function loadSettings() {

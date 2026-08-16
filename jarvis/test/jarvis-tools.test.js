@@ -4,7 +4,7 @@ import { GROUNDING_TOOLS, createToolExecutor } from '../src/jarvis-tools.js';
 
 test('GROUNDING_TOOLS only lists read-only tools, no action tools', () => {
   const names = GROUNDING_TOOLS.map(t => t.function.name);
-  assert.deepEqual(names, ['solve_math', 'web_search', 'list_recent_emails', 'search_emails', 'list_upcoming_events', 'search_calendar_events']);
+  assert.deepEqual(names, ['solve_math', 'web_search', 'list_recent_emails', 'search_emails', 'list_upcoming_events', 'search_calendar_events', 'get_location', 'get_weather', 'browse_webpage']);
 });
 
 test('solve_math delegates to wolfram.solve with the parsed query', async () => {
@@ -36,29 +36,37 @@ test('solve_math returns a graceful fallback string when wolfram.solve throws', 
   assert.match(result, /unavailable|no result/i);
 });
 
-test('web_search delegates to harness.fetchLiveSearchAnswer with the parsed query', async () => {
+test('web_search builds a Google search URL and delegates to mcpWeb.fetchWebpage', async () => {
   const calls = [];
-  const harness = { fetchLiveSearchAnswer: async (query) => { calls.push(query); return 'Paris is the capital of France.'; } };
-  const executor = createToolExecutor({ wolfram: null, harness });
+  const mcpWeb = { fetchWebpage: async (url) => { calls.push(url); return { success: true, text: 'Paris is the capital of France.' }; } };
+  const executor = createToolExecutor({ wolfram: null, harness: null, mcpWeb });
 
   const result = await executor('web_search', '{"query":"capital of France"}');
 
   assert.equal(result, 'Paris is the capital of France.');
-  assert.deepEqual(calls, ['capital of France']);
+  assert.deepEqual(calls, ['https://www.google.com/search?q=capital%20of%20France']);
 });
 
-test('web_search replaces the tab-opening fallback sentinel with a neutral no-result string', async () => {
-  const harness = { fetchLiveSearchAnswer: async () => 'I have launched a Google search for "xyz". Check your active browser tab and HUD viewport for full details.' };
-  const executor = createToolExecutor({ wolfram: null, harness });
+test('web_search returns a graceful fallback string when mcpWeb reports failure', async () => {
+  const mcpWeb = { fetchWebpage: async () => ({ success: false, message: 'not available' }) };
+  const executor = createToolExecutor({ wolfram: null, harness: null, mcpWeb });
 
   const result = await executor('web_search', '{"query":"xyz"}');
 
-  assert.doesNotMatch(result, /browser tab|HUD viewport/i);
+  assert.equal(result, 'No web search result found for this query.');
 });
 
-test('web_search returns a graceful fallback string when the harness throws', async () => {
-  const harness = { fetchLiveSearchAnswer: async () => { throw new Error('network error'); } };
-  const executor = createToolExecutor({ wolfram: null, harness });
+test('web_search returns a graceful fallback string when mcpWeb.fetchWebpage throws', async () => {
+  const mcpWeb = { fetchWebpage: async () => { throw new Error('network error'); } };
+  const executor = createToolExecutor({ wolfram: null, harness: null, mcpWeb });
+
+  const result = await executor('web_search', '{"query":"xyz"}');
+
+  assert.equal(result, 'No web search result found for this query.');
+});
+
+test('web_search returns a graceful fallback string when mcpWeb is not wired up', async () => {
+  const executor = createToolExecutor({ wolfram: null, harness: null });
 
   const result = await executor('web_search', '{"query":"xyz"}');
 
@@ -79,6 +87,40 @@ test('unparseable arguments resolve to a descriptive string instead of throwing'
   const result = await executor('solve_math', 'not json');
 
   assert.match(result, /invalid/i);
+});
+
+test('get_weather delegates to weather.getCurrentWeather with the parsed lat/lon', async () => {
+  const calls = [];
+  const weather = {
+    getCurrentWeather: async (lat, lon) => {
+      calls.push({ lat, lon });
+      return { success: true, temperatureC: 22, feelsLikeC: 21, humidityPct: 40, windKmph: 12, description: 'partly cloudy' };
+    }
+  };
+  const executor = createToolExecutor({ wolfram: null, harness: null, weather });
+
+  const result = await executor('get_weather', '{"lat":37.7749,"lon":-122.4194}');
+
+  assert.deepEqual(calls, [{ lat: 37.7749, lon: -122.4194 }]);
+  assert.match(result, /22°C/);
+  assert.match(result, /partly cloudy/);
+});
+
+test('get_weather returns a graceful fallback when the weather harness reports failure', async () => {
+  const weather = { getCurrentWeather: async () => ({ success: false }) };
+  const executor = createToolExecutor({ wolfram: null, harness: null, weather });
+
+  const result = await executor('get_weather', '{"lat":1,"lon":2}');
+
+  assert.match(result, /unable to retrieve/i);
+});
+
+test('get_weather returns a fallback when no weather harness is available', async () => {
+  const executor = createToolExecutor({ wolfram: null, harness: null });
+
+  const result = await executor('get_weather', '{"lat":1,"lon":2}');
+
+  assert.match(result, /unable to retrieve/i);
 });
 
 test('list_recent_emails delegates to gmail.listRecent using the stored Google credentials', async () => {
@@ -173,4 +215,81 @@ test('list_upcoming_events and search_calendar_events fall back gracefully when 
 
   assert.match(await executor('list_upcoming_events', '{}'), /not connected|no matching/i);
   assert.match(await executor('search_calendar_events', '{"query":"x"}'), /not connected|no matching/i);
+});
+
+test('get_location returns the coordinates when location resolves successfully', async () => {
+  const location = { getCurrentPosition: async () => ({ success: true, lat: 40.7128, lon: -74.006 }) };
+  const executor = createToolExecutor({ wolfram: null, harness: null, location });
+
+  const result = await executor('get_location', '{}');
+  assert.match(result, /40\.71280/);
+  assert.match(result, /-74\.00600/);
+});
+
+test('get_location returns a graceful message when location permission is denied', async () => {
+  const location = { getCurrentPosition: async () => ({ success: false, message: "You've blocked location access, Sir." }) };
+  const executor = createToolExecutor({ wolfram: null, harness: null, location });
+
+  assert.match(await executor('get_location', '{}'), /blocked location/i);
+});
+
+test('get_location returns a graceful fallback when location.getCurrentPosition throws', async () => {
+  const location = { getCurrentPosition: async () => { throw new Error('boom'); } };
+  const executor = createToolExecutor({ wolfram: null, harness: null, location });
+
+  assert.match(await executor('get_location', '{}'), /unable to determine/i);
+});
+
+test('get_location falls back gracefully when location is not wired up', async () => {
+  const executor = createToolExecutor({ wolfram: null, harness: null });
+
+  assert.match(await executor('get_location', '{}'), /not available|unable to determine/i);
+});
+
+test('browse_webpage delegates to mcpWeb.browseWebpage with the parsed url and linkText', async () => {
+  const calls = [];
+  const mcpWeb = { browseWebpage: async (url, linkText) => { calls.push({ url, linkText }); return { success: true, text: 'Pricing: $10/month.' }; } };
+  const executor = createToolExecutor({ wolfram: null, harness: null, mcpWeb });
+
+  const result = await executor('browse_webpage', '{"url":"https://example.com","linkText":"pricing"}');
+
+  assert.equal(result, 'Pricing: $10/month.');
+  assert.deepEqual(calls, [{ url: 'https://example.com', linkText: 'pricing' }]);
+});
+
+test('browse_webpage works without linkText (url only)', async () => {
+  const calls = [];
+  const mcpWeb = { browseWebpage: async (url, linkText) => { calls.push({ url, linkText }); return { success: true, text: 'Homepage content.' }; } };
+  const executor = createToolExecutor({ wolfram: null, harness: null, mcpWeb });
+
+  const result = await executor('browse_webpage', '{"url":"https://example.com"}');
+
+  assert.equal(result, 'Homepage content.');
+  assert.deepEqual(calls, [{ url: 'https://example.com', linkText: undefined }]);
+});
+
+test('browse_webpage returns a graceful fallback string when mcpWeb reports failure', async () => {
+  const mcpWeb = { browseWebpage: async () => ({ success: false, message: 'not available' }) };
+  const executor = createToolExecutor({ wolfram: null, harness: null, mcpWeb });
+
+  const result = await executor('browse_webpage', '{"url":"https://example.com"}');
+
+  assert.equal(result, 'Unable to read that webpage.');
+});
+
+test('browse_webpage returns a graceful fallback string when mcpWeb.browseWebpage throws', async () => {
+  const mcpWeb = { browseWebpage: async () => { throw new Error('navigation timeout'); } };
+  const executor = createToolExecutor({ wolfram: null, harness: null, mcpWeb });
+
+  const result = await executor('browse_webpage', '{"url":"https://example.com"}');
+
+  assert.equal(result, 'Unable to read that webpage.');
+});
+
+test('browse_webpage returns a graceful fallback string when mcpWeb is not wired up', async () => {
+  const executor = createToolExecutor({ wolfram: null, harness: null });
+
+  const result = await executor('browse_webpage', '{"url":"https://example.com"}');
+
+  assert.equal(result, 'Unable to read that webpage.');
 });
