@@ -1275,8 +1275,12 @@ function registerUpdateIpc() {
 app.whenReady().then(() => {
   // Grant microphone access automatically — this is a trusted first-party app,
   // and the voice pipeline is core functionality, not an optional feature.
+  // Also auto-approve geolocation: by default Electron silently denies
+  // permission requests with no handler registered (no native OS prompt
+  // appears, `getCurrentPosition` just errors), so without this the Location
+  // panel would never resolve a position.
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
-    callback(permission === 'media');
+    callback(permission === 'media' || permission === 'geolocation');
   });
 
   registerSteamIpc();

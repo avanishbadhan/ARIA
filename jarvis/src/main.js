@@ -6,6 +6,9 @@ import { loadSettings, saveSettings } from './settings.js';
 import { isUpdateSupported, getCurrentVersion, checkForUpdate, downloadUpdate, installUpdate, onUpdateState, getChangelog } from './update-manager.js';
 import { MODEL_TIERS, TIER_ORDER } from './model-tiers.js';
 import { CameraVisionHarness } from './camera-vision-harness.js';
+import { LocationHarness } from './location-harness.js';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 
 // DOM Element References
 const micBtn = document.getElementById('micBtn');
@@ -14,6 +17,7 @@ const textInput = document.getElementById('textInput');
 const sendBtn = document.getElementById('sendBtn');
 const statusDot = document.getElementById('statusDot');
 const statusText = document.getElementById('statusText');
+const spokenLine = document.getElementById('spokenLine');
 const terminalBox = document.getElementById('terminalBox');
 const swarmList = document.getElementById('swarmList');
 const steamGamesGrid = document.getElementById('steamGamesGrid');
@@ -28,6 +32,7 @@ const viewportTitle = document.getElementById('viewportTitle');
 const viewportExternalLink = document.getElementById('viewportExternalLink');
 const tabsOpenedCount = document.getElementById('tabsOpenedCount');
 const visualizerCanvas = document.getElementById('visualizerCanvas');
+const arcReactorContainer = document.querySelector('.arc-reactor-container');
 const speechMeter = document.getElementById('speechMeter');
 const speechMeterBars = speechMeter ? Array.from(speechMeter.querySelectorAll('.speech-meter-bar')) : [];
 
@@ -42,6 +47,7 @@ let voiceEngine;
 let harness;
 let jarvis;
 let isMuted = false;
+let isThinking = false; // drives the pink "thinking" glow on the reactor core/waveform
 
 // Wake-word / conversation-mode state machine ("Jarvis" / "Hey Jarvis")
 const conversationController = new ConversationController();
@@ -67,7 +73,11 @@ function initApp() {
       statusDot.className = 'status-dot';
       if (status === 'SPEAKING') statusDot.classList.add('speaking');
       if (status === 'LISTENING') statusDot.classList.add('listening');
+      if (status === 'THINKING') statusDot.classList.add('thinking');
     }
+
+    isThinking = status === 'THINKING';
+    if (arcReactorContainer) arcReactorContainer.classList.toggle('thinking', isThinking);
 
     if (message && transcriptDisplay) {
       transcriptDisplay.textContent = message;
@@ -202,6 +212,7 @@ function initApp() {
     cameraVisionHarness,
     onResponse: ({ text, actionType, data }) => {
       addLog({ type: 'JARVIS', message: text });
+      if (spokenLine) spokenLine.textContent = text;
       if (actionType === 'SET_MODEL_TIER') {
         // On success, sync the slider to the tier that was just applied. On
         // failure (e.g. dragged to Ultra with a Groq key but no Gemini key)
@@ -327,6 +338,9 @@ function initApp() {
 
   // 8e. Camera Vision Harness Panel (live COCO-SSD bounding-box overlay)
   initCameraVisionPanel();
+
+  // 8f. Location Panel (one-shot Leaflet map of the user's current position)
+  initLocationPanel();
 
   // Voice & Mute Control Handlers
   if (micBtn) {
@@ -481,7 +495,7 @@ function startVisualizerAnimation() {
     const isListening = voiceEngine ? voiceEngine.isListening : false;
 
     // Glowing Central Core
-    const coreRadius = isSpeaking ? 42 + Math.sin(phase * 4) * 8 : (isListening ? 38 + Math.sin(phase * 2) * 5 : 34);
+    const coreRadius = isSpeaking ? 42 + Math.sin(phase * 4) * 8 : (isListening ? 38 + Math.sin(phase * 2) * 5 : (isThinking ? 40 + Math.sin(phase * 3) * 6 : 34));
     const grad = ctx.createRadialGradient(centerX, centerY, 5, centerX, centerY, coreRadius * 1.8);
 
     if (isSpeaking) {
@@ -492,6 +506,10 @@ function startVisualizerAnimation() {
       grad.addColorStop(0, '#ffffff');
       grad.addColorStop(0.4, '#00f3ff');
       grad.addColorStop(1, 'rgba(0, 119, 255, 0.0)');
+    } else if (isThinking) {
+      grad.addColorStop(0, '#ffffff');
+      grad.addColorStop(0.4, '#ff007f');
+      grad.addColorStop(1, 'rgba(255, 0, 127, 0.0)');
     } else {
       grad.addColorStop(0, 'rgba(226, 241, 255, 0.9)');
       grad.addColorStop(0.4, 'rgba(0, 243, 255, 0.6)');
@@ -509,7 +527,7 @@ function startVisualizerAnimation() {
     ctx.beginPath();
     for (let i = 0; i <= points; i++) {
       const angle = (i / points) * Math.PI * 2;
-      const amp = isSpeaking ? 16 * Math.sin(phase * 3 + i * 0.4) : (isListening ? 10 * Math.cos(phase * 2 + i * 0.3) : 3 * Math.sin(phase + i * 0.2));
+      const amp = isSpeaking ? 16 * Math.sin(phase * 3 + i * 0.4) : (isListening ? 10 * Math.cos(phase * 2 + i * 0.3) : (isThinking ? 8 * Math.sin(phase * 2.5 + i * 0.3) : 3 * Math.sin(phase + i * 0.2)));
       const r = baseRadius + amp;
       const x = centerX + Math.cos(angle) * r;
       const y = centerY + Math.sin(angle) * r;
@@ -519,10 +537,10 @@ function startVisualizerAnimation() {
     }
     ctx.closePath();
 
-    ctx.strokeStyle = isSpeaking ? '#ffaa00' : (isListening ? '#00f3ff' : 'rgba(0, 243, 255, 0.5)');
+    ctx.strokeStyle = isSpeaking ? '#ffaa00' : (isListening ? '#00f3ff' : (isThinking ? '#ff007f' : 'rgba(0, 243, 255, 0.5)'));
     ctx.lineWidth = 3;
     ctx.shadowBlur = 15;
-    ctx.shadowColor = isSpeaking ? '#ffaa00' : '#00f3ff';
+    ctx.shadowColor = isSpeaking ? '#ffaa00' : (isThinking ? '#ff007f' : '#00f3ff');
     ctx.stroke();
 
     // Concentric Orbiting Dots
@@ -1147,6 +1165,39 @@ function initCameraVisionPanel() {
     if (!jarvis) return;
     const isOpen = Boolean(jarvis.cameraVisionHarness?.isOpen);
     jarvis.processUserInput(isOpen ? 'close camera' : 'open camera');
+  });
+}
+
+/**
+ * Wires the Location panel: on load, asks LocationHarness for the user's
+ * position once (not watchPosition — one-shot only, per the spec's scope
+ * decision). On success it initializes a Leaflet map centered on those
+ * coords with an OSM tile layer and a single marker; on failure it leaves
+ * the map container empty and shows the harness's graceful message, the
+ * same degradation pattern as the Steam/Spotify "not connected" states.
+ */
+function initLocationPanel() {
+  const mapEl = document.getElementById('locationMap');
+  const statusEl = document.getElementById('locationStatus');
+  if (!mapEl || !statusEl) return;
+
+  const locationHarness = new LocationHarness();
+  locationHarness.getCurrentPosition().then((result) => {
+    if (!result.success) {
+      statusEl.textContent = result.message;
+      statusEl.style.color = 'var(--text-dim)';
+      return;
+    }
+
+    const map = L.map(mapEl).setView([result.lat, result.lon], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+    L.marker([result.lat, result.lon]).addTo(map);
+
+    statusEl.textContent = `Position locked at ${result.lat.toFixed(5)}, ${result.lon.toFixed(5)}.`;
+    statusEl.style.color = 'var(--cyan-bright)';
   });
 }
 

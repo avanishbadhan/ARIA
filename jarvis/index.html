@@ -119,11 +119,24 @@
 
           <div class="steam-library-status" id="cameraStatus">Camera inactive — say "open camera" or click OPEN CAMERA</div>
         </div>
+
+        <!-- Location Harness Panel -->
+        <div class="location-panel">
+          <div class="panel-header" style="padding-bottom: 6px;">
+            <span class="panel-title">🛰️ Location</span>
+          </div>
+
+          <div class="location-map" id="locationMap"></div>
+
+          <div class="steam-library-status" id="locationStatus">Acquiring your position...</div>
+        </div>
       </section>
 
 
       <!-- Center Stage: Arc Reactor Visualizer & Voice Control -->
       <section class="center-stage">
+        <div class="spoken-line" id="spokenLine"></div>
+
         <div class="arc-reactor-container">
           <div class="reactor-ring-outer"></div>
           <div class="reactor-ring"></div>

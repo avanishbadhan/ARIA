@@ -3,4 +3,7 @@ node_modules/
 dist/
 *.log
 .claude-flow/
+.claude/
 CLAUDE.md
+graphify-out/
+.superpowers/
