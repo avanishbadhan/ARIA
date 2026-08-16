@@ -901,9 +901,10 @@ export class JarvisCore {
     // Ultra tier routes to Gemini first, regardless of the Groq/OpenRouter
     // preference below — if it has no key or fails, fall through to the
     // normal Groq/OpenRouter chain exactly as any other tier would.
+    let answer;
     if (this.groq.currentTier === 'ultra' && this.gemini.apiKey) {
-      const geminiAnswer = await this.gemini.chatWithJarvis(userInput, context, options);
-      if (geminiAnswer) return geminiAnswer;
+      answer = await this.gemini.chatWithJarvis(userInput, context, options);
+      if (answer) return this._cleanLlmText(answer);
     }
 
     // Prefer Groq when explicitly switched on, or automatically when
@@ -914,10 +915,23 @@ export class JarvisCore {
     // which already has its own dedicated math prompt) simply omit options.
     const preferGroq = loadSettings().useGroq || !this.openRouter.apiKey;
     if (preferGroq) {
-      const groqAnswer = await this.groq.chatWithJarvis(userInput, context, options);
-      if (groqAnswer) return groqAnswer;
+      answer = await this.groq.chatWithJarvis(userInput, context, options);
+      if (answer) return this._cleanLlmText(answer);
     }
-    return this.openRouter.chatWithJarvis(userInput, context, options);
+    return this._cleanLlmText(await this.openRouter.chatWithJarvis(userInput, context, options));
+  }
+
+  /**
+   * Strips any inline tool-call / function markers the LLM might have
+   * emitted inside its answer text (e.g. `<function=...></function>`), so
+   * the marker never leaks into the spoken line, transcript, or log.
+   */
+  _cleanLlmText(text) {
+    if (!text || typeof text !== 'string') return text;
+    return text
+      .replace(/<function[^>]*>[\s\S]*?<\/function>/gi, '')
+      .replace(/<function[^>]*\/>/gi, '')
+      .trim();
   }
 
   /**
