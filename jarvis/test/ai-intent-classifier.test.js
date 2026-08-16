@@ -136,6 +136,39 @@ test('accepts a GMAIL_READ_MESSAGE decision with its required query param', asyn
   assert.deepEqual(result.params, { query: 'sarah' });
 });
 
+test('accepts a CAMERA_START decision', async () => {
+  const result = await classifyIntentWithAI({
+    input: 'open camera',
+    classifyIntent: async () => JSON.stringify({ toolName: 'CAMERA_START', params: {} })
+  });
+  assert.equal(result.toolName, 'CAMERA_START');
+});
+
+test('accepts a CAMERA_STOP decision', async () => {
+  const result = await classifyIntentWithAI({
+    input: 'close camera',
+    classifyIntent: async () => JSON.stringify({ toolName: 'CAMERA_STOP', params: {} })
+  });
+  assert.equal(result.toolName, 'CAMERA_STOP');
+});
+
+test('accepts a CAMERA_QUERY decision with its required question param', async () => {
+  const result = await classifyIntentWithAI({
+    input: 'how many fingers am I holding up',
+    classifyIntent: async () => JSON.stringify({ toolName: 'CAMERA_QUERY', params: { question: 'how many fingers am I holding up' } })
+  });
+  assert.equal(result.toolName, 'CAMERA_QUERY');
+  assert.deepEqual(result.params, { question: 'how many fingers am I holding up' });
+});
+
+test('rejects a CAMERA_QUERY decision missing the required question param', async () => {
+  const result = await classifyIntentWithAI({
+    input: 'what am I holding',
+    classifyIntent: async () => JSON.stringify({ toolName: 'CAMERA_QUERY', params: {} })
+  });
+  assert.equal(result, null);
+});
+
 test('accepts a CALENDAR_LIST_UPCOMING decision', async () => {
   const result = await classifyIntentWithAI({
     input: "what's on my calendar",

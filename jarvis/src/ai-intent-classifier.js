@@ -25,6 +25,9 @@ const TOOL_PARAM_REQUIREMENTS = {
   SCREEN_MONITOR_START: [],
   SCREEN_MONITOR_STOP: [],
   SCREEN_QUERY: ['question'],
+  CAMERA_START: [],
+  CAMERA_STOP: [],
+  CAMERA_QUERY: ['question'],
   GMAIL_CHECK_INBOX: [],
   GMAIL_SEARCH: ['query'],
   GMAIL_READ_MESSAGE: ['query'],
@@ -58,6 +61,9 @@ Available tools and their exact params shape:
 - SCREEN_MONITOR_START: {}
 - SCREEN_MONITOR_STOP: {}
 - SCREEN_QUERY: { question: string }
+- CAMERA_START: {} — user wants to open/activate/turn on the webcam or camera vision feed (e.g. "open camera", "turn on the camera")
+- CAMERA_STOP: {} — user wants to close/deactivate/turn off the webcam or camera vision feed
+- CAMERA_QUERY: { question: string } — user is asking a question about what the webcam currently sees (e.g. "what am I holding", "how many fingers am I holding up", "can you see me")
 - GMAIL_CHECK_INBOX: {} — user wants to check their email/inbox generally
 - GMAIL_SEARCH: { query: string } — user wants to search their email for something specific
 - GMAIL_READ_MESSAGE: { query: string } — user wants JARVIS to read a specific email (by sender or subject) aloud
