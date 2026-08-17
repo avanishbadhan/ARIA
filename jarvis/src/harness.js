@@ -168,6 +168,42 @@ export class BrowserHarness {
   }
 
   /**
+   * Opens a Google Maps search for nearby places around (lat, lon) in a new
+   * tab. Google Maps requires no API key when opened as a plain URL in a
+   * browser tab (only programmatic calls are billed), so this is the familiar
+   * visual counterpart to the spoken OSM-based place data.
+   */
+  openNearbyTab(lat, lon, query) {
+    const url = `https://www.google.com/maps/search/${encodeURIComponent(query)}/@${lat},${lon},15z`;
+    const newTab = window.open(url, '_blank', 'noopener,noreferrer');
+    if (newTab) {
+      this.tabsOpened++;
+      this.onLog({ type: 'SUCCESS', message: `[TAB OPENED] Nearby places map tab (#${this.tabsOpened}): ${url}` });
+    } else {
+      this.onLog({ type: 'WARNING', message: `[POPUP NOTICE] Map tab blocked by browser popup setting.` });
+    }
+    this.onViewportUpdate({ title: `Nearby: ${query}`, url, iframeUrl: url, query, tabOpened: Boolean(newTab) });
+    return { url, success: Boolean(newTab) };
+  }
+
+  /**
+   * Opens Google Maps driving directions from (lat, lon) to a destination in
+   * a new tab — the full turn-by-turn counterpart to the spoken summary.
+   */
+  openDirectionsTab(lat, lon, destinationQuery) {
+    const url = `https://www.google.com/maps/dir/?api=1&origin=${lat},${lon}&destination=${encodeURIComponent(destinationQuery)}&travelmode=driving`;
+    const newTab = window.open(url, '_blank', 'noopener,noreferrer');
+    if (newTab) {
+      this.tabsOpened++;
+      this.onLog({ type: 'SUCCESS', message: `[TAB OPENED] Directions map tab (#${this.tabsOpened}): ${url}` });
+    } else {
+      this.onLog({ type: 'WARNING', message: `[POPUP NOTICE] Directions tab blocked by browser popup setting.` });
+    }
+    this.onViewportUpdate({ title: `Directions to: ${destinationQuery}`, url, iframeUrl: url, query: destinationQuery, tabOpened: Boolean(newTab) });
+    return { url, success: Boolean(newTab) };
+  }
+
+  /**
    * Fetches real-time web summary using DuckDuckGo Instant Answer / Wikipedia API
    */
   async fetchLiveSearchAnswer(query) {

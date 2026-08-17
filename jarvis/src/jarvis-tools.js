@@ -14,6 +14,8 @@ const NO_EMAIL_RESULT = 'Gmail is not connected or no matching emails were found
 const NO_CALENDAR_RESULT = 'Google Calendar is not connected or no matching events were found.';
 const NO_WEBPAGE_RESULT = 'Unable to read that webpage.';
 const NO_WEATHER_RESULT = 'Unable to retrieve live weather data.';
+const NO_NEARBY_RESULT = "I couldn't find anything nearby, Sir.";
+const NO_DIRECTIONS_RESULT = "I couldn't find that place, Sir.";
 
 export const GROUNDING_TOOLS = [
   {
@@ -137,6 +139,38 @@ export const GROUNDING_TOOLS = [
         required: ['url']
       }
     }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'find_nearby_places',
+      description: "Finds nearby places matching a category or keyword (e.g. pizza, coffee, gas) around a latitude/longitude, returning the closest few with name, straight-line distance in miles, and street address. Coordinates are required — call get_location first if the user means 'here'. Answer place requests with this tool's real results instead of guessing a business from memory.",
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'The type of place to find (e.g. "pizza", "coffee shop", "gas station").' },
+          lat: { type: 'number', description: 'Optional latitude. Omit to use the user\'s current location (call get_location first).' },
+          lon: { type: 'number', description: 'Optional longitude. Omit to use the user\'s current location (call get_location first).' }
+        },
+        required: ['query']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_directions',
+      description: "Gets driving directions from a latitude/longitude to a destination, returning the total distance in miles and estimated drive time. Coordinates are required — call get_location first if the user means 'here'. Answer directions requests with this tool's real route data instead of guessing a distance or time from memory.",
+      parameters: {
+        type: 'object',
+        properties: {
+          destination: { type: 'string', description: 'The destination, e.g. "the airport", "a coffee shop on Main St", or a place name.' },
+          lat: { type: 'number', description: 'Optional origin latitude. Omit to use the user\'s current location (call get_location first).' },
+          lon: { type: 'number', description: 'Optional origin longitude. Omit to use the user\'s current location (call get_location first).' }
+        },
+        required: ['destination']
+      }
+    }
   }
 ];
 
@@ -146,7 +180,7 @@ export const GROUNDING_TOOLS = [
  * model can still answer from its own knowledge instead of the whole
  * completion failing.
  */
-export function createToolExecutor({ wolfram, harness, gmail, calendar, location, weather, mcpWeb, getGoogleCredentials, onLog = () => {} }) {
+export function createToolExecutor({ wolfram, harness, gmail, calendar, location, weather, maps, mcpWeb, getGoogleCredentials, onLog = () => {} }) {
   return async function executeTool(name, argsJson) {
     let args;
     try {
@@ -285,6 +319,65 @@ export function createToolExecutor({ wolfram, harness, gmail, calendar, location
       } catch (e) {
         onLog({ type: 'WARNING', message: `[TOOL CALL] browse_webpage failed: ${e.message}` });
         return NO_WEBPAGE_RESULT;
+      }
+    }
+
+    // Resolves coordinates for the maps tools: uses the passed lat/lon args
+    // if the model supplied them, otherwise resolves the user's current
+    // position via the location harness. Returns null if unavailable.
+    async function resolveCoords(latArg, lonArg) {
+      if (!Number.isNaN(Number(latArg)) && !Number.isNaN(Number(lonArg))) {
+        return { lat: Number(latArg), lon: Number(lonArg) };
+      }
+      if (location && typeof location.getCurrentPosition === 'function') {
+        const res = await location.getCurrentPosition();
+        if (res.success) return { lat: res.lat, lon: res.lon };
+      }
+      return null;
+    }
+
+    if (name === 'find_nearby_places') {
+      const query = args.query || '';
+      try {
+        if (!maps || typeof maps.findNearbyPlaces !== 'function') return NO_NEARBY_RESULT;
+        const coords = await resolveCoords(args.lat, args.lon);
+        if (!coords) return NO_NEARBY_RESULT;
+        const result = await maps.findNearbyPlaces(coords.lat, coords.lon, query);
+        if (result.success) {
+          if (harness && typeof harness.openNearbyTab === 'function') {
+            try { harness.openNearbyTab(coords.lat, coords.lon, query); } catch (e) {}
+          }
+          const lines = result.places.map((p) =>
+            `${p.name}${p.distanceMi != null ? ` — ${p.distanceMi.toFixed(1)}mi` : ''}${p.address ? `, ${p.address}` : ''}`
+          );
+          onLog({ type: 'TOOL', message: `[TOOL CALL] find_nearby_places("${query}") -> ${result.places.length} place(s)` });
+          return lines.length ? lines.join('\n') : NO_NEARBY_RESULT;
+        }
+        return result.message || NO_NEARBY_RESULT;
+      } catch (e) {
+        onLog({ type: 'WARNING', message: `[TOOL CALL] find_nearby_places failed: ${e.message}` });
+        return NO_NEARBY_RESULT;
+      }
+    }
+
+    if (name === 'get_directions') {
+      const destination = args.destination || '';
+      try {
+        if (!maps || typeof maps.getDirections !== 'function') return NO_DIRECTIONS_RESULT;
+        const coords = await resolveCoords(args.lat, args.lon);
+        if (!coords) return NO_DIRECTIONS_RESULT;
+        const result = await maps.getDirections(coords.lat, coords.lon, destination);
+        if (result.success) {
+          if (harness && typeof harness.openDirectionsTab === 'function') {
+            try { harness.openDirectionsTab(coords.lat, coords.lon, destination); } catch (e) {}
+          }
+          onLog({ type: 'TOOL', message: `[TOOL CALL] get_directions("${destination}") -> ${result.distanceMi} mi, ~${result.durationMin} min` });
+          return `It's ${result.distanceMi} miles, about ${result.durationMin} minutes by car.`;
+        }
+        return result.message || NO_DIRECTIONS_RESULT;
+      } catch (e) {
+        onLog({ type: 'WARNING', message: `[TOOL CALL] get_directions failed: ${e.message}` });
+        return NO_DIRECTIONS_RESULT;
       }
     }
 

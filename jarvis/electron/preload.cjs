@@ -10,6 +10,10 @@ contextBridge.exposeInMainWorld('jarvisElectron', {
   weather: {
     current: (lat, lon) => ipcRenderer.invoke('weather:current', { lat, lon })
   },
+  maps: {
+    findNearby: (lat, lon, query) => ipcRenderer.invoke('maps:find-nearby', { lat, lon, query }),
+    getDirections: (lat, lon, destinationQuery) => ipcRenderer.invoke('maps:get-directions', { lat, lon, destinationQuery })
+  },
   spotifyResolveTrack: (clientId, clientSecret, query) => ipcRenderer.invoke('spotify:resolve-track', { clientId, clientSecret, query }),
   spotifyAuth: {
     status: () => ipcRenderer.invoke('spotify:auth-status'),

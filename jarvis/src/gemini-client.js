@@ -149,9 +149,21 @@ export class GeminiClient {
         const argsJson = JSON.stringify(call.args || {});
         const result = await options.toolExecutor(call.name, argsJson);
 
+        // Gemini 3 now requires the model's `thoughtSignature` to be echoed
+        // back exactly as received when continuing a tool conversation —
+        // omitting it makes the API reject with "Function call is missing a
+        // thought_signature". It arrives as a camelCase sibling of the
+        // `functionCall` within the SAME content part (NOT inside the
+        // functionCall object), and must be echoed back at that same
+        // part-level spot. See
+        // https://ai.google.dev/gemini-api/docs/thought-signatures.
+        const echoPart = { functionCall: { name: call.name, args: call.args || {} } };
+        const signature = fnCall.thoughtSignature || fnCall.thought_signature;
+        if (signature) echoPart.thoughtSignature = signature;
+
         body.contents.push({
           role: 'model',
-          parts: [{ functionCall: { name: call.name, args: call.args || {} } }]
+          parts: [echoPart]
         });
         body.contents.push({
           role: 'user',

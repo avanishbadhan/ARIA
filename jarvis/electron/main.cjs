@@ -471,6 +471,217 @@ function registerWeatherIpc() {
   });
 }
 
+// --- Maps: nearby places & driving directions (free/keyless OSM stack) ---
+// Nearby-place search uses Overpass (OpenStreetMap tag queries); geocoding
+// uses Nominatim; routing uses OSRM's public demo server. All three are free
+// and keyless but rate-limited and intended for light, non-bulk personal use
+// (fine for a single assistant user; a self-hosted/paying instance would be
+// needed at scale). Plain Node HTTPS in the main process — same trick as the
+// weather/wolfram handlers — avoids renderer CORS entirely.
+
+function httpsGetJson(url, headers = {}) {
+  return new Promise((resolve, reject) => {
+    https.get(url, { headers }, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          reject(new Error(`HTTP ${res.statusCode}`));
+          return;
+        }
+        try {
+          resolve(JSON.parse(data));
+        } catch (e) {
+          reject(new Error(`Invalid JSON: ${e.message}`));
+        }
+      });
+    }).on('error', reject);
+  });
+}
+
+function httpsPostJson(url, body, headers = {}) {
+  return new Promise((resolve, reject) => {
+    const req = https.request(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain', 'Content-Length': Buffer.byteLength(body), ...headers }
+    }, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          reject(new Error(`HTTP ${res.statusCode}`));
+          return;
+        }
+        try {
+          resolve(JSON.parse(data));
+        } catch (e) {
+          reject(new Error(`Invalid JSON: ${e.message}`));
+        }
+      });
+    });
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+}
+
+// A keyword -> OpenStreetMap tag filter map, so "pizza" / "coffee" / "gas"
+// resolve to real OSM tags. Anything not in the map falls back to a
+// case-insensitive name-substring match instead.
+const NEARBY_TAG_MAP = {
+  pizza: ['amenity=restaurant', 'amenity=fast_food', 'amenity=pizza'],
+  restaurant: ['amenity=restaurant', 'amenity=fast_food'],
+  food: ['amenity=restaurant', 'amenity=fast_food', 'amenity=cafe'],
+  eat: ['amenity=restaurant', 'amenity=fast_food', 'amenity=cafe'],
+  coffee: ['amenity=cafe', 'shop=coffee'],
+  cafe: ['amenity=cafe'],
+  gas: ['amenity=fuel'],
+  fuel: ['amenity=fuel'],
+  gasstation: ['amenity=fuel'],
+  bank: ['amenity=bank'],
+  atm: ['amenity=atm'],
+  pharmacy: ['amenity=pharmacy'],
+  drugstore: ['amenity=pharmacy'],
+  hospital: ['amenity=hospital'],
+  supermarket: ['shop=supermarket', 'shop=grocery'],
+  grocery: ['shop=supermarket', 'shop=grocery'],
+  bar: ['amenity=bar'],
+  gym: ['leisure=fitness_centre'],
+  hotel: ['tourism=hotel'],
+  parking: ['amenity=parking'],
+  park: ['leisure=park'],
+  school: ['amenity=school']
+};
+
+function nearbyTagFilter(query) {
+  const q = String(query || '').toLowerCase();
+  const keywords = Object.keys(NEARBY_TAG_MAP);
+  for (const kw of keywords) {
+    if (q.includes(kw)) return NEARBY_TAG_MAP[kw];
+  }
+  return null;
+}
+
+function haversineMi(lat1, lon1, lat2, lon2) {
+  const R = 3958.8; // Earth radius in miles
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+// A 2km search radius was too tight for anything outside a dense downtown
+// core — sparser categories (a specific chain, a school) routinely had zero
+// tagged results that close. 10 miles gives Overpass a realistic suburban
+// search area while findNearbyPlaces still only returns the closest 5.
+const NEARBY_RADIUS_MI = 10;
+
+// Builds a bounding box of +/- NEARBY_RADIUS_MI around (lat, lon) as
+// Overpass's (south,west,north,east).
+function overpassBbox(lat, lon) {
+  const radiusKm = NEARBY_RADIUS_MI * 1.60934;
+  const dLat = radiusKm / 111;
+  const dLon = radiusKm / (111 * Math.cos(lat * Math.PI / 180));
+  return `${lat - dLat},${lon - dLon},${lat + dLat},${lon + dLon}`;
+}
+
+// Short human address from OSM addr:* tags.
+function osmAddress(tags = {}) {
+  const parts = [];
+  if (tags['addr:housenumber']) parts.push(tags['addr:housenumber']);
+  if (tags['addr:street']) parts.push(tags['addr:street']);
+  if (parts.length === 0 && tags['addr:city']) parts.push(tags['addr:city']);
+  return parts.join(' ');
+}
+
+function registerMapsIpc() {
+  ipcMain.handle('maps:find-nearby', async (event, { lat, lon, query }) => {
+    const bbox = overpassBbox(Number(lat), Number(lon));
+    const tags = nearbyTagFilter(query);
+    let nodeFilter;
+    if (tags) {
+      nodeFilter = '(' + tags.map((t) => `node[${t}](${bbox})`).join(';\n') + ';' +
+        tags.map((t) => `way[${t}](${bbox})`).join(';\n') + ';)';
+    } else {
+      // Chain names are often tagged in OSM with different punctuation than
+      // a spoken query gives (e.g. "Baskin-Robbins" vs. the query "Baskin
+      // Robbins") — a literal-space regex match on the raw query text
+      // silently misses a real match sitting right there. Escape each word
+      // for regex safety, then join with an optional hyphen/space so
+      // punctuation differences between words don't matter.
+      const words = String(query).trim().split(/\s+/).filter(Boolean);
+      const namePattern = words
+        .map((w) => w.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&'))
+        .join('[- ]?');
+      const escaped = namePattern.replace(/"/g, '\\"');
+      nodeFilter = `(node["name"~"${escaped}",i](${bbox});way["name"~"${escaped}",i](${bbox});)`;
+    }
+    // Overpass's `out` cap truncates in arbitrary/index order, not
+    // nearest-first, so a wide 10-mile box needs a generous cap or the
+    // actual closest match can get cut before findNearbyPlaces ever sorts
+    // by distance and slices to the top 5.
+    const overpassQl = `[out:json][timeout:15];\n${nodeFilter};\nout center 100;`;
+    const data = await httpsPostJson('https://overpass-api.de/api/interpreter', overpassQl, { 'User-Agent': 'jarvis-voice-ai/1.0' });
+
+    const elements = (data.elements || []).map((el) => {
+      const elLat = el.lat ?? el.center?.lat;
+      const elLon = el.lon ?? el.center?.lon;
+      return {
+        name: el.tags?.name || el.tags?.[tags?.[0]?.split('=')[0] || 'amenity'] || 'Unnamed place',
+        lat: elLat,
+        lon: elLon,
+        address: osmAddress(el.tags),
+        tags: el.tags || {}
+      };
+    }).filter((p) => p.name && typeof p.lat === 'number');
+
+    const places = elements
+      .map((p) => ({ ...p, distanceMi: haversineMi(Number(lat), Number(lon), p.lat, p.lon) }))
+      .sort((a, b) => a.distanceMi - b.distanceMi)
+      .slice(0, 5)
+      .map((p) => ({ name: p.name, distanceMi: p.distanceMi, address: p.address }));
+
+    return { success: true, places };
+  });
+
+  ipcMain.handle('maps:get-directions', async (event, { lat, lon, destinationQuery }) => {
+    // Bias the geocode search around the user so "the airport" resolves
+    // locally, not to a same-named place on the other side of the world.
+    const dLat = 10 / 111;
+    const dLon = 10 / (111 * Math.cos(Number(lat) * Math.PI / 180));
+    const viewbox = `${lon - dLon},${lat + dLat},${lon + dLon},${lat - dLat}`;
+    const geocodeUrl = 'https://nominatim.openstreetmap.org/search?' + new URLSearchParams({
+      q: destinationQuery,
+      format: 'jsonv2',
+      limit: '1',
+      viewbox,
+      bounded: '1'
+    }).toString();
+
+    const geocode = await httpsGetJson(geocodeUrl, { 'User-Agent': 'jarvis-voice-ai/1.0' });
+    const top = Array.isArray(geocode) ? geocode[0] : null;
+    if (!top || top.lat == null || top.lon == null) {
+      return { success: false, message: "I couldn't find that place, Sir." };
+    }
+
+    const osrmUrl =
+      `https://router.project-osrm.org/route/v1/driving/${Number(lon)},${Number(lat)};${Number(top.lon)},${Number(top.lat)}?overview=false`;
+    const route = await httpsGetJson(osrmUrl);
+    const leg = route?.routes?.[0];
+    if (!leg || leg.distance == null) {
+      return { success: false, message: "I couldn't find a route to that place, Sir." };
+    }
+
+    return {
+      success: true,
+      distanceMi: Math.round(leg.distance / 1609.344 * 10) / 10,
+      durationMin: Math.round(leg.duration / 60),
+      destinationLabel: top.display_name || String(destinationQuery)
+    };
+  });
+}
+
 function registerWolframIpc() {
   // Same plain-Node-HTTPS-in-main-process trick as registerSteamIpc, to avoid
   // browser CORS entirely for the packaged app.
@@ -1342,6 +1553,7 @@ app.whenReady().then(() => {
   registerScreenMonitorIpc();
   registerWolframIpc();
   registerWeatherIpc();
+  registerMapsIpc();
   registerSpotifyIpc();
   registerSpotifyAuthIpc();
   registerGoogleAuthIpc();

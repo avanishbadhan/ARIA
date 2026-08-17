@@ -26,12 +26,22 @@ import { GmailHarness } from './gmail-harness.js';
 import { GoogleCalendarHarness } from './google-calendar-harness.js';
 import { LocationHarness } from './location-harness.js';
 import { WeatherHarness } from './weather-harness.js';
+import { MapsHarness } from './maps-harness.js';
 import { McpWebHarness } from './mcp-web-harness.js';
 
 // Only questions that reference the actual screen/display are treated as
 // screen-vision (SCREEN_QUERY) questions. Anything else tagged SCREEN_QUERY
 // by the AI classifier is re-routed to web search — see processUserInput.
 const SCREEN_QUERY_PATTERN = /screen|display|monitor|screenshot|desktop|window|browser|page|tab|what am i looking at|what do(?:es)? (?:this|that) say|what'?s on (?:my|the) screen|describe (?:my|the) screen/i;
+
+// Matches requests for a nearby place or driving directions ("find pizza near
+// me", "closest coffee shop from here", "nearest gas station to my location",
+// "directions to the airport"). These are answered by the maps grounding
+// tools (find_nearby_places / get_directions), not by a web search, so the
+// GOOGLE_SEARCH path detects this intent and forces the LLM onto the tools.
+// See docs/superpowers/specs/2026-08-16-nearby-places-and-directions-design.md.
+const PLACES_OR_DIRECTIONS_PATTERN =
+  /near me|nearby|around here|close by|closest|nearest|from here|near (?:my|the) (?:location|area|current position)|directions to|how do i get to|navigate to|route to/i;
 
 export class JarvisCore {
   constructor(voiceEngine, harness, options = {}) {
@@ -146,6 +156,16 @@ export class JarvisCore {
       onLog: (logData) => this.onLog(logData)
     });
 
+    // Maps Harness — nearby-place search and driving directions via the free,
+    // keyless OpenStreetMap stack (Overpass/Nominatim/OSRM), proxied through
+    // the Electron main process (registerMapsIpc) like weather. Exposed as
+    // the find_nearby_places and get_directions grounding tools; pair with
+    // get_location for "what's nearby" / "how do I get there". See
+    // docs/superpowers/specs/2026-08-16-nearby-places-and-directions-design.md.
+    this.mapsHarness = new MapsHarness({
+      onLog: (logData) => this.onLog(logData)
+    });
+
     // Read-only grounding tools (WolframAlpha + web search + location +
     // weather + webpage browsing) exposed to autonomous LLM function-calling
     // for screen vision and general chat — see
@@ -160,6 +180,7 @@ export class JarvisCore {
       calendar: this.calendarHarness,
       location: this.locationHarness,
       weather: this.weatherHarness,
+      maps: this.mapsHarness,
       mcpWeb: this.mcpWebHarness,
       getGoogleCredentials: () => ({ clientId: this.googleClientId, clientSecret: this.googleClientSecret }),
       onLog: (logData) => this.onLog(logData)
@@ -610,7 +631,7 @@ export class JarvisCore {
         });
 
         const llmAnswer = await this._chatWithActiveLLM(
-          `Answer this question using your own knowledge, as JARVIS, in 2-3 sentences. Do not say you're searching or mention any browser. If you're not confident of the answer, say so honestly instead of guessing. IMPORTANT: If the question asks about the current weather or temperature somewhere, you MUST call get_location (when the user means 'here') then get_weather to retrieve the real data — do NOT ask the user to confirm, just call the tools and report the result. If the question depends on where the user is for any other reason (what's nearby, distances, directions), call get_location first: ${decision.params.query}`,
+          `Answer this question using your own knowledge, as JARVIS, in 2-3 sentences. Do not say you're searching or mention any browser. If you're not confident of the answer, say so honestly instead of guessing. IMPORTANT: If the question asks about the current weather or temperature somewhere, you MUST call get_location (when the user means 'here') then get_weather to retrieve the real data — do NOT ask the user to confirm, just call the tools and report the result. If the question asks what's nearby or for directions to a place (phrases like "near me", "nearby", "around here", "directions to", "how do I get to"), you MUST call get_location, then find_nearby_places or get_directions as appropriate — do NOT guess an address or business from memory. For any other question that depends on where the user is, call get_location first: ${decision.params.query}`,
           this.conversationHistory,
           { tools: this.groundingTools, toolExecutor: this.toolExecutor }
         );
@@ -628,19 +649,44 @@ export class JarvisCore {
         return;
       }
 
-      this._updateAgentState("agent-3", "SEARCHING", `Querying: "${decision.params.query}"`);
-      this.voiceEngine.playSearchLaunchSound();
+      // Test the FULL user input, not decision.params.query — the classifier
+      // commonly trims a qualifier like "near me" off the extracted search
+      // query (e.g. "find pizza near me" -> query: "pizza"), which would
+      // silently defeat this check. Same lesson as the SCREEN_QUERY
+      // reclassification guard above.
+      const placesOrDirections = PLACES_OR_DIRECTIONS_PATTERN.test(input);
+      const weatherIntent = /weather|temperature|how (?:hot|cold) is it|feels like|forecast/i.test(decision.params.query);
 
-      // Search first so the LLM can be grounded in the real result instead
-      // of guessing from its own (possibly stale/wrong) training knowledge.
-      const searchResult = await this.harness.executeGoogleSearch(decision.params.query, loadSettings().openTabOnSearch);
+      // Places/directions queries are answered by the maps grounding tools
+      // (find_nearby_places / get_directions), not by a web search — a search
+      // for "closest ice cream place" returns nothing useful and just pops a
+      // tab. Detect the intent up front so we skip the search and force the
+      // LLM straight onto the maps tools.
+      let searchResult = null;
+      if (!placesOrDirections) {
+        this._updateAgentState("agent-3", "SEARCHING", `Querying: "${decision.params.query}"`);
+        this.voiceEngine.playSearchLaunchSound();
 
-      const weatherNudge = /weather|temperature|how (?:hot|cold) is it|feels like|forecast/i.test(decision.params.query)
+        // Search first so the LLM can be grounded in the real result instead
+        // of guessing from its own (possibly stale/wrong) training knowledge.
+        searchResult = await this.harness.executeGoogleSearch(decision.params.query, loadSettings().openTabOnSearch);
+      }
+
+      const weatherNudge = weatherIntent
         ? " IMPORTANT: The user is asking about the weather or current temperature. Ignore the search results above — you MUST call get_location first (for 'here' coordinates), then call get_weather to retrieve the real weather data. Do NOT ask the user to confirm — just call both tools and report the temperature. "
         : '';
-      const llmPrompt = searchResult.summary
-        ? `Live web search results for "${decision.params.query}":\n${searchResult.summary}\n\nUsing ONLY the information above, answer the user's question in 1-3 sentences as JARVIS. Do not say you're searching or mention any browser. If the results above don't actually answer the question, say so honestly instead of guessing.${weatherNudge}`
-        : `Answer this question briefly in 2-3 sentences. Do not say you're searching or mention any browser. Just give the answer clearly: ${decision.params.query}${weatherNudge}`;
+      const placesOrDirectionsNudge = placesOrDirections
+        ? " IMPORTANT: The user is asking about a nearby place or directions. You MUST call get_location first (for 'here' coordinates), then call find_nearby_places or get_directions as appropriate to retrieve the real place/route data. Do NOT ask the user to confirm and do NOT guess an address or business from memory — just call the tools and report the result. "
+        : '';
+
+      let llmPrompt;
+      if (placesOrDirections) {
+        llmPrompt = `Answer the user's question in 1-3 sentences as JARVIS.${placesOrDirectionsNudge} Question: ${decision.params.query}`;
+      } else if (searchResult.summary) {
+        llmPrompt = `Live web search results for "${decision.params.query}":\n${searchResult.summary}\n\nUsing ONLY the information above, answer the user's question in 1-3 sentences as JARVIS. Do not say you're searching or mention any browser. If the results above don't actually answer the question, say so honestly instead of guessing.${weatherNudge}`;
+      } else {
+        llmPrompt = `Answer this question briefly in 2-3 sentences. Do not say you're searching or mention any browser. Just give the answer clearly: ${decision.params.query}${weatherNudge}`;
+      }
 
       const llmAnswer = await this._chatWithActiveLLM(llmPrompt, this.conversationHistory, {
         tools: this.groundingTools,
@@ -651,7 +697,7 @@ export class JarvisCore {
       let spokenResponse;
       if (llmAnswer) {
         spokenResponse = llmAnswer;
-      } else if (searchResult.summary) {
+      } else if (searchResult?.summary) {
         // Wikipedia/DDG summaries can run long — keep only the first couple
         // of sentences so the spoken response stays punchy.
         const trimmed = searchResult.summary.split('.').slice(0, 2).join('.').trim();
@@ -895,7 +941,10 @@ export class JarvisCore {
     // above, which have their own dedicated grounding logic) catch cases the
     // intent classifier didn't tag as a specific tool — see
     // docs/superpowers/specs/2026-08-14-grounding-tool-calling-design.md.
-    let answerText = await this._chatWithActiveLLM(input, this.conversationHistory, {
+    const placesOrDirectionsNudge = PLACES_OR_DIRECTIONS_PATTERN.test(input)
+      ? " IMPORTANT: The user is asking about nearby places or directions. You MUST call get_location first (for 'here' coordinates), then call find_nearby_places or get_directions as appropriate to retrieve the real place/route data. Do NOT ask the user to confirm and do NOT guess an address or business from memory — just call the tools and report the result. "
+      : '';
+    let answerText = await this._chatWithActiveLLM(input + placesOrDirectionsNudge, this.conversationHistory, {
       tools: this.groundingTools,
       toolExecutor: this.toolExecutor
     });

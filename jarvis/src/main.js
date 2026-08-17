@@ -655,32 +655,37 @@ function initSettingsPanel() {
   if (useHermesToggle) useHermesToggle.checked = settings.useHermes;
   applySoundMeterVisibility(settings.soundMeterEnabled);
 
-  if (openrouterKeyInput && localStorage.getItem('jarvis_openrouter_api_key')) {
-    openrouterKeyInput.placeholder = '••••••••••••••••• (saved)';
+  const keyPreview = (value) =>
+    value && value.length > 4 ? `${'•'.repeat(Math.min(12, value.length - 4))}${value.slice(-4)}` : value;
+  const keyPlaceholder = (name, value) =>
+    value ? `${name}: ${keyPreview(value)} (saved)` : `${name}`;
+
+  if (openrouterKeyInput) {
+    openrouterKeyInput.placeholder = keyPlaceholder('OpenRouter API Key', localStorage.getItem('jarvis_openrouter_api_key'));
   }
-  if (groqKeyInput && localStorage.getItem('jarvis_groq_api_key')) {
-    groqKeyInput.placeholder = '••••••••••••••••• (saved)';
+  if (groqKeyInput) {
+    groqKeyInput.placeholder = keyPlaceholder('Groq API Key', localStorage.getItem('jarvis_groq_api_key'));
   }
-  if (geminiKeyInput && localStorage.getItem('jarvis_gemini_api_key')) {
-    geminiKeyInput.placeholder = '••••••••••••••••• (saved)';
+  if (geminiKeyInput) {
+    geminiKeyInput.placeholder = keyPlaceholder('Gemini API Key', localStorage.getItem('jarvis_gemini_api_key'));
   }
-  if (deepgramKeyInput && localStorage.getItem('jarvis_deepgram_api_key')) {
-    deepgramKeyInput.placeholder = '••••••••••••••••• (saved)';
+  if (deepgramKeyInput) {
+    deepgramKeyInput.placeholder = keyPlaceholder('Deepgram API Key', localStorage.getItem('jarvis_deepgram_api_key'));
   }
-  if (wolframKeyInput && localStorage.getItem('jarvis_wolfram_app_id')) {
-    wolframKeyInput.placeholder = '••••••••••••••••• (saved)';
+  if (wolframKeyInput) {
+    wolframKeyInput.placeholder = keyPlaceholder('WolframAlpha AppID', localStorage.getItem('jarvis_wolfram_app_id'));
   }
-  if (spotifyClientIdInput && localStorage.getItem('jarvis_spotify_client_id')) {
-    spotifyClientIdInput.placeholder = '••••••••••••••••• (saved)';
+  if (spotifyClientIdInput) {
+    spotifyClientIdInput.placeholder = keyPlaceholder('Spotify Client ID', localStorage.getItem('jarvis_spotify_client_id'));
   }
-  if (spotifyClientSecretInput && localStorage.getItem('jarvis_spotify_client_secret')) {
-    spotifyClientSecretInput.placeholder = '••••••••••••••••• (saved)';
+  if (spotifyClientSecretInput) {
+    spotifyClientSecretInput.placeholder = keyPlaceholder('Spotify Client Secret', localStorage.getItem('jarvis_spotify_client_secret'));
   }
-  if (googleClientIdInput && localStorage.getItem('jarvis_google_client_id')) {
-    googleClientIdInput.placeholder = '••••••••••••••••• (saved)';
+  if (googleClientIdInput) {
+    googleClientIdInput.placeholder = keyPlaceholder('Google Client ID', localStorage.getItem('jarvis_google_client_id'));
   }
-  if (googleClientSecretInput && localStorage.getItem('jarvis_google_client_secret')) {
-    googleClientSecretInput.placeholder = '••••••••••••••••• (saved)';
+  if (googleClientSecretInput) {
+    googleClientSecretInput.placeholder = keyPlaceholder('Google Client Secret', localStorage.getItem('jarvis_google_client_secret'));
   }
 
   const openModal = () => settingsModal.classList.add('open');
@@ -752,57 +757,57 @@ function initSettingsPanel() {
           jarvis.hermes.apiKey = openrouterKey; // separate client instance, same key
         }
         openrouterKeyInput.value = '';
-        openrouterKeyInput.placeholder = '••••••••••••••••• (saved)';
+        openrouterKeyInput.placeholder = keyPlaceholder('OpenRouter API Key', openrouterKey);
       }
       if (groqKey) {
         localStorage.setItem('jarvis_groq_api_key', groqKey);
         if (jarvis) jarvis.groq.apiKey = groqKey;
         groqKeyInput.value = '';
-        groqKeyInput.placeholder = '••••••••••••••••• (saved)';
+        groqKeyInput.placeholder = keyPlaceholder('Groq API Key', groqKey);
         refreshTierControlAvailability();
       }
       if (geminiKey) {
         localStorage.setItem('jarvis_gemini_api_key', geminiKey);
         if (jarvis) jarvis.gemini.apiKey = geminiKey;
         geminiKeyInput.value = '';
-        geminiKeyInput.placeholder = '••••••••••••••••• (saved)';
+        geminiKeyInput.placeholder = keyPlaceholder('Gemini API Key', geminiKey);
         refreshTierControlAvailability();
       }
       if (deepgramKey) {
         localStorage.setItem('jarvis_deepgram_api_key', deepgramKey);
         if (voiceEngine) voiceEngine.deepgramApiKey = deepgramKey;
         deepgramKeyInput.value = '';
-        deepgramKeyInput.placeholder = '••••••••••••••••• (saved)';
+        deepgramKeyInput.placeholder = keyPlaceholder('Deepgram API Key', deepgramKey);
       }
       if (wolframAppId) {
         localStorage.setItem('jarvis_wolfram_app_id', wolframAppId);
         if (jarvis) jarvis.wolfram.appId = wolframAppId;
         wolframKeyInput.value = '';
-        wolframKeyInput.placeholder = '••••••••••••••••• (saved)';
+        wolframKeyInput.placeholder = keyPlaceholder('WolframAlpha AppID', wolframAppId);
       }
       if (spotifyClientId) {
         localStorage.setItem('jarvis_spotify_client_id', spotifyClientId);
         if (jarvis) jarvis.spotifyClientId = spotifyClientId;
         spotifyClientIdInput.value = '';
-        spotifyClientIdInput.placeholder = '••••••••••••••••• (saved)';
+        spotifyClientIdInput.placeholder = keyPlaceholder('Spotify Client ID', spotifyClientId);
       }
       if (spotifyClientSecret) {
         localStorage.setItem('jarvis_spotify_client_secret', spotifyClientSecret);
         if (jarvis) jarvis.spotifyClientSecret = spotifyClientSecret;
         spotifyClientSecretInput.value = '';
-        spotifyClientSecretInput.placeholder = '••••••••••••••••• (saved)';
+        spotifyClientSecretInput.placeholder = keyPlaceholder('Spotify Client Secret', spotifyClientSecret);
       }
       if (googleClientId) {
         localStorage.setItem('jarvis_google_client_id', googleClientId);
         if (jarvis) jarvis.googleClientId = googleClientId;
         googleClientIdInput.value = '';
-        googleClientIdInput.placeholder = '••••••••••••••••• (saved)';
+        googleClientIdInput.placeholder = keyPlaceholder('Google Client ID', googleClientId);
       }
       if (googleClientSecret) {
         localStorage.setItem('jarvis_google_client_secret', googleClientSecret);
         if (jarvis) jarvis.googleClientSecret = googleClientSecret;
         googleClientSecretInput.value = '';
-        googleClientSecretInput.placeholder = '••••••••••••••••• (saved)';
+        googleClientSecretInput.placeholder = keyPlaceholder('Google Client Secret', googleClientSecret);
       }
 
       if (apiKeysStatus) {

@@ -4,7 +4,7 @@ import { GROUNDING_TOOLS, createToolExecutor } from '../src/jarvis-tools.js';
 
 test('GROUNDING_TOOLS only lists read-only tools, no action tools', () => {
   const names = GROUNDING_TOOLS.map(t => t.function.name);
-  assert.deepEqual(names, ['solve_math', 'web_search', 'list_recent_emails', 'search_emails', 'list_upcoming_events', 'search_calendar_events', 'get_location', 'get_weather', 'browse_webpage']);
+  assert.deepEqual(names, ['solve_math', 'web_search', 'list_recent_emails', 'search_emails', 'list_upcoming_events', 'search_calendar_events', 'get_location', 'get_weather', 'browse_webpage', 'find_nearby_places', 'get_directions']);
 });
 
 test('solve_math delegates to wolfram.solve with the parsed query', async () => {
@@ -292,4 +292,119 @@ test('browse_webpage returns a graceful fallback string when mcpWeb is not wired
   const result = await executor('browse_webpage', '{"url":"https://example.com"}');
 
   assert.equal(result, 'Unable to read that webpage.');
+});
+
+test('find_nearby_places delegates to maps.findNearbyPlaces, opening a nearby tab on success', async () => {
+  const calls = [];
+  const openedTabs = [];
+  const maps = {
+    findNearbyPlaces: async (lat, lon, query) => {
+      calls.push({ lat, lon, query });
+      return { success: true, places: [
+        { name: 'Slice House', distanceMi: 0.3, address: '123 Main St' },
+        { name: 'Pizza Palace', distanceMi: 0.9, address: '45 Oak Ave' }
+      ] };
+    }
+  };
+  const location = { getCurrentPosition: async () => ({ success: true, lat: 40.7128, lon: -74.006 }) };
+  const harness = { openNearbyTab: (lat, lon, query) => openedTabs.push({ lat, lon, query }) };
+  const executor = createToolExecutor({ wolfram: null, harness, location, maps });
+
+  const result = await executor('find_nearby_places', '{"query":"pizza"}');
+
+  assert.deepEqual(calls, [{ lat: 40.7128, lon: -74.006, query: 'pizza' }]);
+  assert.match(result, /Slice House/);
+  assert.match(result, /0\.3mi/);
+  assert.match(result, /123 Main St/);
+  assert.deepEqual(openedTabs, [{ lat: 40.7128, lon: -74.006, query: 'pizza' }]);
+});
+
+test('find_nearby_places uses provided lat/lon args instead of resolving location', async () => {
+  const calls = [];
+  const maps = {
+    findNearbyPlaces: async (lat, lon, query) => {
+      calls.push({ lat, lon, query });
+      return { success: true, places: [{ name: 'Brew', distanceMi: 0.5, address: '1 Park Ln' }] };
+    }
+  };
+  const harness = { openNearbyTab: () => {} };
+  const executor = createToolExecutor({ wolfram: null, harness, maps });
+
+  const result = await executor('find_nearby_places', '{"query":"coffee","lat":10,"lon":20}');
+
+  assert.deepEqual(calls, [{ lat: 10, lon: 20, query: 'coffee' }]);
+  assert.match(result, /Brew/);
+});
+
+test('find_nearby_places returns a graceful fallback when maps reports failure, and opens no tab', async () => {
+  const maps = { findNearbyPlaces: async () => ({ success: false, message: "I couldn't find anything nearby, Sir." }) };
+  let opened = false;
+  const harness = { openNearbyTab: () => { opened = true; } };
+  const location = { getCurrentPosition: async () => ({ success: true, lat: 1, lon: 2 }) };
+  const executor = createToolExecutor({ wolfram: null, harness, location, maps });
+
+  const result = await executor('find_nearby_places', '{"query":"pizza"}');
+
+  assert.match(result, /couldn't find anything nearby/i);
+  assert.equal(opened, false);
+});
+
+test('find_nearby_places returns a graceful fallback when no maps harness is wired up', async () => {
+  const executor = createToolExecutor({ wolfram: null, harness: null });
+
+  const result = await executor('find_nearby_places', '{"query":"pizza"}');
+
+  assert.match(result, /couldn't find anything nearby/i);
+});
+
+test('find_nearby_places returns a fallback when location cannot be resolved', async () => {
+  const maps = { findNearbyPlaces: async () => ({ success: true, places: [] }) };
+  const location = { getCurrentPosition: async () => ({ success: false }) };
+  const executor = createToolExecutor({ wolfram: null, harness: null, location, maps });
+
+  const result = await executor('find_nearby_places', '{"query":"pizza"}');
+
+  assert.match(result, /couldn't find anything nearby/i);
+});
+
+test('get_directions delegates to maps.getDirections, opening a directions tab on success', async () => {
+  const calls = [];
+  const openedTabs = [];
+  const maps = {
+    getDirections: async (lat, lon, destination) => {
+      calls.push({ lat, lon, destination });
+      return { success: true, distanceMi: 4.2, durationMin: 12, destinationLabel: 'Airport' };
+    }
+  };
+  const location = { getCurrentPosition: async () => ({ success: true, lat: 40.7128, lon: -74.006 }) };
+  const harness = { openDirectionsTab: (lat, lon, destination) => openedTabs.push({ lat, lon, destination }) };
+  const executor = createToolExecutor({ wolfram: null, harness, location, maps });
+
+  const result = await executor('get_directions', '{"destination":"the airport"}');
+
+  assert.deepEqual(calls, [{ lat: 40.7128, lon: -74.006, destination: 'the airport' }]);
+  assert.match(result, /4\.2 miles/);
+  assert.match(result, /12 minutes/);
+  assert.deepEqual(openedTabs, [{ lat: 40.7128, lon: -74.006, destination: 'the airport' }]);
+});
+
+test('get_directions returns a graceful fallback when maps reports failure, and opens no tab', async () => {
+  const maps = { getDirections: async () => ({ success: false, message: "I couldn't find that place, Sir." }) };
+  let opened = false;
+  const harness = { openDirectionsTab: () => { opened = true; } };
+  const location = { getCurrentPosition: async () => ({ success: true, lat: 1, lon: 2 }) };
+  const executor = createToolExecutor({ wolfram: null, harness, location, maps });
+
+  const result = await executor('get_directions', '{"destination":"the airport"}');
+
+  assert.match(result, /couldn't find that place/i);
+  assert.equal(opened, false);
+});
+
+test('get_directions returns a graceful fallback when no maps harness is wired up', async () => {
+  const executor = createToolExecutor({ wolfram: null, harness: null });
+
+  const result = await executor('get_directions', '{"destination":"the airport"}');
+
+  assert.match(result, /couldn't find that place/i);
 });

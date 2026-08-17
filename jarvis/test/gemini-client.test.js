@@ -174,3 +174,39 @@ test('generateCompletion executes a function call, feeds the result back, then r
   assert.ok(calls[1].body.contents.some((c) => c.role === 'model' && c.parts.some((p) => p.functionCall)));
   assert.ok(calls[1].body.contents.some((c) => c.role === 'user' && c.parts.some((p) => p.functionResponse)));
 });
+
+test('generateCompletion echoes the thought_signature back on the functionCall so Google accepts the tool round', async () => {
+  const responses = [
+    {
+      candidates: [
+        {
+          content: {
+            parts: [
+              { functionCall: { name: 'get_location', args: {} }, thoughtSignature: 'sig-123' }
+            ]
+          }
+        }
+      ]
+    },
+    { candidates: [{ content: { parts: [{ text: 'You are at lat 40.7, lon -74.0.' }] } }] }
+  ];
+  const calls = [];
+  global.fetch = async (url, init) => {
+    calls.push({ body: JSON.parse(init.body) });
+    return { ok: true, json: async () => responses[calls.length - 1] };
+  };
+  const client = new GeminiClient('fake-key');
+
+  const result = await client.generateCompletion(
+    [{ role: 'user', content: 'where am I?' }],
+    {
+      tools: [{ type: 'function', function: { name: 'get_location', description: 'coords', parameters: { type: 'object', properties: {} } } }],
+      toolExecutor: async () => 'latitude 40.71280, longitude -74.00600'
+    }
+  );
+
+  assert.equal(result, 'You are at lat 40.7, lon -74.0.');
+  const modelPart = calls[1].body.contents.find((c) => c.role === 'model' && c.parts.some((p) => p.functionCall)).parts[0];
+  assert.equal(modelPart.functionCall.name, 'get_location');
+  assert.equal(modelPart.thoughtSignature, 'sig-123');
+});
