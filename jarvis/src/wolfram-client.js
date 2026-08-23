@@ -27,16 +27,17 @@ export class WolframClient {
         // Electron main process — plain Node HTTPS request, no browser CORS.
         spokenText = await window.jarvisElectron.solveMath(this.appId, query);
       } else {
-        // Plain browser tab. Same CORS-proxy tiering as Steam: Vite's dev
-        // server proxy in dev, public CORS proxy as a best-effort fallback
-        // for a static/non-proxied deployment.
-        const wolframPath = `/v1/spoken?appid=${encodeURIComponent(this.appId)}&i=${encodeURIComponent(query)}`;
         const isDev = typeof import.meta !== 'undefined' && import.meta.env?.DEV;
-        const apiUrl = isDev
-          ? `/wolfram-api${wolframPath}`
-          : `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://api.wolframalpha.com${wolframPath}`)}`;
-
-        const response = await fetch(apiUrl);
+        if (!isDev) {
+          // Plain browser tab without the Vite dev proxy. Same credential
+          // policy as steam-library.js: never send the AppID through a
+          // public third-party CORS proxy. Throw → caught below → null →
+          // LLM chat fallback answers instead.
+          throw new Error('Wolfram requires the desktop app or dev-server proxy; refusing to expose the AppID to a public proxy.');
+        }
+        // Dev server proxies /wolfram-api to WolframAlpha (see vite.config.js).
+        const wolframPath = `/v1/spoken?appid=${encodeURIComponent(this.appId)}&i=${encodeURIComponent(query)}`;
+        const response = await fetch(`/wolfram-api${wolframPath}`);
         if (response.status === 501) {
           // WolframAlpha's documented "no spoken result for this query" response.
           spokenText = null;

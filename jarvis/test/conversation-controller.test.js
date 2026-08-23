@@ -205,3 +205,50 @@ test('alternatives default to an empty array when not provided', () => {
 
   assert.deepEqual(result.alternatives, []);
 });
+
+test('a bare wake word mid-conversation re-arms the command window instead of dispatching "Jarvis" as chat', () => {
+  const controller = new ConversationController();
+  controller.handleTranscript('Hey Jarvis, play Dota');
+
+  const result = controller.handleTranscript('Jarvis');
+
+  assert.deepEqual(result, { action: 'AWAIT_COMMAND' }, 'bare wake word must not dispatch literal chat');
+  assert.equal(controller.isConversationActive, false);
+  assert.equal(controller.isAwaitingCommand, true);
+
+  const next = controller.handleTranscript('what time is it');
+  assert.deepEqual(next, { action: 'DISPATCH_COMMAND', command: 'what time is it', alternatives: [], conversationStarting: true, chime: false });
+});
+
+test('a repeated bare wake word while already awaiting keeps the window armed', () => {
+  const controller = new ConversationController();
+  controller.handleTranscript('Jarvis');
+
+  const result = controller.handleTranscript('Hey Jarvis');
+
+  assert.deepEqual(result, { action: 'AWAIT_COMMAND' });
+  assert.equal(controller.isAwaitingCommand, true);
+  assert.equal(controller.isConversationActive, false);
+});
+
+test('after a bare wake word (awaiting command), "stop"/"end conversation"/"goodbye" end the session instead of dispatching as chat', () => {
+  for (const phrase of ['stop', 'Stop.', 'end conversation', 'goodbye']) {
+    const controller = new ConversationController();
+    const first = controller.handleTranscript('Jarvis');
+    assert.deepEqual(first, { action: 'AWAIT_COMMAND' });
+
+    const result = controller.handleTranscript(phrase);
+
+    assert.deepEqual(result, { action: 'END_CONVERSATION' }, `"${phrase}" should end the session`);
+    assert.equal(controller.isAwaitingCommand, false, `"${phrase}" should clear isAwaitingCommand`);
+    assert.equal(controller.isConversationActive, false, `"${phrase}" should clear isConversationActive`);
+  }
+});
+
+test('an alternative that is only the wake word is dropped instead of kept as raw text', () => {
+  const controller = new ConversationController();
+
+  const result = controller.handleTranscript('Hey Jarvis, play Dota', ['Jarvis']);
+
+  assert.deepEqual(result.alternatives, []);
+});

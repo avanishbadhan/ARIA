@@ -9,6 +9,11 @@
 import { buildJarvisMessages } from './llm-persona.js';
 import { getModelQueue } from './model-tiers.js';
 
+// Hard cap on every outbound Gemini fetch so a hung connection can't stall a
+// voice turn forever — the model-queue fallback below treats an abort like
+// any other per-model failure and moves on to the next model.
+const REQUEST_TIMEOUT_MS = 30000;
+
 /**
  * Converts one message's content into Gemini "parts". Plain string content
  * (normal chat) becomes a single text part. Array content — JARVIS's
@@ -110,14 +115,18 @@ export class GeminiClient {
     const functionDeclarations = this._toFunctionDeclarations(options.tools);
     if (functionDeclarations) body.tools = [functionDeclarations];
 
-    const url = `${this.baseUrl}/${model}:generateContent?key=${encodeURIComponent(this.apiKey)}`;
+    // The API key goes in the x-goog-api-key header, not the ?key= query
+    // param — query strings leak into proxies/access logs.
+    const url = `${this.baseUrl}/${model}:generateContent`;
+    const headers = { 'Content-Type': 'application/json', 'x-goog-api-key': this.apiKey };
     const maxToolRounds = 5;
 
     for (let round = 0; round <= maxToolRounds; round++) {
       const response = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+        headers,
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
       });
 
       // Read the body even on failure — Google's error responses include a
@@ -147,7 +156,16 @@ export class GeminiClient {
         }
         const call = fnCall.functionCall;
         const argsJson = JSON.stringify(call.args || {});
-        const result = await options.toolExecutor(call.name, argsJson);
+        // A throwing tool must not abort the whole turn (mirrors
+        // llm-completion.js): feed the error back as the functionResponse so
+        // the same model can still answer without the tool's data.
+        let result;
+        try {
+          result = await options.toolExecutor(call.name, argsJson);
+        } catch (err) {
+          this.onLog({ type: 'WARNING', message: `[GEMINI] Tool ${call.name} failed: ${err.message}` });
+          result = `Tool call failed: ${err.message}`;
+        }
 
         // Gemini 3 now requires the model's `thoughtSignature` to be echoed
         // back exactly as received when continuing a tool conversation —
@@ -182,8 +200,11 @@ export class GeminiClient {
   async generateCompletion(messages, options = {}) {
     if (!this.apiKey) throw new Error("Gemini API Key not configured.");
 
-    // system_instruction is built once here so _runModel can freely mutate
-    // body.contents across tool rounds without rebuilding the whole body.
+    // system_instruction is built once here, but contents are NOT shared
+    // across attempts: _runModel mutates its body.contents array across tool
+    // rounds, so each model attempt gets a fresh deep copy — otherwise a
+    // failed attempt's appended functionCall/functionResponse parts poison
+    // the conversation sent to the fallback model.
     const systemParts = messages
       .filter((m) => m.role === 'system')
       .map((m) => (typeof m.content === 'string' ? m.content : ''))
@@ -204,7 +225,7 @@ export class GeminiClient {
     for (const model of this.modelQueue) {
       try {
         this.onLog({ type: 'HARNESS', message: `[GEMINI] Trying model: ${model}` });
-        const answer = await this._runModel(model, initialContents, options, prefixBody);
+        const answer = await this._runModel(model, structuredClone(initialContents), options, prefixBody);
         this.onLog({ type: 'SUCCESS', message: `[GEMINI] Response from ${model}` });
         return answer;
       } catch (e) {

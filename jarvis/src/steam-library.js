@@ -58,18 +58,19 @@ export class SteamLibrary extends GameLibraryBase {
       // Node HTTPS request), which isn't subject to browser CORS at all.
       data = await window.jarvisElectron.fetchSteamLibrary(this.apiKey, this.steamId);
     } else {
-      // Plain browser tab. Steam's API doesn't allow direct cross-origin
-      // browser calls. In dev, route through Vite's own server proxy (see
-      // vite.config.js) — no third-party dependency. In a built/static
-      // deployment, fall back to a public CORS proxy (best-effort; these
-      // are unreliable and can go down).
-      const steamPath = `/IPlayerService/GetOwnedGames/v0001/?key=${this.apiKey}&steamid=${this.steamId}&include_appinfo=1&format=json`;
       const isDev = typeof import.meta !== 'undefined' && import.meta.env?.DEV;
-      const apiUrl = isDev
-        ? `/steam-api${steamPath}`
-        : `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://api.steampowered.com${steamPath}`)}`;
-
-      const response = await fetch(apiUrl);
+      if (!isDev) {
+        // Plain browser tab, no Vite dev proxy. Steam's API doesn't allow
+        // direct cross-origin browser calls, and routing the key through a
+        // public CORS proxy would leak that credential to the proxy (and its
+        // logs). Only the proxied paths are supported — Vite's dev server in
+        // dev (see vite.config.js) and the Electron main process when packaged.
+        this.onLog({ type: 'WARNING', message: '[STEAM LIBRARY] Steam library needs the JARVIS desktop app or dev server; refusing to expose the API key to a public proxy.' });
+        throw new Error('Steam library requires the desktop app or dev-server proxy.');
+      }
+      // Dev server proxies /steam-api to the Steam Web API (see vite.config.js).
+      const steamPath = `/IPlayerService/GetOwnedGames/v0001/?key=${this.apiKey}&steamid=${this.steamId}&include_appinfo=1&format=json`;
+      const response = await fetch(`/steam-api${steamPath}`);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }

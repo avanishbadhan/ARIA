@@ -313,3 +313,22 @@ test('multi-round tool calling stops after MAX_TOOL_ROUNDS and falls through to 
   assert.equal(toolCallsMade.length, 4, 'should execute at most MAX_TOOL_ROUNDS tool calls');
   assert.equal(calls.length, 5, '1 initial + 4 follow-up calls across the one model');
 });
+
+test('fetchChatCompletion passes a 30s abort timeout signal on every request so a hung fetch cannot stall a turn', async () => {
+  const signals = [];
+  global.fetch = async (url, init) => {
+    signals.push(init.signal);
+    return { ok: true, json: async () => ({ choices: [{ message: { content: 'hello' } }] }) };
+  };
+
+  await fetchChatCompletion({
+    baseUrl: 'https://example.test/chat',
+    headers: {},
+    modelQueue: ['some-model'],
+    messages: [{ role: 'user', content: 'hi' }],
+    logPrefix: 'TEST'
+  });
+
+  assert.equal(signals.length, 1);
+  assert.ok(signals[0] instanceof AbortSignal);
+});

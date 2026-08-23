@@ -210,3 +210,66 @@ test('askAboutCamera reports failure gracefully when the video never produces a 
 
   assert.equal(result.success, false);
 });
+
+test('two rapid open() calls share a single acquisition instead of double-acquiring streams', async () => {
+  let gumCalls = 0;
+  let release;
+  const { harness } = makeHarness({
+    mediaDevices: {
+      getUserMedia: () => new Promise((resolve) => { gumCalls++; release = resolve; })
+    }
+  });
+
+  const first = harness.open();
+  const second = harness.open();
+
+  assert.equal(gumCalls, 1, 'getUserMedia runs once for both concurrent callers');
+  release({ getTracks: () => [] });
+  const [r1, r2] = await Promise.all([first, second]);
+
+  assert.equal(r1.success, true);
+  assert.equal(r2.success, true);
+  assert.equal(harness.isOpen, true);
+});
+
+test('open() stops freshly acquired tracks instead of leaking them when a post-acquisition step fails', async () => {
+  const stopped = [];
+  const brokenVideo = {};
+  Object.defineProperty(brokenVideo, 'srcObject', {
+    set() { throw new Error('srcObject attach failed'); },
+    get() { return null; }
+  });
+  const { harness } = makeHarness({
+    videoEl: brokenVideo,
+    mediaDevices: { getUserMedia: async () => ({ getTracks: () => [{ stop: () => stopped.push('stopped') }] }) }
+  });
+
+  const result = await harness.open();
+
+  assert.equal(result.success, false);
+  assert.deepEqual(stopped, ['stopped'], 'the just-acquired stream was released');
+  assert.equal(harness.stream, null);
+  assert.equal(harness.isOpen, false);
+});
+
+test('a third open() after the in-flight one settles acquires again normally', async () => {
+  let gumCalls = 0;
+  let release;
+  const { harness } = makeHarness({
+    mediaDevices: {
+      getUserMedia: () => new Promise((resolve) => { gumCalls++; release = resolve; })
+    }
+  });
+
+  const first = harness.open();
+  const second = harness.open();
+  release({ getTracks: () => [] });
+  await Promise.all([first, second]);
+  harness.close();
+
+  const third = harness.open();
+  assert.equal(gumCalls, 2, 'the guard is cleared once settled — no stale promise is returned');
+  release({ getTracks: () => [] });
+  await third;
+  assert.equal(harness.isOpen, true);
+});

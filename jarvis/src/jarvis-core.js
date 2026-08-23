@@ -16,7 +16,7 @@ import { OpenRouterClient } from './openrouter-client.js';
 import { GroqClient } from './groq-client.js';
 import { GeminiClient } from './gemini-client.js';
 import { WolframClient } from './wolfram-client.js';
-import { MODEL_TIERS } from './model-tiers.js';
+import { MODEL_TIERS, normalizeTierAlias } from './model-tiers.js';
 import { loadSettings, saveSettings } from './settings.js';
 import { classifyIntentWithAI, INTENT_CLASSIFIER_SYSTEM_PROMPT } from './ai-intent-classifier.js';
 import { ScreenVisionHarness } from './screen-vision-harness.js';
@@ -27,6 +27,7 @@ import { GoogleCalendarHarness } from './google-calendar-harness.js';
 import { LocationHarness } from './location-harness.js';
 import { WeatherHarness } from './weather-harness.js';
 import { MapsHarness } from './maps-harness.js';
+import { FileSystemHarness } from './file-harness.js';
 import { McpWebHarness } from './mcp-web-harness.js';
 
 // Only questions that reference the actual screen/display are treated as
@@ -260,6 +261,13 @@ export class JarvisCore {
     this.conversationHistory = [];
     this.maxHistoryTurns = 8; // ~4 user/assistant pairs
 
+    // Input serialization: overlapping processUserInput runs (transcripts
+    // arriving faster than they're answered) would interleave history and
+    // speech, so while one run is in flight the newest input is held here
+    // (max 1 queued) and processed when the in-flight run completes.
+    this._isProcessingInput = false;
+    this._queuedInput = null;
+
     // Multi-Agent Swarm Registry
     this.swarmAgents = [
       { id: "agent-1", role: "Queen Coordinator", domain: "Orchestration", status: "ACTIVE", calls: 0, lastAction: "System Ready" },
@@ -314,9 +322,39 @@ export class JarvisCore {
   }
 
   /**
-   * Main entry point when a user speaks or submits a text prompt to JARVIS
+   * Main entry point when a user speaks or submits a text prompt to JARVIS.
+   * Serializes overlapping runs: while one input is being processed, the
+   * newest incoming transcript is queued (max 1 — older pending input is
+   * superseded) and runs once the in-flight pass completes, instead of two
+   * passes interleaving conversation history and spoken responses.
    */
   async processUserInput(rawInput, alternatives = []) {
+    if (!rawInput || !rawInput.trim()) return;
+
+    if (this._isProcessingInput) {
+      const queued = rawInput.trim();
+      this._queuedInput = { input: queued, alternatives };
+      this.onLog({
+        type: 'HARNESS',
+        message: `[USER INPUT] Still processing the previous request — queued "${queued}".`
+      });
+      return;
+    }
+
+    this._isProcessingInput = true;
+    try {
+      await this._runUserInput(rawInput, alternatives);
+    } finally {
+      this._isProcessingInput = false;
+      if (this._queuedInput) {
+        const next = this._queuedInput;
+        this._queuedInput = null;
+        await this.processUserInput(next.input, next.alternatives);
+      }
+    }
+  }
+
+  async _runUserInput(rawInput, alternatives = []) {
     if (!rawInput || !rawInput.trim()) return;
 
     const input = rawInput.trim();
@@ -413,6 +451,7 @@ export class JarvisCore {
       });
 
       this._updateAgentState("agent-4", "ACTIVE", `Launched ${gameResult.gameName || decision.params.gameQuery}`);
+      this._pushHistory(input, spokenResponse);
       await this.voiceEngine.speak(spokenResponse);
       return;
     }
@@ -450,6 +489,7 @@ export class JarvisCore {
       });
 
       this._updateAgentState("agent-7", "ACTIVE", result.trackName ? `Playing ${result.trackName}` : `Searched Spotify for "${decision.params.query}"`);
+      this._pushHistory(input, spokenResponse);
       await this.voiceEngine.speak(spokenResponse);
       return;
     }
@@ -469,6 +509,7 @@ export class JarvisCore {
       });
 
       this._updateAgentState("agent-7", "ACTIVE", result.matchedName ? `Playing ${result.matchedName}` : `Searched Spotify for "${query}"`);
+      this._pushHistory(input, spokenResponse);
       await this.voiceEngine.speak(spokenResponse);
       return;
     }
@@ -526,6 +567,7 @@ export class JarvisCore {
       });
 
       this._updateAgentState("agent-9", "ACTIVE", gameResult.success ? `Launched ${gameResult.gameName}` : `Not found: ${decision.params.gameQuery}`);
+      this._pushHistory(input, spokenResponse);
       await this.voiceEngine.speak(spokenResponse);
       return;
     }
@@ -545,14 +587,29 @@ export class JarvisCore {
       });
 
       this._updateAgentState("agent-8", "ACTIVE", gameResult.success ? `Launched ${gameResult.gameName}` : `Not found: ${decision.params.gameQuery}`);
+      this._pushHistory(input, spokenResponse);
       await this.voiceEngine.speak(spokenResponse);
       return;
     }
 
     // 5. Handle Model-Tier Switch Commands
     if (decision.toolName === 'SET_MODEL_TIER') {
-      const tierKey = decision.params.tier;
+      // The AI classifier only validates presence, not validity — normalize
+      // aliases and reject unknown tiers gracefully instead of crashing on
+      // MODEL_TIERS[tierKey].provider (mirrors the regex path's behavior).
+      const rawTier = typeof decision.params.tier === 'string' ? decision.params.tier.trim() : '';
+      const tierKey = normalizeTierAlias(rawTier) || rawTier;
       const tier = MODEL_TIERS[tierKey];
+      if (!tier) {
+        const spokenResponse = "I don't recognize that performance mode, Sir. Available modes are Quick, Medium, High, and Ultra.";
+        this.onResponse({
+          text: spokenResponse,
+          actionType: 'SET_MODEL_TIER',
+          data: { tier: decision.params.tier, applied: false }
+        });
+        await this.voiceEngine.speak(spokenResponse);
+        return;
+      }
       const requiresGemini = tier.provider === 'gemini';
       const hasRequiredKey = requiresGemini ? Boolean(this.gemini.apiKey) : Boolean(this.groq.apiKey);
 
@@ -577,6 +634,10 @@ export class JarvisCore {
         actionType: 'SET_MODEL_TIER',
         data: { tier: tierKey, applied: hasRequiredKey }
       });
+
+      // Only an actually-applied switch belongs in conversation memory —
+      // unknown-tier and missing-key replies aren't follow-up context.
+      if (hasRequiredKey) this._pushHistory(input, spokenResponse);
 
       await this.voiceEngine.speak(spokenResponse);
       return;
@@ -733,6 +794,7 @@ export class JarvisCore {
       });
 
       this._updateAgentState("agent-3", "ACTIVE", `Opened ${decision.params.siteName}`);
+      this._pushHistory(input, spokenResponse);
       await this.voiceEngine.speak(spokenResponse);
       return;
     }

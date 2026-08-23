@@ -37,38 +37,52 @@ export class ScreenVisionHarness {
       return { success: false, message: 'Screen capture is only available in the desktop app, Sir.' };
     }
 
-    const wasMonitoring = this.isMonitoring;
-    if (!wasMonitoring && window.jarvisElectron.screen.monitorShow) {
-      await window.jarvisElectron.screen.monitorShow();
-    }
+    // In-flight guard: two rapid asks while not monitoring would each see
+    // wasMonitoring=false, so the first restore would hide the indicator
+    // while the second capture was still running (and monitorShow would fire
+    // twice). Concurrent calls await this same acquisition instead.
+    if (this._askInFlight) return this._askInFlight;
 
-    let result;
-    try {
-      const capture = await window.jarvisElectron.screen.capturePrimary();
-      if (!capture.success) {
-        this.onLog({ type: 'WARNING', message: `[SCREEN VISION] Capture failed: ${capture.error}` });
-        result = { success: false, message: "I wasn't able to capture your screen, Sir." };
-      } else if (!this.askVisionLLM) {
-        result = { success: false, message: "I couldn't read your screen right now, Sir." };
-      } else {
-        const answer = await this.askVisionLLM({ question, imageDataUrl: capture.dataUrl });
-        if (answer) {
-          this.onLog({ type: 'SUCCESS', message: `[SCREEN VISION] "${question}" answered from screenshot.` });
-          result = { success: true, message: answer };
-        } else {
-          this.onLog({ type: 'WARNING', message: '[SCREEN VISION] No vision-capable LLM provider available.' });
-          result = { success: false, message: "I couldn't read your screen right now, Sir." };
-        }
+    this._askInFlight = (async () => {
+      const wasMonitoring = this.isMonitoring;
+      if (!wasMonitoring && window.jarvisElectron.screen.monitorShow) {
+        await window.jarvisElectron.screen.monitorShow();
       }
-    } catch (e) {
-      this.onLog({ type: 'WARNING', message: `[SCREEN VISION] ${e.message}` });
-      result = { success: false, message: "I couldn't read your screen right now, Sir." };
-    }
 
-    if (!wasMonitoring && window.jarvisElectron.screen.monitorHide) {
-      await window.jarvisElectron.screen.monitorHide();
-    }
+      let result;
+      try {
+        const capture = await window.jarvisElectron.screen.capturePrimary();
+        if (!capture.success) {
+          this.onLog({ type: 'WARNING', message: `[SCREEN VISION] Capture failed: ${capture.error}` });
+          result = { success: false, message: "I wasn't able to capture your screen, Sir." };
+        } else if (!this.askVisionLLM) {
+          result = { success: false, message: "I couldn't read your screen right now, Sir." };
+        } else {
+          const answer = await this.askVisionLLM({ question, imageDataUrl: capture.dataUrl });
+          if (answer) {
+            this.onLog({ type: 'SUCCESS', message: `[SCREEN VISION] "${question}" answered from screenshot.` });
+            result = { success: true, message: answer };
+          } else {
+            this.onLog({ type: 'WARNING', message: '[SCREEN VISION] No vision-capable LLM provider available.' });
+            result = { success: false, message: "I couldn't read your screen right now, Sir." };
+          }
+        }
+      } catch (e) {
+        this.onLog({ type: 'WARNING', message: `[SCREEN VISION] ${e.message}` });
+        result = { success: false, message: "I couldn't read your screen right now, Sir." };
+      }
 
-    return result;
+      if (!wasMonitoring && window.jarvisElectron.screen.monitorHide) {
+        await window.jarvisElectron.screen.monitorHide();
+      }
+
+      return result;
+    })();
+
+    try {
+      return await this._askInFlight;
+    } finally {
+      this._askInFlight = null;
+    }
   }
 }

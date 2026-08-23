@@ -21,6 +21,7 @@ const DIST_DIR = path.join(__dirname, '..', 'dist');
 const SECRET_PATTERNS = [
   { name: 'OpenRouter API key', regex: /sk-or-v1-[A-Za-z0-9_-]{10,}/g },
   { name: 'Groq API key', regex: /gsk_[A-Za-z0-9_-]{10,}/g },
+  { name: 'Google/Gemini API key', regex: /AIza[0-9A-Za-z_-]{35}/g },
   { name: 'Steam/Deepgram/Spotify-shaped hex secret (32-40 hex chars)', regex: /\b[A-Fa-f0-9]{32,40}\b/g }
 ];
 

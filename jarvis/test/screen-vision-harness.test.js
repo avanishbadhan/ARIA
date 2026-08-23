@@ -69,6 +69,46 @@ test('askAboutScreen flashes the indicator on/off when monitoring was not alread
   assert.deepEqual(calls, ['show', 'hide']);
 });
 
+test('two rapid askAboutScreen calls share one show/hide cycle and one capture instead of restoring early', async () => {
+  const calls = [];
+  let captureCount = 0;
+  let releaseCapture;
+  resetWindow({
+    monitorShow: async () => { calls.push('show'); },
+    monitorHide: async () => { calls.push('hide'); },
+    capturePrimary: () => new Promise((resolve) => { captureCount++; releaseCapture = resolve; })
+  });
+  const harness = new ScreenVisionHarness({ askVisionLLM: async () => 'answer' });
+
+  const first = harness.askAboutScreen('what is on my screen');
+  const second = harness.askAboutScreen('and now?');
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(captureCount, 1, 'only one capture is in flight');
+  assert.deepEqual(calls, ['show'], 'the indicator was shown exactly once so far');
+
+  releaseCapture({ success: true, dataUrl: 'data:image/jpeg;base64,FAKE' });
+  const [r1, r2] = await Promise.all([first, second]);
+
+  assert.deepEqual(calls, ['show', 'hide'], 'restore happens exactly once, after the shared capture finishes');
+  assert.equal(r1.success, true);
+  assert.equal(r2.success, true);
+});
+
+test('a later askAboutScreen after the in-flight one settles runs a fresh show/hide cycle', async () => {
+  const calls = [];
+  resetWindow({
+    monitorShow: async () => { calls.push('show'); },
+    monitorHide: async () => { calls.push('hide'); }
+  });
+  const harness = new ScreenVisionHarness({ askVisionLLM: async () => 'answer' });
+
+  await harness.askAboutScreen('what is on my screen');
+  await harness.askAboutScreen('and now?');
+
+  assert.deepEqual(calls, ['show', 'hide', 'show', 'hide'], 'the guard clears once settled — no stale promise is reused');
+});
+
 test('askAboutScreen does not toggle the indicator when monitoring is already active', async () => {
   const calls = [];
   resetWindow({

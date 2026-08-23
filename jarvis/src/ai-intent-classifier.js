@@ -107,9 +107,15 @@ export async function classifyIntentWithAI({ input, classifyIntent, onLog = () =
 
   const requiredParams = TOOL_PARAM_REQUIREMENTS[toolName];
   const paramsObj = parsed.params && typeof parsed.params === 'object' ? parsed.params : {};
-  const missing = requiredParams.filter(key => paramsObj[key] === undefined);
+  // Required string params must be defined AND survive a trim — checking
+  // `=== undefined` alone let null/""/whitespace-only values through
+  // (e.g. GMAIL_SEARCH {query: null}, SET_MODEL_TIER {tier: ""}), which
+  // produced broken dispatches instead of falling back to the regex reasoner.
+  const missing = requiredParams.filter(
+    key => typeof paramsObj[key] !== 'string' || paramsObj[key].trim().length === 0
+  );
   if (missing.length) {
-    onLog({ type: 'WARNING', message: `[AI INTENT CLASSIFIER] "${toolName}" missing required params (${missing.join(', ')}) — falling back to regex.` });
+    onLog({ type: 'WARNING', message: `[AI INTENT CLASSIFIER] "${toolName}" missing/empty required params (${missing.join(', ')}) — falling back to regex.` });
     return null;
   }
 

@@ -76,3 +76,49 @@ test('constructor falls back to the default free-model queue when no modelQueue 
   const client = new OpenRouterClient('fake-key');
   assert.equal(client.modelQueue[0], 'openrouter/free');
 });
+
+test('generateCompletion sends the HTTP-Referer header when the renderer origin is an http(s) URL', async () => {
+  const headersSeen = [];
+  global.fetch = async (url, init) => {
+    headersSeen.push(init.headers);
+    return { ok: true, json: async () => ({ choices: [{ message: { content: 'hello' } }] }) };
+  };
+  const client = new OpenRouterClient('fake-key');
+
+  await client.generateCompletion([{ role: 'user', content: 'hi' }]);
+
+  assert.equal(headersSeen[0]['HTTP-Referer'], 'http://localhost:3000');
+});
+
+test('generateCompletion omits the HTTP-Referer header for a packaged file:// origin instead of sending garbage', async () => {
+  const headersSeen = [];
+  global.fetch = async (url, init) => {
+    headersSeen.push(init.headers);
+    return { ok: true, json: async () => ({ choices: [{ message: { content: 'hello' } }] }) };
+  };
+  const client = new OpenRouterClient('fake-key');
+
+  const realOrigin = global.window.location.origin;
+  global.window.location.origin = 'file:///C:/app/dist/index.html';
+  try {
+    await client.generateCompletion([{ role: 'user', content: 'hi' }]);
+  } finally {
+    global.window.location.origin = realOrigin;
+  }
+
+  assert.equal('HTTP-Referer' in headersSeen[0], false);
+});
+
+test('generateCompletion passes a 30s abort timeout signal so a hung fetch cannot stall a turn', async () => {
+  const signals = [];
+  global.fetch = async (url, init) => {
+    signals.push(init.signal);
+    return { ok: true, json: async () => ({ choices: [{ message: { content: 'hello' } }] }) };
+  };
+  const client = new OpenRouterClient('fake-key');
+
+  await client.generateCompletion([{ role: 'user', content: 'hi' }]);
+
+  assert.equal(signals.length, 1);
+  assert.ok(signals[0] instanceof AbortSignal);
+});

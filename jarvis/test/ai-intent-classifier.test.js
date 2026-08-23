@@ -218,3 +218,41 @@ test('rejects a CALENDAR_CREATE_EVENT decision missing the title param', async (
   });
   assert.equal(result, null);
 });
+
+test('returns null when a required param is null instead of trusting it', async () => {
+  const logs = [];
+  const result = await classifyIntentWithAI({
+    input: 'search my email for the invoice',
+    classifyIntent: async () => JSON.stringify({ shouldCallTool: true, toolName: 'GMAIL_SEARCH', confidence: 0.9, params: { query: null }, reasoning: 'x' }),
+    onLog: (l) => logs.push(l)
+  });
+  assert.equal(result, null);
+  assert.ok(logs.some(l => l.type === 'WARNING'));
+});
+
+test('returns null when a required param is an empty or whitespace-only string', async () => {
+  for (const tier of ['', '   ']) {
+    const result = await classifyIntentWithAI({
+      input: 'switch mode to high',
+      classifyIntent: async () => JSON.stringify({ shouldCallTool: true, toolName: 'SET_MODEL_TIER', confidence: 0.9, params: { tier }, reasoning: 'x' })
+    });
+    assert.equal(result, null, `"${tier}" must not pass as a SET_MODEL_TIER tier`);
+  }
+});
+
+test('returns null when a required param is not a string', async () => {
+  const result = await classifyIntentWithAI({
+    input: 'launch elden ring',
+    classifyIntent: async () => JSON.stringify({ shouldCallTool: true, toolName: 'STEAM_LAUNCH_GAME', confidence: 0.9, params: { gameQuery: 12345 }, reasoning: 'x' })
+  });
+  assert.equal(result, null);
+});
+
+test('accepts a SET_MODEL_TIER decision with a real tier value', async () => {
+  const result = await classifyIntentWithAI({
+    input: 'switch mode to high',
+    classifyIntent: async () => JSON.stringify({ shouldCallTool: true, toolName: 'SET_MODEL_TIER', confidence: 0.9, params: { tier: 'high' }, reasoning: 'x' })
+  });
+  assert.equal(result.toolName, 'SET_MODEL_TIER');
+  assert.deepEqual(result.params, { tier: 'high' });
+});

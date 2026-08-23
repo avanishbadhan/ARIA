@@ -7,6 +7,16 @@
 import { fetchChatCompletion } from './llm-completion.js';
 import { buildJarvisMessages } from './llm-persona.js';
 
+/**
+ * OpenRouter's optional HTTP-Referer attribution header. Only sent when the
+ * renderer origin is a real http(s) URL — the packaged file:// build reports
+ * origin "file://" (or even "null"), which OpenRouter rejects as garbage.
+ */
+function refererHeader() {
+  const origin = typeof window !== 'undefined' ? window.location?.origin || '' : '';
+  return /^https?:\/\//i.test(origin) ? { 'HTTP-Referer': origin } : {};
+}
+
 export class OpenRouterClient {
   constructor(apiKey = '', options = {}) {
     this.apiKey = apiKey;
@@ -46,7 +56,7 @@ export class OpenRouterClient {
       headers: {
         'Authorization': `Bearer ${this.apiKey}`,
         'Content-Type': 'application/json',
-        'HTTP-Referer': window.location.origin || 'http://localhost:3000',
+        ...refererHeader(),
         'X-Title': 'JARVIS Voice AI System'
       },
       modelQueue: this.modelQueue,
@@ -72,7 +82,7 @@ export class OpenRouterClient {
       headers: {
         'Authorization': `Bearer ${this.apiKey}`,
         'Content-Type': 'application/json',
-        'HTTP-Referer': window.location.origin || 'http://localhost:3000',
+        ...refererHeader(),
         'X-Title': 'JARVIS Voice AI System'
       },
       modelQueue: this.visionModelQueue,

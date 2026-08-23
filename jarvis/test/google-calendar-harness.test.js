@@ -45,6 +45,27 @@ test('listUpcoming reports no upcoming events without erroring', async () => {
   assert.match(result.message, /no upcoming events/i);
 });
 
+test('listUpcoming announces an all-day (date-only) event as a local date without a bogus clock time', async () => {
+  resetWindow();
+  global.window.jarvisElectron = {
+    isElectron: true,
+    calendar: {
+      listEvents: async () => ([
+        // All-day events arrive as bare date strings ("2026-08-22"). Aug 22
+        // 2026 is a Saturday — it must be parsed as local midnight (not UTC,
+        // which shifts the day for negative UTC offsets).
+        { id: '1', title: 'Company offsite', start: '2026-08-22', end: '2026-08-23' }
+      ])
+    }
+  };
+  const harness = new GoogleCalendarHarness();
+  const result = await harness.listUpcoming('id', 'secret');
+
+  assert.equal(result.success, true);
+  assert.match(result.message, /'Company offsite' on Sat, Aug 22/);
+  assert.doesNotMatch(result.message, /12:00|00:00|\bAM\b|\bPM\b/);
+});
+
 test('listUpcoming returns a graceful failure message when the IPC call throws', async () => {
   resetWindow();
   global.window.jarvisElectron = { isElectron: true, calendar: { listEvents: async () => { throw new Error('Not connected to Google.'); } } };
@@ -167,4 +188,44 @@ test('createEvent returns a not-connected message outside Electron', async () =>
   const result = await harness.createEvent('id', 'secret', 'Standup', 'tomorrow at 3pm');
   assert.equal(result.success, false);
   assert.match(result.message, /connect/i);
+});
+
+test('createEvent resolves a bare time ("at 9pm") to the next future occurrence, not the one that already passed', async () => {
+  resetWindow();
+  let captured;
+  global.window.jarvisElectron = {
+    isElectron: true,
+    calendar: {
+      createEvent: async (_clientId, _clientSecret, _title, _description, startISO, endISO) => {
+        captured = { startISO, endISO };
+        return { id: 'evt-fwd' };
+      }
+    }
+  };
+
+  // Freeze "now" at 11:05 PM local so today's 9 PM has already passed — a
+  // bare "at 9pm" must resolve to TOMORROW 9 PM (chrono forwardDate), not
+  // to today's stale hour. Deterministic regardless of the wall clock.
+  const RealDate = Date;
+  const fixedNow = new RealDate('2026-03-01T23:05:00');
+  class FrozenDate extends RealDate {
+    constructor(...args) {
+      if (args.length === 0) super(fixedNow.getTime());
+      else super(...args);
+    }
+    static now() { return fixedNow.getTime(); }
+  }
+  global.Date = FrozenDate;
+  try {
+    const harness = new GoogleCalendarHarness();
+    const result = await harness.createEvent('id', 'secret', 'Late gym session', 'at 9pm');
+    assert.equal(result.success, true);
+
+    const start = new RealDate(captured.startISO);
+    assert.equal(start.getHours(), 21);
+    assert.equal(start.getDate(), 2); // March 2 — tomorrow, never March 1's 21:00
+    assert.equal(start.getMonth(), 2);
+  } finally {
+    global.Date = RealDate;
+  }
 });

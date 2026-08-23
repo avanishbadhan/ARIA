@@ -28,6 +28,7 @@ export class VoiceEngine {
     this.synthesis = window.speechSynthesis;
     this.isListening = false;
     this.isSpeaking = false;
+    this.isMuted = false;
     this.voice = null;
     this.audioCtx = null;
     this.voiceRate = 1.05;
@@ -479,6 +480,10 @@ export class VoiceEngine {
 
   speak(text) {
     if (!this.synthesis) return Promise.resolve();
+    // Muted means fully muted: no new utterances are queued or spoken until
+    // unmuted (main.js's mute button cancels the current line via cancel()
+    // and flips this flag — speak() must honor it for every later reply).
+    if (this.isMuted) return Promise.resolve();
     
     this._ensureAudioContext();
 

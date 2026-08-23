@@ -55,3 +55,18 @@ test('getCurrentPosition returns a graceful message when geolocation is unsuppor
   assert.equal(result.success, false);
   assert.match(result.message, /doesn't support location/i);
 });
+
+test('getCurrentPosition passes a finite timeout and maximumAge so the TIMEOUT branch is reachable', async () => {
+  let seenOptions;
+  mockGeolocation((onSuccess, onError, options) => {
+    seenOptions = options;
+    onSuccess({ coords: { latitude: 40.7128, longitude: -74.006 } });
+  });
+  const harness = new LocationHarness();
+
+  const result = await harness.getCurrentPosition();
+
+  assert.equal(result.success, true);
+  assert.equal(seenOptions.timeout, 10000, 'a finite timeout replaces Chromium\'s Infinity default');
+  assert.equal(seenOptions.maximumAge, 60000);
+});

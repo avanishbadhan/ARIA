@@ -25,6 +25,10 @@ export class CameraVisionHarness {
 
     this.stream = null;
     this.isOpen = false;
+    // In-flight acquisition guard: isOpen only flips true after getUserMedia
+    // resolves, so two rapid open() calls would otherwise both start acquiring
+    // and leak the first stream. Concurrent opens await this same promise.
+    this._opening = null;
     this.model = null;
     this.isDetecting = false;
     this.animId = null;
@@ -42,25 +46,38 @@ export class CameraVisionHarness {
 
   async open() {
     if (this.isOpen) return { success: true, message: 'Camera feed is already active, Sir.' };
+    if (this._opening) return this._opening;
     if (!this.mediaDevices?.getUserMedia) {
       return { success: false, message: 'Camera access is not available here, Sir.' };
     }
 
-    try {
-      this.stream = await this.mediaDevices.getUserMedia({ video: true });
-      if (this.videoEl) this.videoEl.srcObject = this.stream;
-      this.isOpen = true;
-      this.panelEl?.classList.add('active');
+    this._opening = (async () => {
+      try {
+        this.stream = await this.mediaDevices.getUserMedia({ video: true });
+        if (this.videoEl) this.videoEl.srcObject = this.stream;
+        this.isOpen = true;
+        this.panelEl?.classList.add('active');
 
-      await this._ensureModelLoaded();
-      this._startDetectionLoop();
+        await this._ensureModelLoaded();
+        this._startDetectionLoop();
 
-      this.onLog({ type: 'SUCCESS', message: '[CAMERA VISION] Optical feed active.' });
-      return { success: true, message: 'Camera feed active, Sir.' };
-    } catch (e) {
-      this.onLog({ type: 'WARNING', message: `[CAMERA VISION] ${e.message}` });
-      return { success: false, message: "I wasn't able to access the camera, Sir." };
-    }
+        this.onLog({ type: 'SUCCESS', message: '[CAMERA VISION] Optical feed active.' });
+        return { success: true, message: 'Camera feed active, Sir.' };
+      } catch (e) {
+        // If the stream was acquired but a later step failed, release the
+        // freshly acquired tracks instead of leaking them.
+        if (this.stream) {
+          this.stream.getTracks().forEach(track => track.stop());
+          this.stream = null;
+        }
+        this.onLog({ type: 'WARNING', message: `[CAMERA VISION] ${e.message}` });
+        return { success: false, message: "I wasn't able to access the camera, Sir." };
+      } finally {
+        this._opening = null;
+      }
+    })();
+
+    return this._opening;
   }
 
   close() {

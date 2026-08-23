@@ -14,6 +14,11 @@ function stripThinkTags(content) {
   return withoutClosedBlocks.trim();
 }
 
+// Hard cap on every outbound chat-completion fetch (Groq/OpenRouter both
+// route through here) so a hung connection can't stall a voice turn forever
+// — the model-queue loop treats an abort like any other per-model failure.
+const REQUEST_TIMEOUT_MS = 30000;
+
 /**
  * Posts one chat-completion request for a single model/message-array pair.
  * Split out of fetchChatCompletion so a tool-call follow-up round can re-POST
@@ -23,6 +28,7 @@ async function postChatCompletion({ baseUrl, headers, model, messages, temperatu
   const response = await fetch(baseUrl, {
     method: 'POST',
     headers,
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     body: JSON.stringify({
       model,
       messages,

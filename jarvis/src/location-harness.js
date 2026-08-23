@@ -57,7 +57,12 @@ export class LocationHarness {
         (err) => {
           this.onLog({ type: 'WARNING', message: `[LOCATION] Position unavailable: ${err.message}` });
           resolve({ success: false, message: this._messageForError(err) });
-        }
+        },
+        // Chromium's default timeout is Infinity, which left the one-shot
+        // lookup hanging forever and the TIMEOUT branch unreachable. Cap it
+        // at 10s and accept a cached fix up to a minute old so the panel
+        // resolves promptly instead of waiting on a fresh GPS lock.
+        { timeout: 10000, maximumAge: 60000 }
       );
     });
   }

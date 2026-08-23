@@ -96,3 +96,17 @@ test('chatWithJarvis forwards options.tools/toolExecutor through to generateComp
 
   assert.equal(calls[0].body.tools[0].function.name, 'solve_math');
 });
+
+test('generateCompletion passes a 30s abort timeout signal so a hung fetch cannot stall a turn', async () => {
+  const signals = [];
+  global.fetch = async (url, init) => {
+    signals.push(init.signal);
+    return { ok: true, json: async () => ({ choices: [{ message: { content: 'hello' } }] }) };
+  };
+  const client = new GroqClient('fake-key');
+
+  await client.generateCompletion([{ role: 'user', content: 'hi' }]);
+
+  assert.equal(signals.length, 1);
+  assert.ok(signals[0] instanceof AbortSignal);
+});

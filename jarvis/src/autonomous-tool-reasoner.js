@@ -305,7 +305,7 @@ export class AutonomousToolReasoner {
 
     // 1h. Check for Gmail commands — same thin fallback-net role as the
     // screen/camera checks above. Checked well before the "gmail" entry in
-    // the OPEN_SITE site map (section 6) so "check my email" is never
+    // the OPEN_SITE site map (section 2) so "check my email" is never
     // misread as "open gmail.com"; plain "open gmail" still falls through to
     // that site-map entry unchanged, since none of these require "open".
     if (text.match(/^(?:check|any new)\s+(?:my\s+)?(?:emails?|gmail|inbox)[.!]?\s*$/i)) {
@@ -415,7 +415,7 @@ export class AutonomousToolReasoner {
     }
 
     // 1x. Web browser / new-tab intents — checked before the broad gaming
-    // "open <anything>" fallback (section 2b) so vague browsing commands never
+    // "open <anything>" fallback (section 3b) so vague browsing commands never
     // get routed to Steam ("open my browser" -> launch game "my browser").
     // A bare "open my browser" / "open a tab" opens the browser itself;
     // "open a new tab with/for/about <topic>" is a web search for that topic.
@@ -442,9 +442,34 @@ export class AutonomousToolReasoner {
       };
     }
 
-    // 2. Check for gaming & Steam launch intents (implicit & explicit)
+    // 2. Direct Website Intent — checked BEFORE the gaming sections below so
+    // "open google maps/docs/drive/photos/calendar" or "open my gmail" hit
+    // this site map instead of being swallowed by the broad launch fallback
+    // as a bogus Steam game ("google maps", "my gmail") or hijacked by a
+    // gaming keyword. 'google' sits last so specific Google properties
+    // ("open google maps" -> maps) win over the generic homepage.
+    const siteMap = ['youtube', 'github', 'reddit', 'twitter', 'wikipedia', 'amazon', 'gmail', 'maps', 'google'];
+    for (const site of siteMap) {
+      if (text.includes(site) && (text.includes('open') || text.includes('go to') || text.includes('show'))) {
+        return {
+          shouldCallTool: true,
+          toolName: 'OPEN_SITE',
+          confidence: 0.94,
+          params: { siteName: site },
+          reasoning: `Autonomous reasoner identified direct web navigation intent for site "${site}".`
+        };
+      }
+    }
+
+    // 3. Check for gaming & Steam launch intents (implicit & explicit)
     const gamingKeywords = ['play', 'game', 'gaming', 'steam', 'csgo', 'cs2', 'dota', 'cyberpunk', 'elden ring', 'gta', 'apex', 'tf2', 'helldivers', 'pubg', 'rust', 'baldurs gate'];
     const gamingIntentDetected = gamingKeywords.some(kw => text.includes(kw));
+
+    // Actual launch intent — an informational question that merely CONTAINS
+    // a game keyword ("what is rust", "how to learn rust", "what is elden
+    // ring") is not a launch command and must fall through to the web-search
+    // heuristics instead of hijacking STEAM_LAUNCH_GAME.
+    const launchIntentPattern = /\b(?:launch|lunch|open|play|run|start|fire up|load up)\b/;
 
     if (gamingIntentDetected) {
       // "lunch" is a common speech-to-text mishearing of "launch" — treat it as an alias.
@@ -474,7 +499,7 @@ export class AutonomousToolReasoner {
       ];
 
       for (const game of gameMatches) {
-        if (game.keywords.some(kw => text.includes(kw))) {
+        if (launchIntentPattern.test(text) && game.keywords.some(kw => text.includes(kw))) {
           return {
             shouldCallTool: true,
             toolName: 'STEAM_LAUNCH_GAME',
@@ -498,15 +523,17 @@ export class AutonomousToolReasoner {
       }
     }
 
-    // 2b. Broad launch-verb fallback — covers "launch/start/run/open <any title>"
+    // 3b. Broad launch-verb fallback — covers "launch/start/run/open <any title>"
     // even when the sentence has no recognized gaming keyword (e.g. a game only
     // present in the user's real Steam library, like "launch Cookie Clicker").
     // Delegates the actual name resolution to SteamHarness (library -> dict -> store search).
     // "lunch" is included as an alias since speech-to-text frequently mishears "launch" as "lunch".
+    // Open-site targets never reach here: the OPEN_SITE site-map check above runs first,
+    // and nonGameTargets additionally guards multi-word Google-property phrases.
     const launchMatch = text.match(/(?:launch|lunch|start|run|open)\s+(?:the\s+game\s+|game\s+)?([a-z0-9][a-z0-9\s':\-]*)/i);
     if (launchMatch && launchMatch[1]) {
       const candidate = launchMatch[1].trim();
-      const nonGameTargets = ['steam', 'google', 'youtube', 'browser', 'chrome', 'reddit', 'github', 'twitter', 'wikipedia', 'amazon', 'gmail', 'maps', 'epic', 'epic games', 'xbox'];
+      const nonGameTargets = ['steam', 'google', 'youtube', 'browser', 'chrome', 'reddit', 'github', 'twitter', 'wikipedia', 'amazon', 'gmail', 'maps', 'epic', 'epic games', 'xbox', 'google docs', 'google drive', 'google photos', 'google calendar', 'google maps', 'my gmail'];
       if (!nonGameTargets.includes(candidate)) {
         return {
           shouldCallTool: true,
@@ -518,7 +545,7 @@ export class AutonomousToolReasoner {
       }
     }
 
-    // 3. Check for a model-tier switch command ("switch mode to high",
+    // 4. Check for a model-tier switch command ("switch mode to high",
     // "set mode to max") — checked early, before search/math, since it's an
     // explicit system command rather than something to look up or compute.
     const tierMatch = text.match(/\b(?:switch|set|change)\s+(?:mode|model|tier)\s+to\s+(\w+)\b/i)
@@ -539,7 +566,7 @@ export class AutonomousToolReasoner {
       // mode to insane") — fall through rather than guess.
     }
 
-    // 4. Check for math queries (arithmetic through high-level math) —
+    // 5. Check for math queries (arithmetic through high-level math) —
     // checked before the web-search heuristics below, since e.g. "what is 5
     // plus 3" would otherwise match the "what is" search starter. Scoped
     // deliberately to math phrasing only, not a catch-all for trivia.
@@ -564,7 +591,7 @@ export class AutonomousToolReasoner {
       };
     }
 
-    // 5. Check for real-time Web Search / Info retrieval intents
+    // 6. Check for real-time Web Search / Info retrieval intents
     const searchStarters = [
       'what is', 'what are', 'who is', 'who was', 'where is', 'where are',
       'how to', 'how does', 'why is', 'why do', 'tell me about', 'find out',
@@ -590,20 +617,6 @@ export class AutonomousToolReasoner {
         params: { query: query },
         reasoning: "Autonomous reasoner classified query as requiring real-time web knowledge lookup via Google Harness."
       };
-    }
-
-    // 6. Direct Website Intent
-    const siteMap = ['youtube', 'github', 'reddit', 'twitter', 'wikipedia', 'amazon', 'gmail', 'maps'];
-    for (const site of siteMap) {
-      if (text.includes(site) && (text.includes('open') || text.includes('go to') || text.includes('show'))) {
-        return {
-          shouldCallTool: true,
-          toolName: 'OPEN_SITE',
-          confidence: 0.94,
-          params: { siteName: site },
-          reasoning: `Autonomous reasoner identified direct web navigation intent for site "${site}".`
-        };
-      }
     }
 
     // 7. Default Conversational / System query

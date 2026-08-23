@@ -41,14 +41,33 @@ test('generateCompletion converts OpenAI-style messages into Gemini system_instr
   ]);
 });
 
-test('generateCompletion hits the primary model with the API key in the query string', async () => {
-  const calls = mockFetchOnce({ candidates: [{ content: { parts: [{ text: 'answer' }] } }] });
+test('generateCompletion sends the API key via the x-goog-api-key header, not the query string', async () => {
+  const calls = [];
+  global.fetch = async (url, init) => {
+    calls.push({ url, headers: init.headers, signal: init.signal });
+    return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: 'answer' }] } }] }) };
+  };
   const client = new GeminiClient('fake-key');
 
   await client.generateCompletion([{ role: 'user', content: 'hi' }]);
 
   assert.ok(calls[0].url.startsWith('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent'));
-  assert.ok(calls[0].url.includes('key=fake-key'));
+  assert.equal(calls[0].headers['x-goog-api-key'], 'fake-key');
+  assert.ok(!calls[0].url.includes('key='), 'API key must never appear in the URL (leaks into logs/proxies)');
+});
+
+test('every outbound Gemini fetch carries an abort timeout signal so a hung request cannot stall a turn', async () => {
+  const signals = [];
+  global.fetch = async (url, init) => {
+    signals.push(init.signal);
+    return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: 'answer' }] } }] }) };
+  };
+  const client = new GeminiClient('fake-key');
+
+  await client.generateCompletion([{ role: 'user', content: 'hi' }]);
+
+  assert.equal(signals.length, 1);
+  assert.ok(signals[0] instanceof AbortSignal);
 });
 
 test('generateCompletion retries the next model on a 404, and returns its answer', async () => {
@@ -209,4 +228,66 @@ test('generateCompletion echoes the thought_signature back on the functionCall s
   const modelPart = calls[1].body.contents.find((c) => c.role === 'model' && c.parts.some((p) => p.functionCall)).parts[0];
   assert.equal(modelPart.functionCall.name, 'get_location');
   assert.equal(modelPart.thoughtSignature, 'sig-123');
+});
+
+test('a failed model attempt never poisons the conversation sent to the fallback model', async () => {
+  const bodiesByCall = [];
+  let callCount = 0;
+  global.fetch = async (url, init) => {
+    callCount += 1;
+    const model = url.match(/models\/([^:]+):/)[1];
+    bodiesByCall.push({ model, body: JSON.parse(init.body) });
+    if (model === 'gemini-3.6-flash') {
+      // First round asks for a tool, second round dies mid-tool-loop.
+      if (callCount === 1) {
+        return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ functionCall: { name: 'get_location', args: {} } }] } }] }) };
+      }
+      return { status: 500, ok: false, json: async () => ({}) };
+    }
+    return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: 'fallback answer' }] } }] }) };
+  };
+  const client = new GeminiClient('fake-key');
+
+  const result = await client.generateCompletion(
+    [{ role: 'user', content: 'weather here?' }],
+    {
+      tools: [{ type: 'function', function: { name: 'get_location', description: 'coords', parameters: { type: 'object', properties: {} } } }],
+      toolExecutor: async () => 'latitude 40.7'
+    }
+  );
+
+  assert.equal(result, 'fallback answer');
+  // The fallback model must receive pristine contents — no functionCall or
+  // functionResponse parts left over from the failed first attempt's tool
+  // rounds.
+  const fallbackContents = bodiesByCall.find((c) => c.model === 'gemini-3.5-flash').body.contents;
+  assert.deepEqual(fallbackContents, [{ role: 'user', parts: [{ text: 'weather here?' }] }]);
+});
+
+test('generateCompletion feeds "Tool call failed: ..." back as the functionResponse when the executor throws', async () => {
+  const responses = [
+    { candidates: [{ content: { parts: [{ functionCall: { name: 'web_search', args: { q: 'x' } } }] } }] },
+    { candidates: [{ content: { parts: [{ text: 'I could not complete the search, Sir.' }] } }] }
+  ];
+  const calls = [];
+  global.fetch = async (url, init) => {
+    calls.push(JSON.parse(init.body));
+    return { ok: true, json: async () => responses[calls.length - 1] };
+  };
+  const client = new GeminiClient('fake-key');
+
+  const result = await client.generateCompletion(
+    [{ role: 'user', content: 'search for x' }],
+    {
+      tools: [{ type: 'function', function: { name: 'web_search', description: '', parameters: { type: 'object', properties: {} } } }],
+      toolExecutor: async () => { throw new Error('Playwright browser not installed'); }
+    }
+  );
+
+  // Same model answers without the tool instead of the whole turn crashing.
+  assert.equal(result, 'I could not complete the search, Sir.');
+  const responseTurn = calls[1].contents.filter((c) => c.role === 'user').at(-1);
+  const responsePart = responseTurn.parts[0].functionResponse;
+  assert.equal(responsePart.name, 'web_search');
+  assert.deepEqual(responsePart.response, { result: 'Tool call failed: Playwright browser not installed' });
 });

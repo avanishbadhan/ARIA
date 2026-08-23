@@ -15,6 +15,26 @@ const path = require('path');
 
 let clientPromise = null;
 
+// Serialize browser_navigate+browser_snapshot pairs: concurrent calls share
+// one browser instance, so letting two calls interleave would point each
+// other's snapshot at the wrong page. Every public operation runs inside
+// this promise-chain mutex, making its navigate+snapshot sequence atomic.
+let navigationChain = Promise.resolve();
+
+// Set while a stop() teardown is in flight — guards against double-close
+// racing with itself (two concurrent stops closing the same client).
+let stopPromise = null;
+
+/**
+ * Runs `run()` after every previously enqueued navigation has finished.
+ * Returns this call's own outcome; internal chain failures don't reject it.
+ */
+function enqueueNavigation(run) {
+  const result = navigationChain.then(run);
+  navigationChain = result.then(() => {}, () => {});
+  return result;
+}
+
 // Matches the truncation length fetchGmailFullMessage() uses for long email
 // bodies elsewhere in this codebase — keeps a single huge page from blowing
 // the LLM's context.
@@ -50,7 +70,14 @@ async function getClient() {
     });
 
     const client = new Client({ name: 'jarvis-voice-ai', version: '1.0.0' }, { capabilities: {} });
-    await client.connect(transport);
+    try {
+      await client.connect(transport);
+    } catch (err) {
+      // connect() failed after the child process was spawned — close the
+      // transport (which kills the child) instead of orphaning it.
+      try { await transport.close(); } catch (e) {}
+      throw err;
+    }
 
     // If the spawned process dies mid-session (crash, killed, etc.), clear
     // the cached promise so the *next* call respawns instead of reusing a
@@ -71,11 +98,13 @@ async function getClient() {
 /**
  * Navigates to a URL and returns the extracted readable page text.
  */
-async function fetchWebpageText(url) {
-  const client = await getClient();
-  await client.callTool({ name: 'browser_navigate', arguments: { url } });
-  const snapshot = await client.callTool({ name: 'browser_snapshot', arguments: {} });
-  return extractText(snapshot);
+function fetchWebpageText(url) {
+  return enqueueNavigation(async () => {
+    const client = await getClient();
+    await client.callTool({ name: 'browser_navigate', arguments: { url } });
+    const snapshot = await client.callTool({ name: 'browser_snapshot', arguments: {} });
+    return extractText(snapshot);
+  });
 }
 
 /**
@@ -88,19 +117,53 @@ async function fetchWebpageText(url) {
  * once that's verified against the live tool output).
  */
 async function browseAndExtract(url, linkText) {
-  const client = await getClient();
-  await client.callTool({ name: 'browser_navigate', arguments: { url } });
+  return enqueueNavigation(async () => {
+    const client = await getClient();
+    await client.callTool({ name: 'browser_navigate', arguments: { url } });
 
-  if (linkText) {
-    const found = await client.callTool({ name: 'browser_find', arguments: { text: linkText } });
-    const foundText = extractText(found);
-    if (foundText) {
-      return `Found "${linkText}" on the page:\n${foundText}`;
+    if (linkText) {
+      const found = await client.callTool({ name: 'browser_find', arguments: { text: linkText } });
+      const foundText = extractText(found);
+      if (foundText) {
+        return `Found "${linkText}" on the page:\n${foundText}`;
+      }
     }
-  }
 
-  const snapshot = await client.callTool({ name: 'browser_snapshot', arguments: {} });
-  return extractText(snapshot);
+    const snapshot = await client.callTool({ name: 'browser_snapshot', arguments: {} });
+    return extractText(snapshot);
+  });
 }
 
-module.exports = { fetchWebpageText, browseAndExtract };
+/**
+ * Tears the manager down: waits for any in-flight navigation to finish,
+ * closes the MCP client and its transport (which terminates the spawned
+ * @playwright/mcp child process), and resets singleton state so a later
+ * call respawns fresh. Safe to call more than once / concurrently.
+ */
+async function stop() {
+  if (stopPromise) return stopPromise;
+  stopPromise = (async () => {
+    await navigationChain; // never rejects (see enqueueNavigation)
+
+    const pending = clientPromise;
+    clientPromise = null;
+    if (!pending) return;
+
+    try {
+      const client = await pending;
+      // Closing the client also closes its transport, which kills the
+      // spawned child process — no separate kill step needed.
+      await client.close();
+    } catch (e) {
+      // The connection never came up or already died — nothing to close.
+    }
+  })();
+
+  try {
+    await stopPromise;
+  } finally {
+    stopPromise = null;
+  }
+}
+
+module.exports = { fetchWebpageText, browseAndExtract, stop };

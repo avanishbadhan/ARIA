@@ -33,16 +33,47 @@ export class GoogleCalendarHarness {
     return date.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
   }
 
+  // All-day events arrive from Google as date-only strings ("2026-08-22").
+  _isDateOnly(raw) {
+    return typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw);
+  }
+
+  /**
+   * Parses an event start/end value into a Date. Date-only strings are parsed
+   * by `new Date()` as UTC midnight, then formatted in the local timezone —
+   * which shifts them a day early for negative UTC offsets (e.g. "2026-08-22"
+   * shown as Fri Aug 21 in the US). Parse them as local midnight instead.
+   */
+  _parseEventDate(raw) {
+    if (this._isDateOnly(raw)) {
+      const [y, m, d] = raw.split('-').map(Number);
+      return new Date(y, m - 1, d);
+    }
+    return new Date(raw);
+  }
+
+  /**
+   * Spoken fragment for when an event starts — timed events get the usual
+   * "at Sat, Aug 22, 3:00 PM" treatment, all-day events just "on Sat, Aug 22"
+   * (a bogus "at ... 12:00 AM" reads like a timed meeting).
+   */
+  _formatEventStart(raw) {
+    if (this._isDateOnly(raw)) {
+      return `on ${this._parseEventDate(raw).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}`;
+    }
+    return `at ${this._formatTime(new Date(raw))}`;
+  }
+
   _summarizeList(events) {
     if (!events.length) return 'You have no upcoming events, Sir.';
     const top = events[0];
-    return `You have ${events.length} upcoming event${events.length === 1 ? '' : 's'}. The next is '${top.title}' at ${this._formatTime(new Date(top.start))}.`;
+    return `You have ${events.length} upcoming event${events.length === 1 ? '' : 's'}. The next is '${top.title}' ${this._formatEventStart(top.start)}.`;
   }
 
   _summarizeSearch(events, query) {
     if (!events.length) return `I didn't find any events matching "${query}", Sir.`;
     const top = events[0];
-    return `I found ${events.length} event${events.length === 1 ? '' : 's'} matching "${query}". The top result is '${top.title}' at ${this._formatTime(new Date(top.start))}.`;
+    return `I found ${events.length} event${events.length === 1 ? '' : 's'} matching "${query}". The top result is '${top.title}' ${this._formatEventStart(top.start)}.`;
   }
 
   /**
@@ -87,7 +118,10 @@ export class GoogleCalendarHarness {
   async createEvent(clientId, clientSecret, title, whenText, durationMinutes = 60, description = '') {
     if (!this._isElectron()) return this._notConnected();
 
-    const start = chrono.parseDate(whenText, new Date());
+    // forwardDate: bare times ("at 9pm") must resolve to the NEXT future
+    // occurrence, not today's already-past 9pm — otherwise an evening
+    // "schedule X at 9pm" books the event in the past.
+    const start = chrono.parseDate(whenText, new Date(), { forwardDate: true });
     if (!start) {
       return { success: false, message: "I couldn't figure out when to schedule that, Sir." };
     }

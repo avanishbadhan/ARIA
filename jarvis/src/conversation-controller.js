@@ -29,7 +29,10 @@ export class ConversationController {
   }
 
   handleTranscript(text, alternatives = []) {
-    const stripWake = (s) => s.replace(WAKE_WORD_REGEX, '').trim() || s.trim();
+    // No raw-text fallback: an utterance that is ONLY the wake word strips to
+    // empty, which callers use to (re)arm the command window instead of
+    // dispatching the literal wake word as chat.
+    const stripWake = (s) => s.replace(WAKE_WORD_REGEX, '').trim();
     const cleanedAlternatives = alternatives.map(stripWake).filter(Boolean);
     const wakeMatch = text.match(WAKE_WORD_REGEX);
 
@@ -37,21 +40,28 @@ export class ConversationController {
     // just-addressed one ("Hey Jarvis, stop"). While idle with no wake word,
     // a bare "stop conversation" is ignored (ambient speech, not addressed to
     // JARVIS) so passive listening doesn't react to background chatter.
-    if ((this._conversationActive || wakeMatch) && this.isStopPhrase(text)) {
+    if ((this._conversationActive || this._awaitingCommand || wakeMatch) && this.isStopPhrase(text)) {
       this._conversationActive = false;
       this._awaitingCommand = false;
       return { action: 'END_CONVERSATION' };
     }
 
+    const command = stripWake(text);
+    if (!command && (this._conversationActive || this._awaitingCommand)) {
+      // Bare wake word ("Jarvis.") mid-conversation or while already awaiting:
+      // re-arm the command window instead of dispatching "Jarvis" as chat.
+      this._conversationActive = false;
+      this._awaitingCommand = true;
+      return { action: 'AWAIT_COMMAND' };
+    }
+
     if (this._conversationActive) {
-      const command = stripWake(text);
       return { action: 'DISPATCH_COMMAND', command, alternatives: cleanedAlternatives, conversationStarting: false, chime: false };
     }
 
     if (this._awaitingCommand) {
       this._awaitingCommand = false;
       this._conversationActive = true;
-      const command = stripWake(text);
       return { action: 'DISPATCH_COMMAND', command, alternatives: cleanedAlternatives, conversationStarting: true, chime: false };
     }
 
@@ -59,10 +69,10 @@ export class ConversationController {
       return { action: 'IGNORE' };
     }
 
-    const command = text.slice(wakeMatch[0].length).trim();
-    if (command) {
+    const trailingCommand = text.slice(wakeMatch[0].length).trim();
+    if (trailingCommand) {
       this._conversationActive = true;
-      return { action: 'DISPATCH_COMMAND', command, alternatives: cleanedAlternatives, conversationStarting: true, chime: true };
+      return { action: 'DISPATCH_COMMAND', command: trailingCommand, alternatives: cleanedAlternatives, conversationStarting: true, chime: true };
     }
 
     this._awaitingCommand = true;

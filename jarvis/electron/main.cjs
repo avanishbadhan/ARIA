@@ -1,6 +1,7 @@
 const { app, BrowserWindow, Tray, Menu, shell, session, ipcMain, nativeImage, safeStorage, desktopCapturer, screen } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
+const { fileURLToPath } = require('url');
 const fs = require('fs');
 const https = require('https');
 const http = require('http');
@@ -46,13 +47,16 @@ autoUpdater.autoDownload = false;
 autoUpdater.autoInstallOnAppQuit = false;
 let pendingUpdate = null; // { version, classification } once update-available fires
 let updateReadyToInstall = false;
+// Last state object sent to the renderer — replayed via 'update:get-state'
+// so events fired before the renderer subscribed aren't lost.
+let lastUpdateState = { status: 'idle' };
 
 // Only one JARVIS instance/tray icon at a time.
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', () => {
-    if (mainWindow) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.show();
       mainWindow.focus();
@@ -101,22 +105,59 @@ function createWindow() {
     ? 'file://'
     : new URL(DEV_URL).origin;
 
+  // Boundary directory for packaged file:// navigations (see isOwnOrigin).
+  const APP_DIST_DIR = path.resolve(__dirname, '..', 'dist');
+
+  // Scheme allowlist for URLs handed to shell.openExternal from renderer
+  // content (page links, window.open, crafted game/site titles). Everything
+  // else — file://, \\UNC paths, unknown custom protocols — is blocked:
+  // page content must never be able to invoke arbitrary protocol handlers.
+  const OPENABLE_PROTOCOLS = new Set(['http:', 'https:', 'steam:', 'xbox:', 'com.epicgames.launcher:']);
+  const isSafeToOpen = (urlString) => {
+    try {
+      return OPENABLE_PROTOCOLS.has(new URL(urlString).protocol);
+    } catch {
+      return false;
+    }
+  };
+
+  // True when `urlString` belongs to the app itself. Compares parsed origins
+  // rather than string prefixes — `url.startsWith(APP_ORIGIN)` would let
+  // lookalikes through (http://localhost:3000.evil.com, http://localhost:30001,
+  // http://localhost:3000@evil.com). In packaged mode APP_ORIGIN is scheme-only
+  // ('file://') with no host to compare, so the equivalent safe rule there is:
+  // file: protocol, no host, and a resolved path that stays inside the app's
+  // own dist/ directory (path.resolve also neutralizes ../ traversal).
+  const isOwnOrigin = (urlString) => {
+    let urlObj;
+    try {
+      urlObj = new URL(urlString);
+    } catch {
+      return false;
+    }
+    if (!app.isPackaged) return urlObj.origin === APP_ORIGIN;
+
+    if (urlObj.protocol !== 'file:' || urlObj.host) return false;
+    let filePath;
+    try {
+      filePath = fileURLToPath(urlObj);
+    } catch {
+      return false;
+    }
+    const resolved = path.resolve(filePath);
+    return resolved === APP_DIST_DIR || resolved.startsWith(APP_DIST_DIR + path.sep);
+  };
+
   mainWindow.webContents.on('will-navigate', (event, url) => {
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      event.preventDefault();
-      shell.openExternal(url);
-      return;
-    }
-    if (!url.startsWith(APP_ORIGIN)) {
-      event.preventDefault();
-      shell.openExternal(url);
-    }
+    if (isOwnOrigin(url)) return;
+    event.preventDefault();
+    if (isSafeToOpen(url)) shell.openExternal(url);
   });
 
   // window.open() calls (Google search tabs, Store search fallback, site links)
   // should open in the user's default browser, not spawn a second Electron window.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    if (isSafeToOpen(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
 
@@ -127,6 +168,11 @@ function createWindow() {
       mainWindow.hide();
     }
   });
+
+  // Null out the handle once destroyed so every mainWindow consumer (tray,
+  // second-instance, activate, sendUpdateState) can detect the dead window
+  // instead of calling into a destroyed BrowserWindow.
+  mainWindow.on('closed', () => { mainWindow = null; });
 }
 
 function createTray() {
@@ -135,13 +181,18 @@ function createTray() {
   tray.setToolTip('J.A.R.V.I.S. Voice AI');
 
   const menu = Menu.buildFromTemplate([
-    { label: 'Show JARVIS', click: () => { mainWindow.show(); mainWindow.focus(); } },
+    { label: 'Show JARVIS', click: () => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      mainWindow.show();
+      mainWindow.focus();
+    } },
     { type: 'separator' },
     { label: 'Quit', click: () => { app.isQuitting = true; app.quit(); } }
   ]);
   tray.setContextMenu(menu);
 
   tray.on('click', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
     if (mainWindow.isVisible()) {
       mainWindow.hide();
     } else {
@@ -682,6 +733,166 @@ function registerMapsIpc() {
   });
 }
 
+// --- JARVIS notes filesystem (sandboxed .md scratchpad) ------------------
+// A small private notes directory under userData (same convention as the
+// spotify/google token .bin files). JARVIS uses these as its own organic
+// memory mid-conversation; everything is confined to this directory, flat,
+// .md only. See
+// docs/superpowers/specs/2026-08-19-jarvis-notes-filesystem-design.md.
+const NOTES_DIR = path.join(app.getPath('userData'), 'jarvis-notes');
+const MAX_NOTE_BYTES = 100 * 1024;
+const MAX_NOTE_COUNT = 200;
+
+function ensureNotesDir() {
+  if (!fs.existsSync(NOTES_DIR)) fs.mkdirSync(NOTES_DIR, { recursive: true });
+}
+
+// The real trust boundary for note filenames. Runs in the main process
+// regardless of what the renderer/LLM passed in — the model's suggested
+// filename is never trusted as a real path. Lowercases, collapses
+// whitespace to '-', strips everything outside [a-z0-9-_], forces a .md
+// extension, and rejects (throws) if the raw input contained '..', '/' or
+// '\' or sanitizes to empty. Reserved Windows device names (con, nul, ...)
+// are left alone — they're just data filenames under our own dir, never
+// opened as devices.
+function sanitizeFilename(name) {
+  const raw = String(name || '');
+  if (raw.includes('..') || raw.includes('/') || raw.includes('\\')) {
+    throw new Error('invalid filename: path traversal');
+  }
+  const base = raw
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9_-]/g, '')
+    .replace(/\.+$/, '');
+  if (!base) throw new Error('invalid filename: empty after sanitization');
+  return `${base}.md`;
+}
+
+// First ~60 chars of the first non-empty line, whitespace-collapsed, used as
+// a list preview.
+function previewNote(content) {
+  const firstLine = String(content || '')
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .find(Boolean) || '';
+  const collapsed = firstLine.replace(/\s+/g, ' ').trim();
+  return collapsed.length > 60 ? collapsed.slice(0, 60) + '…' : collapsed;
+}
+
+function registerFilesIpc() {
+  ipcMain.handle('files:write', (event, { filename, content, overwrite }) => {
+    let safe;
+    try {
+      safe = sanitizeFilename(filename);
+    } catch (e) {
+      console.warn('[files] rejected filename:', filename);
+      return { success: false, message: "That isn't a usable note name, Sir." };
+    }
+
+    if (typeof content !== 'string' || Buffer.byteLength(content, 'utf8') > MAX_NOTE_BYTES) {
+      return { success: false, message: 'That note is too long to save, Sir.' };
+    }
+
+    ensureNotesDir();
+    const filePath = path.join(NOTES_DIR, safe);
+    const exists = fs.existsSync(filePath);
+
+    // Existing file + not explicitly overwriting -> report back so the
+    // renderer can route through the spoken-confirmation flow; nothing is
+    // written here.
+    if (exists && !overwrite) {
+      return { success: false, exists: true, filename: safe };
+    }
+
+    // Only new files count against the note-count cap (an overwrite replaces
+    // in place and doesn't grow the directory).
+    if (!exists) {
+      try {
+        const count = fs.readdirSync(NOTES_DIR).filter((f) => f.endsWith('.md')).length;
+        if (count >= MAX_NOTE_COUNT) {
+          return { success: false, message: 'Your notes sandbox is full, Sir — delete an old note first.' };
+        }
+      } catch (e) {
+        console.warn('[files] count check failed:', e.message);
+      }
+    }
+
+    try {
+      fs.writeFileSync(filePath, content, 'utf8');
+      return { success: true, filename: safe };
+    } catch (e) {
+      console.warn('[files] write failed:', e.message);
+      return { success: false, message: "I wasn't able to save that note, Sir." };
+    }
+  });
+
+  ipcMain.handle('files:read', (event, { filename }) => {
+    let safe;
+    try {
+      safe = sanitizeFilename(filename);
+    } catch (e) {
+      return { success: false, message: "That isn't a usable note name, Sir." };
+    }
+    const filePath = path.join(NOTES_DIR, safe);
+    if (!fs.existsSync(filePath)) {
+      return { success: false, message: "No note by that name, Sir." };
+    }
+    try {
+      return { success: true, content: fs.readFileSync(filePath, 'utf8') };
+    } catch (e) {
+      console.warn('[files] read failed:', e.message);
+      return { success: false, message: "I wasn't able to read that note, Sir." };
+    }
+  });
+
+  ipcMain.handle('files:list', () => {
+    ensureNotesDir();
+    try {
+      const files = fs.readdirSync(NOTES_DIR)
+        .filter((f) => f.endsWith('.md'))
+        .map((f) => {
+          const filePath = path.join(NOTES_DIR, f);
+          let modifiedAt = 0;
+          let preview = '';
+          try {
+            const stat = fs.statSync(filePath);
+            modifiedAt = stat.mtimeMs;
+          } catch (e) {}
+          try {
+            preview = previewNote(fs.readFileSync(filePath, 'utf8'));
+          } catch (e) {}
+          return { filename: f, preview, modifiedAt };
+        })
+        .sort((a, b) => b.modifiedAt - a.modifiedAt);
+      return { success: true, files };
+    } catch (e) {
+      console.warn('[files] list failed:', e.message);
+      return { success: false, message: "I wasn't able to list your notes, Sir." };
+    }
+  });
+
+  ipcMain.handle('files:delete', (event, { filename }) => {
+    let safe;
+    try {
+      safe = sanitizeFilename(filename);
+    } catch (e) {
+      return { success: false, message: "That isn't a usable note name, Sir." };
+    }
+    const filePath = path.join(NOTES_DIR, safe);
+    if (!fs.existsSync(filePath)) {
+      return { success: false, message: "No note by that name, Sir." };
+    }
+    try {
+      fs.unlinkSync(filePath);
+      return { success: true };
+    } catch (e) {
+      console.warn('[files] delete failed:', e.message);
+      return { success: false, message: "I wasn't able to delete that note, Sir." };
+    }
+  });
+}
+
 function registerWolframIpc() {
   // Same plain-Node-HTTPS-in-main-process trick as registerSteamIpc, to avoid
   // browser CORS entirely for the packaged app.
@@ -796,8 +1007,9 @@ function loadSpotifyTokens() {
 }
 
 function saveSpotifyTokens(tokens) {
-  if (!safeStorage.isEncryptionAvailable()) return;
+  if (!safeStorage.isEncryptionAvailable()) return false;
   fs.writeFileSync(spotifyTokensPath(), safeStorage.encryptString(JSON.stringify(tokens)));
+  return true;
 }
 
 function clearSpotifyTokens() {
@@ -968,11 +1180,21 @@ function registerSpotifyAuthIpc() {
           code,
           redirect_uri: SPOTIFY_REDIRECT_URI
         }).then((tokenResp) => {
-          saveSpotifyTokens({
+          if (!tokenResp.refresh_token) {
+            finish(reject, new Error('Spotify did not return a refresh token. Disconnect JARVIS from your Spotify account and try again.'));
+            return;
+          }
+          const saved = saveSpotifyTokens({
             access_token: tokenResp.access_token,
             refresh_token: tokenResp.refresh_token,
             expires_at: Date.now() + tokenResp.expires_in * 1000
           });
+          if (!saved) {
+            // Don't report success when tokens were never persisted — the UI
+            // would show "Connected" and every later call would fail.
+            finish(reject, new Error('Could not securely store Spotify credentials: OS secure storage is unavailable.'));
+            return;
+          }
           finish(resolve, { success: true });
         }).catch((err) => finish(reject, err));
       });
@@ -1041,8 +1263,9 @@ function loadGoogleTokens() {
 }
 
 function saveGoogleTokens(tokens) {
-  if (!safeStorage.isEncryptionAvailable()) return;
+  if (!safeStorage.isEncryptionAvailable()) return false;
   fs.writeFileSync(googleTokensPath(), safeStorage.encryptString(JSON.stringify(tokens)));
+  return true;
 }
 
 function clearGoogleTokens() {
@@ -1355,11 +1578,16 @@ function registerGoogleAuthIpc() {
             finish(reject, new Error("Google did not return a refresh token. Remove JARVIS from your Google Account's connected apps and try again."));
             return;
           }
-          saveGoogleTokens({
+          if (!saveGoogleTokens({
             access_token: tokenResp.access_token,
             refresh_token: tokenResp.refresh_token,
             expires_at: Date.now() + tokenResp.expires_in * 1000
-          });
+          })) {
+            // Don't report success when tokens were never persisted — the UI
+            // would show "Connected" and every later call would fail.
+            finish(reject, new Error('Could not securely store Google credentials: OS secure storage is unavailable.'));
+            return;
+          }
           finish(resolve, { success: true });
         }).catch((err) => finish(reject, err));
       });
@@ -1433,7 +1661,8 @@ function registerMcpIpc() {
 }
 
 function sendUpdateState(state) {
-  if (mainWindow) mainWindow.webContents.send('update:state', state);
+  lastUpdateState = state;
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update:state', state);
 }
 
 function registerUpdaterEvents() {
@@ -1486,6 +1715,10 @@ function registerUpdaterEvents() {
 function registerUpdateIpc() {
   ipcMain.handle('update:get-version', () => app.getVersion());
 
+  // Snapshot of the last autoUpdater state — lets the renderer replay events
+  // that fired before it subscribed (e.g. the silent launch-time check).
+  ipcMain.handle('update:get-state', () => lastUpdateState);
+
   ipcMain.handle('update:check', () => {
     if (!app.isPackaged) {
       // Dev builds have no publish feed to compare against — report idle
@@ -1493,7 +1726,7 @@ function registerUpdateIpc() {
       sendUpdateState({ status: 'idle' });
       return;
     }
-    autoUpdater.checkForUpdates();
+    autoUpdater.checkForUpdates().catch(() => {});
   });
 
   ipcMain.handle('update:download', () => {
@@ -1571,7 +1804,7 @@ app.whenReady().then(() => {
   }
 
   app.on('activate', () => {
-    if (mainWindow) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.show();
       mainWindow.focus();
     } else {
@@ -1587,4 +1820,6 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   app.isQuitting = true;
   stopMic();
+  // Tear down the Playwright MCP child process so it doesn't outlive the app.
+  mcpManager.stop().catch(() => {});
 });

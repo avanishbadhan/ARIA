@@ -775,7 +775,25 @@ function initSettingsPanel() {
       }
       if (deepgramKey) {
         localStorage.setItem('jarvis_deepgram_api_key', deepgramKey);
-        if (voiceEngine) voiceEngine.deepgramApiKey = deepgramKey;
+        // The STT engine choice is otherwise fixed at VoiceEngine construction,
+        // so a key saved mid-session would be ignored until reload. Hot-swap it
+        // the same way the other keys hot-update their clients: stop whichever
+        // engine currently owns the mic (clearing its old client — Deepgram
+        // socket, Electron mic, or browser recognition), point the engine at
+        // Deepgram, then resume wake-word listening only if it was running.
+        if (voiceEngine) {
+          const wasListening = Boolean(voiceEngine.isListening || voiceEngine.continuousMode);
+          if (wasListening) {
+            voiceEngine.stopListening();
+          } else if (voiceEngine.recognition) {
+            try { voiceEngine.recognition.abort(); } catch (e) {}
+          }
+          voiceEngine.deepgramApiKey = deepgramKey;
+          voiceEngine.engine = 'deepgram';
+          if (wasListening && voiceEngine.startListening() !== false && micBtn) {
+            micBtn.classList.add('active');
+          }
+        }
         deepgramKeyInput.value = '';
         deepgramKeyInput.placeholder = keyPlaceholder('Deepgram API Key', deepgramKey);
       }
@@ -1051,7 +1069,15 @@ function initUpdatePanel() {
     }
   };
 
-  onUpdateState(renderState);
+  // Subscribe first, then replay the main process's last known update state
+  // once — the silent launch-time check can fire (and even finish) before
+  // this panel subscribed, and those events were never delivered. The replay
+  // is ignored if a live event already arrived during the round-trip.
+  let liveEventSeen = false;
+  onUpdateState((state) => { liveEventSeen = true; renderState(state); });
+  window.jarvisElectron?.update?.getState?.().then((state) => {
+    if (state && !liveEventSeen) renderState(state);
+  }).catch(() => {});
 
   updateActionBtn.addEventListener('click', () => {
     if (latestStatus === 'available') {
