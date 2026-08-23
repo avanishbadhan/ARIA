@@ -1,11 +1,22 @@
 /**
- * Read-only "grounding" tools exposed to autonomous LLM function-calling —
- * deliberately just fetch/compute and hand back a result, nothing that
- * launches apps, plays media, or changes system state (those stay on the
- * existing pre-classified dispatch path in jarvis-core.js's
+ * Grounding tools exposed to autonomous LLM function-calling. Almost all of
+ * them are read-only — they just fetch/compute and hand back a result,
+ * nothing that launches apps, plays media, or changes system state (those
+ * stay on the existing pre-classified dispatch path in jarvis-core.js's
  * processUserInput, never handed to a model to trigger on its own
- * initiative). Provider-agnostic on purpose: any OpenAI-compatible client
- * (Groq, OpenRouter, and eventually a Gemini/Google connector) can pass this
+ * initiative).
+ *
+ * Deliberate narrow exception: the notes tools (write_note / read_note /
+ * list_notes / delete_note) are state-changing, but confined entirely to an
+ * isolated sandbox directory (app.getPath('userData')/jarvis-notes/) and
+ * reversible — nothing launches and nothing leaves the sandbox. Overwrites
+ * and deletes still require a spoken-confirmation round trip via
+ * setPendingFileAction (they never fire directly from a model call); fresh
+ * writes and reads execute immediately like the other tools. See
+ * docs/superpowers/specs/2026-08-19-jarvis-notes-filesystem-design.md.
+ *
+ * Provider-agnostic on purpose: any OpenAI-compatible client (Groq,
+ * OpenRouter, and eventually a Gemini/Google connector) can pass this
  * same schema+executor pair to fetchChatCompletion.
  */
 
@@ -16,6 +27,10 @@ const NO_WEBPAGE_RESULT = 'Unable to read that webpage.';
 const NO_WEATHER_RESULT = 'Unable to retrieve live weather data.';
 const NO_NEARBY_RESULT = "I couldn't find anything nearby, Sir.";
 const NO_DIRECTIONS_RESULT = "I couldn't find that place, Sir.";
+const NO_NOTE_STORAGE = "File storage isn't available outside the JARVIS desktop app, Sir.";
+const NO_NOTE_WRITE_RESULT = "I wasn't able to save that note, Sir.";
+const NO_NOTE_READ_RESULT = "I wasn't able to read that note, Sir.";
+const NO_NOTE_LIST_RESULT = "I wasn't able to list your notes, Sir.";
 
 export const GROUNDING_TOOLS = [
   {
@@ -171,6 +186,61 @@ export const GROUNDING_TOOLS = [
         required: ['destination']
       }
     }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'write_note',
+      description: "Saves a short note as a .md file in JARVIS's private notes sandbox (persistent memory across conversations). Use this when the user asks you to remember, save, or make a note of something. If the note already exists, a confirmation round trip is required before overwriting — do NOT rewrite it yourself; tell the user it already exists and ask whether to overwrite.",
+      parameters: {
+        type: 'object',
+        properties: {
+          filename: { type: 'string', description: 'A short, descriptive name for the note (no extension, e.g. "wifi-password").' },
+          content: { type: 'string', description: 'The note content to save.' }
+        },
+        required: ['filename', 'content']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'read_note',
+      description: "Reads the content of a saved note from JARVIS's private notes sandbox by filename. Use this when the user asks what they saved about something or wants to recall a note. Call list_notes first if unsure of the exact filename.",
+      parameters: {
+        type: 'object',
+        properties: {
+          filename: { type: 'string', description: 'The name of the note to read (no extension).' }
+        },
+        required: ['filename']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_notes',
+      description: "Lists all notes saved in JARVIS's private notes sandbox, most recently modified first, each with a short preview and its modified time. Use this when the user asks what notes are saved or what you remember.",
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: []
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'delete_note',
+      description: "Deletes a saved note from JARVIS's private notes sandbox by filename. Deletion requires a spoken confirmation round trip — call this and then ask the user to confirm before it is actually deleted.",
+      parameters: {
+        type: 'object',
+        properties: {
+          filename: { type: 'string', description: 'The name of the note to delete (no extension).' }
+        },
+        required: ['filename']
+      }
+    }
   }
 ];
 
@@ -180,7 +250,7 @@ export const GROUNDING_TOOLS = [
  * model can still answer from its own knowledge instead of the whole
  * completion failing.
  */
-export function createToolExecutor({ wolfram, harness, gmail, calendar, location, weather, maps, mcpWeb, getGoogleCredentials, onLog = () => {} }) {
+export function createToolExecutor({ wolfram, harness, gmail, calendar, location, weather, maps, mcpWeb, getGoogleCredentials, files, setPendingFileAction, onLog = () => {} }) {
   return async function executeTool(name, argsJson) {
     let args;
     try {
@@ -378,6 +448,91 @@ export function createToolExecutor({ wolfram, harness, gmail, calendar, location
       } catch (e) {
         onLog({ type: 'WARNING', message: `[TOOL CALL] get_directions failed: ${e.message}` });
         return NO_DIRECTIONS_RESULT;
+      }
+    }
+
+    if (name === 'write_note') {
+      const filename = args.filename || '';
+      const content = args.content || '';
+      try {
+        if (!files || typeof files.writeNote !== 'function') return NO_NOTE_STORAGE;
+        const result = await files.writeNote(filename, content, false);
+        if (result.success) {
+          onLog({ type: 'TOOL', message: `[TOOL CALL] write_note("${result.filename}") -> saved` });
+          return `Note saved as "${result.filename}".`;
+        }
+        if (result.exists) {
+          const safeName = result.filename || filename;
+          if (setPendingFileAction) {
+            setPendingFileAction({
+              type: 'overwrite',
+              filename: safeName,
+              content,
+              expiresAt: Date.now() + 120000
+            });
+          }
+          onLog({ type: 'TOOL', message: `[TOOL CALL] write_note("${safeName}") -> exists, confirmation pending` });
+          return `A note named "${safeName}" already exists — ask the user to confirm before overwriting it.`;
+        }
+        return result.message || NO_NOTE_WRITE_RESULT;
+      } catch (e) {
+        onLog({ type: 'WARNING', message: `[TOOL CALL] write_note failed: ${e.message}` });
+        return NO_NOTE_WRITE_RESULT;
+      }
+    }
+
+    if (name === 'read_note') {
+      const filename = args.filename || '';
+      try {
+        if (!files || typeof files.readNote !== 'function') return NO_NOTE_STORAGE;
+        const result = await files.readNote(filename);
+        if (result.success) {
+          onLog({ type: 'TOOL', message: `[TOOL CALL] read_note("${filename}") -> read` });
+          return result.content;
+        }
+        onLog({ type: 'TOOL', message: `[TOOL CALL] read_note("${filename}") -> not found` });
+        return `${result.message || NO_NOTE_READ_RESULT} You could call list_notes to see what notes are saved.`;
+      } catch (e) {
+        onLog({ type: 'WARNING', message: `[TOOL CALL] read_note failed: ${e.message}` });
+        return NO_NOTE_READ_RESULT;
+      }
+    }
+
+    if (name === 'list_notes') {
+      try {
+        if (!files || typeof files.listNotes !== 'function') return NO_NOTE_STORAGE;
+        const result = await files.listNotes();
+        if (result.success) {
+          if (!result.files.length) return 'No notes saved yet.';
+          const lines = result.files.map((f) =>
+            `${f.filename} — ${f.preview || 'empty'} (modified ${new Date(f.modifiedAt).toLocaleString()})`
+          );
+          onLog({ type: 'TOOL', message: `[TOOL CALL] list_notes() -> ${result.files.length} note(s)` });
+          return lines.join('\n');
+        }
+        return result.message || NO_NOTE_LIST_RESULT;
+      } catch (e) {
+        onLog({ type: 'WARNING', message: `[TOOL CALL] list_notes failed: ${e.message}` });
+        return NO_NOTE_LIST_RESULT;
+      }
+    }
+
+    if (name === 'delete_note') {
+      const filename = args.filename || '';
+      try {
+        if (!files || typeof files.deleteNote !== 'function') return NO_NOTE_STORAGE;
+        if (setPendingFileAction) {
+          setPendingFileAction({
+            type: 'delete',
+            filename,
+            expiresAt: Date.now() + 120000
+          });
+        }
+        onLog({ type: 'TOOL', message: `[TOOL CALL] delete_note("${filename}") -> confirmation pending` });
+        return `Deleting "${filename}" requires confirmation — ask the user to confirm before it is deleted.`;
+      } catch (e) {
+        onLog({ type: 'WARNING', message: `[TOOL CALL] delete_note failed: ${e.message}` });
+        return "I wasn't able to delete that note, Sir.";
       }
     }
 

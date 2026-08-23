@@ -2,9 +2,24 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { GROUNDING_TOOLS, createToolExecutor } from '../src/jarvis-tools.js';
 
-test('GROUNDING_TOOLS only lists read-only tools, no action tools', () => {
+test('GROUNDING_TOOLS lists read-only tools plus the sandboxed notes exception, no other action tools', () => {
   const names = GROUNDING_TOOLS.map(t => t.function.name);
-  assert.deepEqual(names, ['solve_math', 'web_search', 'list_recent_emails', 'search_emails', 'list_upcoming_events', 'search_calendar_events', 'get_location', 'get_weather', 'browse_webpage', 'find_nearby_places', 'get_directions']);
+  // Notes tools are the documented narrow exception (sandboxed under
+  // userData/jarvis-notes/, confirmation-gated for overwrites/deletes — see
+  // docs/superpowers/specs/2026-08-19-jarvis-notes-filesystem-design.md).
+  assert.deepEqual(names, [
+    'solve_math', 'web_search', 'list_recent_emails', 'search_emails',
+    'list_upcoming_events', 'search_calendar_events', 'get_location',
+    'get_weather', 'browse_webpage', 'find_nearby_places', 'get_directions',
+    'write_note', 'read_note', 'list_notes', 'delete_note'
+  ]);
+});
+
+test('GROUNDING_TOOLS still excludes real action tools (send/create/play)', () => {
+  const names = GROUNDING_TOOLS.map(t => t.function.name);
+  for (const forbidden of ['send_email', 'create_event', 'play_music', 'pause_playback', 'launch_game']) {
+    assert.ok(!names.includes(forbidden), `${forbidden} must stay out of GROUNDING_TOOLS`);
+  }
 });
 
 test('solve_math delegates to wolfram.solve with the parsed query', async () => {
