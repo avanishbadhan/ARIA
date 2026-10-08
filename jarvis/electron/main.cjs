@@ -8,6 +8,7 @@ const http = require('http');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
 const { classifyUpdate } = require('./update-classify.cjs');
+const { describeGoogleTokenError } = require('./google-token-error.cjs');
 const mcpManager = require('./mcp-manager.cjs');
 
 const DEV_URL = 'http://localhost:3000';
@@ -1303,7 +1304,10 @@ function googleTokenRequest(bodyParams) {
           return;
         }
         if (res.statusCode !== 200) {
-          reject(new Error(parsed?.error_description || parsed?.error || `Google token exchange HTTP ${res.statusCode}`));
+          const { message, revoked } = describeGoogleTokenError(res.statusCode, parsed);
+          const err = new Error(message);
+          err.revoked = revoked;
+          reject(err);
           return;
         }
         resolve(parsed);
@@ -1323,12 +1327,20 @@ async function getValidGoogleAccessToken(clientId, clientSecret) {
     return tokens.access_token;
   }
 
-  const refreshed = await googleTokenRequest({
-    grant_type: 'refresh_token',
-    refresh_token: tokens.refresh_token,
-    client_id: clientId,
-    client_secret: clientSecret
-  });
+  let refreshed;
+  try {
+    refreshed = await googleTokenRequest({
+      grant_type: 'refresh_token',
+      refresh_token: tokens.refresh_token,
+      client_id: clientId,
+      client_secret: clientSecret
+    });
+  } catch (err) {
+    // A dead refresh token never recovers — drop it so the app reports
+    // "not connected" instead of failing the same way on every call.
+    if (err.revoked) clearGoogleTokens();
+    throw err;
+  }
 
   const updated = {
     access_token: refreshed.access_token,
