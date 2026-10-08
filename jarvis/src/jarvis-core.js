@@ -1,5 +1,5 @@
 /**
- * JARVIS Core AI Brain & Multi-Agent Swarm Orchestrator
+ * ARIA Core AI Brain & Multi-Agent Swarm Orchestrator
  * Coordinates voice interaction, OpenRouter LLM intelligence, autonomous tool decision engine,
  * Google Search browser harness, Steam game launcher harness, Spotify harness, and swarm telemetry.
  */
@@ -167,6 +167,18 @@ export class JarvisCore {
       onLog: (logData) => this.onLog(logData)
     });
 
+    // Filesystem Harness - the private notes sandbox (Electron IPC with
+    // a localStorage fallback outside the desktop app). Exposed to the LLM
+    // as the write_note/read_note/list_notes/delete_note tools below, and
+    // read by the Memory view. Previously imported but never constructed,
+    // so every note tool silently reported "no storage".
+    this.filesHarness = new FileSystemHarness({
+      onLog: (logData) => this.onLog(logData)
+    });
+    // Overwrite/delete awaiting spoken confirmation (set by the tool
+    // executor, consumed on the next user input, expires after 120s).
+    this.pendingFileAction = null;
+
     // Read-only grounding tools (WolframAlpha + web search + location +
     // weather + webpage browsing) exposed to autonomous LLM function-calling
     // for screen vision and general chat — see
@@ -183,6 +195,8 @@ export class JarvisCore {
       weather: this.weatherHarness,
       maps: this.mapsHarness,
       mcpWeb: this.mcpWebHarness,
+      files: this.filesHarness,
+      setPendingFileAction: (action) => { this.pendingFileAction = action; },
       getGoogleCredentials: () => ({ clientId: this.googleClientId, clientSecret: this.googleClientSecret }),
       onLog: (logData) => this.onLog(logData)
     });
@@ -283,7 +297,7 @@ export class JarvisCore {
 
     // Local Conversational Knowledge Base Fallbacks
     this.knowledgeBase = {
-      "who are you": "I am JARVIS, your Just A Rather Very Intelligent System. Powered by OpenRouter AI intelligence and multi-agent swarm architecture, I am equipped with voice synthesis, Google Search automation, desktop Steam and Spotify launchers, and autonomous tool calling capabilities.",
+      "who are you": "I am ARIA, your Adaptive Reasoning and Intelligent Automation system. Powered by OpenRouter AI intelligence and multi-agent swarm architecture, I am equipped with voice synthesis, Google Search automation, desktop Steam and Spotify launchers, and autonomous tool calling capabilities.",
       "what can you do": "I can engage in live voice conversations using OpenRouter LLMs, answer your questions, autonomously perform Google searches, launch Steam, open and play games like Counter-Strike 2, Dota 2, or Cyberpunk 2077, open Spotify or play a specific song, open websites, and execute complex multi-agent tasks.",
       "hello": "Hello Sir. All systems are operational. OpenRouter network active. How may I assist you today?",
       "hi": "Greetings Sir. OpenRouter neural link connected. Ready for your voice or manual commands.",
@@ -322,7 +336,7 @@ export class JarvisCore {
   }
 
   /**
-   * Main entry point when a user speaks or submits a text prompt to JARVIS.
+   * Main entry point when a user speaks or submits a text prompt to ARIA.
    * Serializes overlapping runs: while one input is being processed, the
    * newest incoming transcript is queued (max 1 — older pending input is
    * superseded) and runs once the in-flight pass completes, instead of two
@@ -363,7 +377,33 @@ export class JarvisCore {
       message: `[USER INPUT] "${input}"`
     });
 
-    this.onStatusChange({ status: "THINKING", message: `JARVIS processing via ${this._activeProviderLabel()}...` });
+    // 0. Pending file-action confirmation (overwrite/delete two-step flow).
+    // Set by the tool executor when a write collides or a delete needs a
+    // second word; consumed here on the very next input. A bare confirmation
+    // runs it, a refusal drops it with an ack, anything else drops it and
+    // continues as a normal command so a stale pending action can never
+    // hijack unrelated speech. Expired pendings fall through silently.
+    if (this.pendingFileAction) {
+      const pending = this.pendingFileAction;
+      this.pendingFileAction = null;
+      const live = pending.expiresAt && pending.expiresAt >= Date.now();
+      if (live && /^(yes(?: please)?|yeah|yep|yup|sure|ok(?:ay)?|confirm(?:ed)?|overwrite(?: it)?|do it|go ahead|delete it|please do)[\s.,!]*$/i.test(input)) {
+        await this._executePendingFileAction(pending, input);
+        return;
+      }
+      if (live && /^(no(\s+thanks|\s+thank you)?|nope|nah|not really|cancel(?: it| that)?|never ?mind|don't|dont)[\s.,!]*$/i.test(input)) {
+        const ack = `Kept the existing note "${pending.filename}" - nothing changed, Sir.`;
+        this.onLog({ type: 'SUCCESS', message: `[FILE ACTION] Confirmation declined for "${pending.filename}".` });
+        this.onResponse({ text: ack, actionType: 'FILE_ACTION', data: { pending, declined: true } });
+        this._updateAgentState("agent-1", "ACTIVE", "File action declined");
+        this._updateAgentState("agent-2", "ACTIVE", "Audio I/O standby");
+        this._pushHistory(input, ack);
+        await this.voiceEngine.speak(ack);
+        return;
+      }
+    }
+
+    this.onStatusChange({ status: "THINKING", message: `ARIA processing via ${this._activeProviderLabel()}...` });
     this.voiceEngine.playBeep(1200, 0.05, 'triangle');
 
     // 1. Notify Swarm: Queen & Reasoner agents process request
@@ -659,7 +699,7 @@ export class JarvisCore {
         spokenResponse = wolframAnswer;
       } else {
         const llmAnswer = await this._chatWithActiveLLM(
-          `Answer this math question briefly and precisely as JARVIS, showing just the final answer, not your reasoning: ${decision.params.query}`,
+          `Answer this math question briefly and precisely as ARIA, showing just the final answer, not your reasoning: ${decision.params.query}`,
           this.conversationHistory
         );
         spokenResponse = llmAnswer || `I wasn't able to compute that one, Sir.`;
@@ -692,7 +732,7 @@ export class JarvisCore {
         });
 
         const llmAnswer = await this._chatWithActiveLLM(
-          `Answer this question using your own knowledge, as JARVIS, in 2-3 sentences. Do not say you're searching or mention any browser. If you're not confident of the answer, say so honestly instead of guessing. IMPORTANT: If the question asks about the current weather or temperature somewhere, you MUST call get_location (when the user means 'here') then get_weather to retrieve the real data — do NOT ask the user to confirm, just call the tools and report the result. If the question asks what's nearby or for directions to a place (phrases like "near me", "nearby", "around here", "directions to", "how do I get to"), you MUST call get_location, then find_nearby_places or get_directions as appropriate — do NOT guess an address or business from memory. For any other question that depends on where the user is, call get_location first: ${decision.params.query}`,
+          `Answer this question using your own knowledge, as ARIA, in 2-3 sentences. Do not say you're searching or mention any browser. If you're not confident of the answer, say so honestly instead of guessing. IMPORTANT: If the question asks about the current weather or temperature somewhere, you MUST call get_location (when the user means 'here') then get_weather to retrieve the real data — do NOT ask the user to confirm, just call the tools and report the result. If the question asks what's nearby or for directions to a place (phrases like "near me", "nearby", "around here", "directions to", "how do I get to"), you MUST call get_location, then find_nearby_places or get_directions as appropriate — do NOT guess an address or business from memory. For any other question that depends on where the user is, call get_location first: ${decision.params.query}`,
           this.conversationHistory,
           { tools: this.groundingTools, toolExecutor: this.toolExecutor }
         );
@@ -742,9 +782,9 @@ export class JarvisCore {
 
       let llmPrompt;
       if (placesOrDirections) {
-        llmPrompt = `Answer the user's question in 1-3 sentences as JARVIS.${placesOrDirectionsNudge} Question: ${decision.params.query}`;
+        llmPrompt = `Answer the user's question in 1-3 sentences as ARIA.${placesOrDirectionsNudge} Question: ${decision.params.query}`;
       } else if (searchResult.summary) {
-        llmPrompt = `Live web search results for "${decision.params.query}":\n${searchResult.summary}\n\nUsing ONLY the information above, answer the user's question in 1-3 sentences as JARVIS. Do not say you're searching or mention any browser. If the results above don't actually answer the question, say so honestly instead of guessing.${weatherNudge}`;
+        llmPrompt = `Live web search results for "${decision.params.query}":\n${searchResult.summary}\n\nUsing ONLY the information above, answer the user's question in 1-3 sentences as ARIA. Do not say you're searching or mention any browser. If the results above don't actually answer the question, say so honestly instead of guessing.${weatherNudge}`;
       } else {
         llmPrompt = `Answer this question briefly in 2-3 sentences. Do not say you're searching or mention any browser. Just give the answer clearly: ${decision.params.query}${weatherNudge}`;
       }
@@ -1036,8 +1076,8 @@ export class JarvisCore {
     this._updateAgentState("agent-2", "SPEAKING", "Synthesizing vocal response");
     
     this.onLog({
-      type: 'JARVIS',
-      message: `[JARVIS VOICE RESPONSE] "${answerText}"`
+      type: 'ARIA',
+      message: `[ARIA VOICE RESPONSE] "${answerText}"`
     });
 
     this.onResponse({
@@ -1082,7 +1122,7 @@ export class JarvisCore {
   /**
    * Name of whichever provider _chatWithActiveLLM would actually reach for
    * right now, given the current tier/settings/keys — used purely for
-   * status-line/log display (e.g. "JARVIS processing via Gemini...")
+   * status-line/log display (e.g. "ARIA processing via Gemini...")
    * instead of hardcoding "OpenRouter" regardless of what's really
    * configured. Mirrors _chatWithActiveLLM's own routing decision exactly;
    * update both together if that logic ever changes.
@@ -1264,7 +1304,7 @@ export class JarvisCore {
     const messages = [
       {
         role: 'system',
-        content: `You are JARVIS, analyzing ${sourceDescription}. Answer their question about what is visible concisely (1-3 sentences), as JARVIS would speak it aloud. If the image doesn't contain enough information to answer, say so honestly.`
+        content: `You are ARIA, analyzing ${sourceDescription}. Answer their question about what is visible concisely (1-3 sentences), as ARIA would speak it aloud. If the image doesn't contain enough information to answer, say so honestly.`
       },
       {
         role: 'user',
@@ -1330,8 +1370,45 @@ export class JarvisCore {
   }
 
   /**
+   * Runs a confirmed pending file action (overwrite with the stashed content,
+   * or the staged delete) and answers directly - same shape as every other
+   * dispatch branch (log, response, agent states, history, speech).
+   */
+  async _executePendingFileAction(pending, input) {
+    let answerText;
+    if (pending.type === 'overwrite') {
+      const result = this.filesHarness
+        ? await this.filesHarness.writeNote(pending.filename, pending.content, true)
+        : { success: false };
+      answerText = result.success
+        ? `Overwrote the note "${pending.filename}", Sir.`
+        : `I was not able to overwrite "${pending.filename}", Sir.`;
+      this._updateAgentState("agent-1", "ACTIVE", `File overwrite: "${pending.filename}"`);
+    } else if (pending.type === 'delete') {
+      const result = this.filesHarness
+        ? await this.filesHarness.deleteNote(pending.filename)
+        : { success: false };
+      answerText = result.success
+        ? `Deleted the note "${pending.filename}", Sir.`
+        : `I was not able to delete "${pending.filename}", Sir.`;
+      this._updateAgentState("agent-1", "ACTIVE", `File delete: "${pending.filename}"`);
+    } else {
+      answerText = `Nothing to confirm, Sir.`;
+    }
+    this.onLog({ type: 'SUCCESS', message: `[FILE ACTION] ${answerText}` });
+    this.onResponse({
+      text: answerText,
+      actionType: 'FILE_ACTION',
+      data: { pending }
+    });
+    this._updateAgentState("agent-2", "ACTIVE", "Audio I/O standby");
+    this._pushHistory(input, answerText);
+    await this.voiceEngine.speak(answerText);
+  }
+
+  /**
    * Appends a user/assistant exchange to the rolling short-term memory buffer,
-   * trimming to maxHistoryTurns so JARVIS remembers only the last few commands.
+   * trimming to maxHistoryTurns so ARIA remembers only the last few commands.
    */
   _pushHistory(userText, assistantText) {
     this.conversationHistory.push({ role: 'user', content: userText });

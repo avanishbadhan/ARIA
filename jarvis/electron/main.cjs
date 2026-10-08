@@ -70,11 +70,11 @@ function createWindow() {
     height: 900,
     minWidth: 1024,
     minHeight: 700,
-    title: 'J.A.R.V.I.S.',
+    title: 'ARIA',
     icon: ICON_PATH,
     backgroundColor: '#05070c',
     autoHideMenuBar: true,
-    // Start hidden — JARVIS lives in the tray and listens in the background;
+    // Start hidden — ARIA lives in the tray and listens in the background;
     // the window only appears when the user opens it from the tray icon.
     show: false,
     webPreferences: {
@@ -98,7 +98,7 @@ function createWindow() {
   }
 
   // Keep the window pinned to the app: never let in-page links (Leaflet map
-  // attributions, <a href>, etc.) navigate the Electron window away from JARVIS.
+  // attributions, <a href>, etc.) navigate the Electron window away from ARIA.
   // Non-app URLs go to the OS default browser; steam:// and other custom
   // protocols also go to the OS since Electron can't resolve them.
   const APP_ORIGIN = app.isPackaged
@@ -112,7 +112,7 @@ function createWindow() {
   // content (page links, window.open, crafted game/site titles). Everything
   // else — file://, \\UNC paths, unknown custom protocols — is blocked:
   // page content must never be able to invoke arbitrary protocol handlers.
-  const OPENABLE_PROTOCOLS = new Set(['http:', 'https:', 'steam:', 'xbox:', 'com.epicgames.launcher:']);
+  const OPENABLE_PROTOCOLS = new Set(['http:', 'https:', 'steam:', 'xbox:', 'spotify:', 'com.epicgames.launcher:']);
   const isSafeToOpen = (urlString) => {
     try {
       return OPENABLE_PROTOCOLS.has(new URL(urlString).protocol);
@@ -178,10 +178,10 @@ function createWindow() {
 function createTray() {
   const icon = nativeImage.createFromPath(ICON_PATH);
   tray = new Tray(icon.isEmpty() ? icon : icon.resize({ width: 16, height: 16 }));
-  tray.setToolTip('J.A.R.V.I.S. Voice AI');
+  tray.setToolTip('ARIA Voice AI');
 
   const menu = Menu.buildFromTemplate([
-    { label: 'Show JARVIS', click: () => {
+    { label: 'Show ARIA', click: () => {
       if (!mainWindow || mainWindow.isDestroyed()) return;
       mainWindow.show();
       mainWindow.focus();
@@ -756,10 +756,14 @@ function ensureNotesDir() {
 // are left alone — they're just data filenames under our own dir, never
 // opened as devices.
 function sanitizeFilename(name) {
-  const raw = String(name || '');
+  let raw = String(name || '');
   if (raw.includes('..') || raw.includes('/') || raw.includes('\\')) {
     throw new Error('invalid filename: path traversal');
   }
+  // Strip one pre-existing .md so re-saving a listed name
+  // ('wifi-password.md') stays 'wifi-password.md' instead of corrupting
+  // into 'wifi-passwordmd.md'. Runs before the character filter below.
+  if (raw.toLowerCase().endsWith('.md')) raw = raw.slice(0, -3);
   const base = raw
     .toLowerCase()
     .replace(/\s+/g, '-')
@@ -1166,8 +1170,8 @@ function registerSpotifyAuthIpc() {
         res.writeHead(200, { 'Content-Type': 'text/html' });
         res.end(
           `<html><body style="font-family:sans-serif;background:#05070c;color:${ok ? '#39ff14' : '#ff3b3b'};text-align:center;padding-top:80px">` +
-          `<h2>JARVIS: Spotify ${ok ? 'connected' : 'connection failed'}.</h2>` +
-          `<p style="color:#8899aa">You can close this tab and return to JARVIS.</p></body></html>`
+          `<h2>ARIA: Spotify ${ok ? 'connected' : 'connection failed'}.</h2>` +
+          `<p style="color:#8899aa">You can close this tab and return to ARIA.</p></body></html>`
         );
 
         if (!ok) {
@@ -1181,7 +1185,7 @@ function registerSpotifyAuthIpc() {
           redirect_uri: SPOTIFY_REDIRECT_URI
         }).then((tokenResp) => {
           if (!tokenResp.refresh_token) {
-            finish(reject, new Error('Spotify did not return a refresh token. Disconnect JARVIS from your Spotify account and try again.'));
+            finish(reject, new Error('Spotify did not return a refresh token. Disconnect ARIA from your Spotify account and try again.'));
             return;
           }
           const saved = saveSpotifyTokens({
@@ -1557,8 +1561,8 @@ function registerGoogleAuthIpc() {
         res.writeHead(200, { 'Content-Type': 'text/html' });
         res.end(
           `<html><body style="font-family:sans-serif;background:#05070c;color:${ok ? '#39ff14' : '#ff3b3b'};text-align:center;padding-top:80px">` +
-          `<h2>JARVIS: Google account ${ok ? 'connected' : 'connection failed'}.</h2>` +
-          `<p style="color:#8899aa">You can close this tab and return to JARVIS.</p></body></html>`
+          `<h2>ARIA: Google account ${ok ? 'connected' : 'connection failed'}.</h2>` +
+          `<p style="color:#8899aa">You can close this tab and return to ARIA.</p></body></html>`
         );
 
         if (!ok) {
@@ -1575,7 +1579,7 @@ function registerGoogleAuthIpc() {
           code_verifier: codeVerifier
         }).then((tokenResp) => {
           if (!tokenResp.refresh_token) {
-            finish(reject, new Error("Google did not return a refresh token. Remove JARVIS from your Google Account's connected apps and try again."));
+            finish(reject, new Error("Google did not return a refresh token. Remove ARIA from your Google Account's connected apps and try again."));
             return;
           }
           if (!saveGoogleTokens({

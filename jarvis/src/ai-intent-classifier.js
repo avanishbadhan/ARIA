@@ -37,7 +37,7 @@ const TOOL_PARAM_REQUIREMENTS = {
   CONVERSATIONAL: []
 };
 
-export const INTENT_CLASSIFIER_SYSTEM_PROMPT = `You are JARVIS's intent classifier. Given the user's utterance, decide which
+export const INTENT_CLASSIFIER_SYSTEM_PROMPT = `You are ARIA's intent classifier. Given the user's utterance, decide which
 single tool (if any) should handle it, and return ONLY strict JSON — no
 markdown, no prose — matching this exact shape:
 
@@ -66,7 +66,7 @@ Available tools and their exact params shape:
 - CAMERA_QUERY: { question: string } — user is asking a question about what the webcam currently sees (e.g. "what am I holding", "how many fingers am I holding up", "can you see me")
 - GMAIL_CHECK_INBOX: {} — user wants to check their email/inbox generally
 - GMAIL_SEARCH: { query: string } — user wants to search their email for something specific
-- GMAIL_READ_MESSAGE: { query: string } — user wants JARVIS to read a specific email (by sender or subject) aloud
+- GMAIL_READ_MESSAGE: { query: string } — user wants ARIA to read a specific email (by sender or subject) aloud
 - CALENDAR_LIST_UPCOMING: {} — user wants to know what's on their calendar / upcoming meetings generally
 - CALENDAR_SEARCH: { query: string } — user wants to search their calendar for an event matching something specific
 - CALENDAR_CREATE_EVENT: { title: string, when: string } — user wants to schedule a new event; title is the event name, when is a natural-language time phrase like "tomorrow at 3pm" that the harness resolves into a real timestamp

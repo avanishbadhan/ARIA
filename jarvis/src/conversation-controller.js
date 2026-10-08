@@ -1,6 +1,6 @@
-const WAKE_WORD_REGEX = /^(?:hey[,]?\s+)?jarvis\b[,!.\s]*/i;
+const WAKE_WORD_REGEX = /^(?:hey[,]?\s+)?aria\b[,!.\s]*/i;
 const STOP_PHRASE_REGEX =
-  /^(?:(?:hey[,]?\s+)?jarvis[,!.\s]*)?(?:stop(?: the)? conversation|stop(?: listening)?|end(?: the)? conversation|end|that['’]?s all|goodbye jarvis|goodbye)[.,!?\s]*$/i;
+  /^(?:(?:hey[,]?\s+)?aria[,!.\s]*)?(?:stop(?: the)? conversation|stop(?: listening)?|end(?: the)? conversation|end|that['’]?s all|goodbye aria|goodbye)[.,!?\s]*$/i;
 
 export class ConversationController {
   constructor({ wakeTimeoutMs = 8000, conversationTimeoutMs = 120000 } = {}) {
@@ -37,9 +37,9 @@ export class ConversationController {
     const wakeMatch = text.match(WAKE_WORD_REGEX);
 
     // End-conversation phrases end an active conversation, and also end a
-    // just-addressed one ("Hey Jarvis, stop"). While idle with no wake word,
+    // just-addressed one ("Hey Aria, stop"). While idle with no wake word,
     // a bare "stop conversation" is ignored (ambient speech, not addressed to
-    // JARVIS) so passive listening doesn't react to background chatter.
+    // ARIA) so passive listening doesn't react to background chatter.
     if ((this._conversationActive || this._awaitingCommand || wakeMatch) && this.isStopPhrase(text)) {
       this._conversationActive = false;
       this._awaitingCommand = false;
@@ -48,8 +48,8 @@ export class ConversationController {
 
     const command = stripWake(text);
     if (!command && (this._conversationActive || this._awaitingCommand)) {
-      // Bare wake word ("Jarvis.") mid-conversation or while already awaiting:
-      // re-arm the command window instead of dispatching "Jarvis" as chat.
+      // Bare wake word ("Aria.") mid-conversation or while already awaiting:
+      // re-arm the command window instead of dispatching "Aria" as chat.
       this._conversationActive = false;
       this._awaitingCommand = true;
       return { action: 'AWAIT_COMMAND' };

@@ -7,6 +7,9 @@ import { isUpdateSupported, getCurrentVersion, checkForUpdate, downloadUpdate, i
 import { MODEL_TIERS, TIER_ORDER } from './model-tiers.js';
 import { CameraVisionHarness } from './camera-vision-harness.js';
 import { LocationHarness } from './location-harness.js';
+import { FileSystemHarness } from './file-harness.js';
+import { loadTasks, addTask, toggleTask, removeTask, clearCompleted } from './tasks-store.js';
+import { QUOTES, nextQuoteIndex } from './quotes.js';
 
 // DOM Element References
 const micBtn = document.getElementById('micBtn');
@@ -21,6 +24,7 @@ const swarmList = document.getElementById('swarmList');
 const steamGamesGrid = document.getElementById('steamGamesGrid');
 const launchSteamBtn = document.getElementById('launchSteamBtn');
 const muteBtn = document.getElementById('muteBtn');
+const stopBtn = document.getElementById('stopBtn');
 const cameraVideo = document.getElementById('cameraVideo');
 const cameraOverlayCanvas = document.getElementById('cameraOverlayCanvas');
 const cameraViewport = document.getElementById('cameraViewport');
@@ -33,12 +37,30 @@ const visualizerCanvas = document.getElementById('visualizerCanvas');
 const arcReactorContainer = document.querySelector('.arc-reactor-container');
 const speechMeter = document.getElementById('speechMeter');
 const speechMeterBars = speechMeter ? Array.from(speechMeter.querySelectorAll('.speech-meter-bar')) : [];
+const neuralCanvas = document.getElementById('neuralSphere');
+const neuralStage = document.getElementById('sphereStage');
+const homeView = document.getElementById('view-home');
 
 // Visualizer Canvas Context
 const ctx = visualizerCanvas ? visualizerCanvas.getContext('2d') : null;
 let animationFrameId = null;
 let meterLevel = 0; // 0..1 current displayed level, decays over time
 let meterDecayFrameId = null;
+
+// Neural sphere state
+const nctx = neuralCanvas ? neuralCanvas.getContext('2d') : null;
+let neuralFrameId = null;
+let neuralAngle = 0;
+let neuralTilt = 0.35;
+const neuralColor = { r: 110, g: 175, b: 255 }; // lerped toward the state target each frame
+let spherePts = [];
+let sphereEdges = [];
+let sphereAdj = [];
+// Drag-to-spin globe state: flick velocity decays into inertia after release.
+let neuralDragging = false;
+let neuralDragWired = false;
+let dragVelX = 0, dragVelY = 0, userTilt = 0, dragGlow = 0;
+let lastPX = 0, lastPY = 0;
 
 // Initialize System Components
 let voiceEngine;
@@ -47,14 +69,47 @@ let jarvis;
 let isMuted = false;
 let isThinking = false; // drives the pink "thinking" glow on the reactor core/waveform
 
-// Wake-word / conversation-mode state machine ("Jarvis" / "Hey Jarvis")
+// Wake-word / conversation-mode state machine ("Aria" / "Hey Aria")
 const conversationController = new ConversationController();
 let wakeTimeoutId = null;
 let conversationTimeoutId = null;
 
+/**
+ * Stops whatever ARIA is doing right now: cuts speech, drops any queued
+ * follow-up, ends the conversation, and clears pending timers. An in-flight
+ * LLM reply may still land once, but it will not be spoken over the stop.
+ */
+function stopAll() {
+  if (voiceEngine) voiceEngine.stopSpeaking();
+  conversationController.reset();
+  clearTimeout(wakeTimeoutId);
+  clearTimeout(conversationTimeoutId);
+  if (jarvis) jarvis._queuedInput = null;
+  // The sphere's thinking streak reads isThinking — without clearing it here
+  // the yellow chase would run forever after a stop.
+  isThinking = false;
+  if (statusDot) statusDot.className = 'status-dot';
+  if (statusText) statusText.textContent = 'STOPPED';
+  restoreGreeting();
+  pushActivity('HARNESS', '[STOP] Current task stopped by the user.');
+}
+
+/**
+ * Stop-button handler (topbar ■). Doubles as a mic revival switch: if the
+ * engine is fully down (not listening, not armed, not speaking), the click
+ * restarts wake-word listening instead — that's also what the mic-error
+ * messages point at.
+ */
+function onStopBtn() {
+  if (voiceEngine && !voiceEngine.isListening && !voiceEngine.isSpeaking && !voiceEngine.continuousMode) {
+    if (voiceEngine.startListening() !== false) return;
+  }
+  stopAll();
+}
+
 function initApp() {
   // 1. Terminal logger helper
-  const addLog = ({ type = 'JARVIS', message }) => {
+  const addLog = ({ type = 'ARIA', message }) => {
     if (!terminalBox) return;
     const entry = document.createElement('div');
     entry.className = `log-entry ${type}`;
@@ -62,6 +117,7 @@ function initApp() {
     entry.textContent = `[${timestamp}] ${message}`;
     terminalBox.appendChild(entry);
     terminalBox.scrollTop = terminalBox.scrollHeight;
+    pushActivity(type, message);
   };
 
   // 2. Status updater helper
@@ -124,6 +180,11 @@ function initApp() {
       `;
       swarmList.appendChild(card);
     });
+    const sysSummary = document.getElementById('sysSummary');
+    if (sysSummary) {
+      const active = agents.filter(a => String(a.status || '').toUpperCase() === 'ACTIVE').length;
+      sysSummary.textContent = `${active}/${agents.length} agents active · ${(jarvis && jarvis._activeProviderLabel && jarvis._activeProviderLabel()) || 'starting'}`;
+    }
   };
 
   // 5. Instantiate Harness, Voice, & Core
@@ -140,7 +201,7 @@ function initApp() {
       const result = conversationController.handleTranscript(text, alternatives);
 
       if (result.action === 'IGNORE') {
-        // Not addressed to JARVIS — ignore ambient speech while passively listening.
+        // Not addressed to ARIA — ignore ambient speech while passively listening.
         return;
       }
 
@@ -152,7 +213,7 @@ function initApp() {
         clearTimeout(wakeTimeoutId);
         wakeTimeoutId = setTimeout(() => {
           conversationController.onWakeTimeout();
-          if (transcriptDisplay) transcriptDisplay.textContent = 'Say "Jarvis" to give a command...';
+          if (transcriptDisplay) transcriptDisplay.textContent = 'Say "Aria" to give a command...';
         }, conversationController.wakeTimeoutMs);
         return;
       }
@@ -160,9 +221,9 @@ function initApp() {
       if (result.action === 'DISPATCH_COMMAND') {
         clearTimeout(wakeTimeoutId);
         if (result.chime) {
-          // "Hey Jarvis, play Dota" — wake word + command in one breath. This is
+          // "Hey Aria, play Dota" — wake word + command in one breath. This is
           // the only case that needs a fresh chime here: the AWAIT_COMMAND branch
-          // above already played it when "Jarvis" was said alone, and in-conversation
+          // above already played it when "Aria" was said alone, and in-conversation
           // follow-ups intentionally stay silent (see spec: no chime per turn).
           voiceEngine.playBeep(1000, 0.08, 'sine');
         }
@@ -170,7 +231,7 @@ function initApp() {
         conversationTimeoutId = setTimeout(() => {
           conversationController.onConversationTimeout();
           voiceEngine.playBeep(500, 0.12, 'sine');
-          if (transcriptDisplay) transcriptDisplay.textContent = 'Conversation ended. Say "Jarvis" to start.';
+          if (transcriptDisplay) transcriptDisplay.textContent = 'Conversation ended. Say "Aria" to start.';
         }, conversationController.conversationTimeoutMs);
         jarvis.processUserInput(result.command, result.alternatives);
         return;
@@ -179,7 +240,7 @@ function initApp() {
       if (result.action === 'END_CONVERSATION') {
         clearTimeout(conversationTimeoutId);
         voiceEngine.playBeep(500, 0.12, 'sine');
-        if (transcriptDisplay) transcriptDisplay.textContent = 'Conversation ended. Say "Jarvis" to start.';
+        if (transcriptDisplay) transcriptDisplay.textContent = 'Conversation ended. Say "Aria" to start.';
       }
     },
     onStateChange: (state) => {
@@ -191,10 +252,13 @@ function initApp() {
           micBtn.classList.remove('active');
         }
       }
+      // Speech finished (or engine went quiet) — hero reverts to standby.
+      if (state.status === 'IDLE') restoreGreeting();
     },
     onSpeechMeter: ({ active, intensity }) => {
       if (active) pulseMeter(intensity);
-    }
+    },
+    onLog: addLog
   });
 
   const cameraVisionHarness = new CameraVisionHarness({
@@ -209,7 +273,8 @@ function initApp() {
     onStatusChange: updateStatus,
     cameraVisionHarness,
     onResponse: ({ text, actionType, data }) => {
-      addLog({ type: 'JARVIS', message: text });
+      addLog({ type: 'ARIA', message: text });
+      showAriaResponse(text);
       if (spokenLine) spokenLine.textContent = text;
       if (actionType === 'SET_MODEL_TIER') {
         // On success, sync the slider to the tier that was just applied. On
@@ -221,10 +286,10 @@ function initApp() {
       if (actionType === 'CAMERA_START' || actionType === 'CAMERA_STOP' || actionType === 'CAMERA_QUERY') {
         const cameraStatus = document.getElementById('cameraStatus');
         if (cameraStatus) cameraStatus.textContent = text;
-        const cameraToggleBtn = document.getElementById('cameraToggleBtn');
-        if (cameraToggleBtn) {
-          const isOpen = Boolean(jarvis.cameraVisionHarness?.isOpen);
-          cameraToggleBtn.textContent = isOpen ? 'CLOSE CAMERA 📷' : 'OPEN CAMERA 📷';
+        syncCameraButtons();
+        // Bring the live feed on screen the moment the camera is on.
+        if (actionType === 'CAMERA_START' && data && data.success) {
+          switchView('devices');
         }
       }
     },
@@ -340,25 +405,12 @@ function initApp() {
   // 8f. Location Panel (one-shot Leaflet map of the user's current position)
   initLocationPanel();
 
-  // Voice & Mute Control Handlers
-  if (micBtn) {
-    micBtn.addEventListener('click', () => {
-      if (voiceEngine.isListening) {
-        voiceEngine.stopListening();
-        micBtn.classList.remove('active');
-        conversationController.reset();
-        clearTimeout(wakeTimeoutId);
-        clearTimeout(conversationTimeoutId);
-        if (transcriptDisplay) transcriptDisplay.textContent = 'Voice input paused.';
-      } else {
-        const success = voiceEngine.startListening();
-        if (success !== false) {
-          micBtn.classList.add('active');
-          if (transcriptDisplay) transcriptDisplay.textContent = 'Say "Jarvis" to give a command...';
-        }
-      }
-    });
-  }
+  // 8g. ARIA dashboard shell (nav, greeting, rail, tasks, calendar, memory)
+  initDashboard(addLog);
+
+  // Voice & Mute Control Handlers (the stop button is bound once in
+  // initDashboard alongside command-bar focus; the legacy mic button is
+  // gone from the UI, micBtn stays null-guarded regardless)
 
   if (muteBtn) {
     muteBtn.addEventListener('click', () => {
@@ -392,7 +444,7 @@ function initApp() {
       clearTimeout(conversationTimeoutId);
       conversationController.reset();
       voiceEngine.playBeep(500, 0.12, 'sine');
-      if (transcriptDisplay) transcriptDisplay.textContent = 'Conversation ended. Say "Jarvis" to start.';
+      if (transcriptDisplay) transcriptDisplay.textContent = 'Conversation ended. Say "Aria" to start.';
       return;
     }
 
@@ -431,8 +483,19 @@ function initApp() {
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
         startVisualizerAnimation();
+        startNeuralSphere();
       }
     });
+  }
+
+  // 11b. Neural sphere hero background (Home view).
+  if (neuralCanvas && nctx) {
+    startNeuralSphere();
+    if (typeof ResizeObserver !== 'undefined' && neuralStage) {
+      new ResizeObserver(() => sizeNeuralCanvas()).observe(neuralStage);
+    } else {
+      window.addEventListener('resize', sizeNeuralCanvas);
+    }
   }
 
   addLog({
@@ -445,8 +508,16 @@ function initApp() {
   const wakeStarted = voiceEngine.startListening();
   if (wakeStarted !== false) {
     if (micBtn) micBtn.classList.add('active');
-    if (transcriptDisplay) transcriptDisplay.textContent = 'Say "Jarvis" to give a command...';
-    addLog({ type: 'HARNESS', message: '[WAKE WORD] Passive listening active. Say "Jarvis" or "Hey Jarvis" to issue a command.' });
+    if (transcriptDisplay) transcriptDisplay.textContent = 'Say "Aria" to give a command...';
+    addLog({ type: 'HARNESS', message: '[WAKE WORD] Passive listening active. Say "Aria" or "Hey Aria" to issue a command.' });
+  }
+
+  // 13. Boot sequence complete — flip the status and fade the boot screen
+  // (the inline failsafe owns minimum-display timing + failure fallback).
+  const bootStatus = document.getElementById('bootStatus');
+  if (bootStatus) bootStatus.textContent = 'System online';
+  if (typeof window !== 'undefined' && typeof window.__ariaHideBoot === 'function') {
+    window.__ariaHideBoot();
   }
 }
 
@@ -475,6 +546,13 @@ function populateSteamGames() {
     });
     steamGamesGrid.appendChild(card);
   });
+  const librarySummary = document.getElementById('librarySummary');
+  if (librarySummary && jarvis && jarvis.steamHarness) {
+    const connected = jarvis.steamHarness.steamLibrary.isConfigured();
+    librarySummary.textContent = connected
+      ? `${games.length} games ready — say "play ..." to launch.`
+      : 'Steam library not connected.';
+  }
 }
 
 /**
@@ -573,6 +651,368 @@ function startVisualizerAnimation() {
 }
 
 /**
+ * Neural-sphere hero background: ~150 nodes spread over a Fibonacci sphere
+ * with edges between near neighbors, slowly rotating when idle, expanding /
+ * retracting with the speech meter while ARIA talks, and turning yellow
+ * while thinking. Pure canvas 2D — no dependencies, DPR-aware.
+ */
+function buildNeuralSphere(count = 220) {
+  spherePts = [];
+  sphereEdges = [];
+  sphereAdj = [];
+  const golden = Math.PI * (3 - Math.sqrt(5));
+  for (let i = 0; i < count; i++) {
+    const y = 1 - (i / (count - 1)) * 2;
+    const r = Math.sqrt(Math.max(0, 1 - y * y));
+    const theta = golden * i;
+    // Organic radial jitter so it reads as a neural web, not a perfect globe.
+    const nr = 0.86 + Math.random() * 0.28;
+    spherePts.push({ x: Math.cos(theta) * r * nr, y: y * nr, z: Math.sin(theta) * r * nr });
+  }
+  // Neighbor pairs are rotation-invariant — compute once, plus an adjacency
+  // list so thought-pulses can hop neuron to neuron.
+  const maxChord = 0.46;
+  let edges = 0;
+  for (let i = 0; i < count && edges < 950; i++) {
+    for (let j = i + 1; j < count && edges < 950; j++) {
+      const a = spherePts[i], b = spherePts[j];
+      const dx = a.x - b.x, dy = a.y - b.y, dz = a.z - b.z;
+      if (dx * dx + dy * dy + dz * dz < maxChord * maxChord) {
+        sphereEdges.push([i, j]);
+        edges++;
+      }
+    }
+  }
+  sphereAdj = Array.from({ length: count }, () => []);
+  for (const [i, j] of sphereEdges) {
+    sphereAdj[i].push(j);
+    sphereAdj[j].push(i);
+  }
+}
+
+function sizeNeuralCanvas() {
+  if (!neuralCanvas || !neuralStage) return false;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const w = Math.max(1, Math.floor(neuralStage.clientWidth * dpr));
+  const h = Math.max(1, Math.floor(neuralStage.clientHeight * dpr));
+  if (neuralCanvas.width !== w || neuralCanvas.height !== h) {
+    neuralCanvas.width = w;
+    neuralCanvas.height = h;
+  }
+  return true;
+}
+
+function startNeuralSphere() {
+  if (!neuralCanvas || !nctx || !neuralStage) return;
+  if (neuralFrameId) {
+    cancelAnimationFrame(neuralFrameId);
+    neuralFrameId = null;
+  }
+  const FOCAL = 3.4;
+  const BLUE = { r: 102, g: 152, b: 222 }; // dark ocean blue (dim web, bright nodes)
+  const YELLOW = { r: 255, g: 198, b: 80 }; // completed thought — the whole web burns yellow
+  let t = 0;
+  let thinkAlpha = 0;
+  let speakEnergy = 0; // smoothed speech drive — fast attack, slow release, never jerky
+  let pulses = [];
+  let dust = [];
+
+  if (!spherePts.length) buildNeuralSphere();
+  if (!dust.length) buildDust();
+  sizeNeuralCanvas();
+
+  // Click-drag spins the globe like an online globe: direct 1:1 steering
+  // while held, flick velocity decaying into inertia on release. Wired once
+  // (start re-runs on window visibility changes).
+  if (!neuralDragWired && neuralStage) {
+    neuralDragWired = true;
+    neuralStage.style.cursor = 'grab';
+    neuralStage.addEventListener('pointerdown', (e) => {
+      neuralDragging = true;
+      lastPX = e.clientX;
+      lastPY = e.clientY;
+      dragVelX = 0;
+      dragVelY = 0;
+      neuralStage.style.cursor = 'grabbing';
+      try { neuralStage.setPointerCapture(e.pointerId); } catch (err) {}
+    });
+    neuralStage.addEventListener('pointermove', (e) => {
+      if (!neuralDragging) return;
+      const dx = e.clientX - lastPX, dy = e.clientY - lastPY;
+      lastPX = e.clientX;
+      lastPY = e.clientY;
+      neuralAngle += dx * 0.005;
+      userTilt = Math.max(-0.9, Math.min(0.9, userTilt - dy * 0.003));
+      dragVelY = dx * 0.005;
+      dragVelX = -dy * 0.003;
+    });
+    const endDrag = () => {
+      neuralDragging = false;
+      if (neuralStage) neuralStage.style.cursor = 'grab';
+    };
+    neuralStage.addEventListener('pointerup', endDrag);
+    neuralStage.addEventListener('pointercancel', endDrag);
+  }
+
+  function buildDust(n = 46) {
+    dust = [];
+    for (let i = 0; i < n; i++) {
+      dust.push({
+        bx: Math.random(), by: Math.random(),
+        sp: 0.00006 + Math.random() * 0.00022,
+        tw: Math.random() * Math.PI * 2,
+        sz: 0.6 + Math.random() * 1.4
+      });
+    }
+  }
+
+  // Random neighbor hop for thought-pulses (falls back to staying put on
+  // isolated neurons, which shouldn't happen but costs nothing to guard).
+  function pickNeighbor(node, avoid) {
+    const nb = sphereAdj[node] || [];
+    if (!nb.length) return node;
+    if (nb.length === 1) return nb[0];
+    let next = nb[(Math.random() * nb.length) | 0];
+    if (next === avoid) next = nb[((Math.random() * nb.length) | 0)];
+    return next;
+  }
+
+  function newPulse() {
+    let node = (Math.random() * spherePts.length) | 0;
+    if (!(sphereAdj[node] || []).length) node = 0;
+    return { node, next: pickNeighbor(node, -1), t: Math.random(), pace: 0.9 + Math.random() * 0.2, trail: [] };
+  }
+
+  function stateNow() {
+    const speaking = voiceEngine ? voiceEngine.isSpeaking : false;
+    const listening = voiceEngine ? voiceEngine.isListening : false;
+    if (speaking) return 'speaking';
+    if (isThinking) return 'thinking';
+    if (listening) return 'listening';
+    return 'idle';
+  }
+
+  function render() {
+    neuralFrameId = requestAnimationFrame(render);
+    if (document.hidden) return;
+    if (homeView && !homeView.classList.contains('active')) return;
+    if (!sizeNeuralCanvas()) return;
+
+    const w = neuralCanvas.width, h = neuralCanvas.height;
+    const state = stateNow();
+    t += 1;
+
+    // Rotation speed per state. Color: the whole web burns yellow only while
+    // speaking (thought completed); thinking stays blue with a single pulse.
+    const speed = state === 'thinking' ? 0.0075 : (state === 'speaking' ? 0.0042 : (state === 'listening' ? 0.0032 : 0.0016));
+    if (!neuralDragging) neuralAngle += speed;
+    // Flick inertia: release velocity keeps the globe coasting, decaying out.
+    neuralAngle += dragVelY;
+    userTilt = Math.max(-0.9, Math.min(0.9, userTilt + dragVelX));
+    dragVelX *= 0.94;
+    dragVelY *= 0.94;
+    if (Math.abs(dragVelX) < 0.00005) dragVelX = 0;
+    if (Math.abs(dragVelY) < 0.00005) dragVelY = 0;
+    neuralTilt = 0.35 + Math.sin(t * 0.004) * 0.05 + userTilt;
+    // Hands-on glow: the web brightens while grabbed or coasting on a flick.
+    const flick = Math.min(1, (Math.abs(dragVelX) + Math.abs(dragVelY)) * 60);
+    const grabTarget = neuralDragging ? 1 : Math.min(1, flick * 2);
+    dragGlow += (grabTarget - dragGlow) * 0.12;
+    const grabBoost = 1 + dragGlow * 0.6;
+    const target = state === 'speaking' ? YELLOW : BLUE;
+    neuralColor.r += (target.r - neuralColor.r) * 0.06;
+    neuralColor.g += (target.g - neuralColor.g) * 0.06;
+    neuralColor.b += (target.b - neuralColor.b) * 0.06;
+    const boost = state === 'idle' ? 0.7 : (state === 'speaking' ? 1.4 : 1);
+
+    // Smooth speech drive: fast attack on voice energy, slow release — the
+    // raw meter jumps frame to frame, this never does.
+    const rawDrive = (voiceEngine && voiceEngine.isSpeaking) ? (0.35 + 0.65 * Math.min(1, meterLevel)) : 0;
+    speakEnergy += (rawDrive - speakEnergy) * (rawDrive > speakEnergy ? 0.25 : 0.06);
+
+    // Calm global breathing only; speech moves the neurons themselves below.
+    const breathe = 1 + Math.sin(t * 0.02) * 0.022;
+
+    const R = Math.min(w, h) * 0.30 * breathe;
+    const cx = w / 2, cy = h / 2 + h * 0.02;
+    const cosA = Math.cos(neuralAngle), sinA = Math.sin(neuralAngle);
+    const cosT = Math.cos(neuralTilt), sinT = Math.sin(neuralTilt);
+
+    // Project all nodes once. The speech wave is keyed to each neuron's
+    // shell radius and latitude — neighbors share nearly the same phase,
+    // so the web swells and settles coherently instead of shearing sideways.
+    const proj = new Array(spherePts.length);
+    for (let i = 0; i < spherePts.length; i++) {
+      const p = spherePts[i];
+      const r0 = Math.sqrt(p.x * p.x + p.y * p.y + p.z * p.z);
+      const dd = 1 + speakEnergy * 0.10 * Math.sin(t * 0.09 - r0 * 6.0)
+                   + speakEnergy * 0.03 * Math.sin(t * 0.05 + p.y * 2.0);
+      const px = p.x * dd, py = p.y * dd, pz = p.z * dd;
+      const x1 = px * cosA + pz * sinA;
+      const z1 = -px * sinA + pz * cosA;
+      const y1 = py * cosT - z1 * sinT;
+      const z2 = py * sinT + z1 * cosT;
+      const s = FOCAL / (FOCAL - z2);
+      proj[i] = { x: cx + x1 * R * s, y: cy + y1 * R * s, s, z: z2 };
+    }
+
+    // Advance the thought streak first: its head position drives which
+    // links ignite yellow below.
+    thinkAlpha += ((state === 'thinking' ? 1 : 0) - thinkAlpha) * 0.07;
+    let headX = 0, headY = 0;
+    if (thinkAlpha > 0.02) {
+      if (!pulses.length) pulses.push(newPulse());
+      for (const pu of pulses) {
+        const a0 = proj[pu.node], b0 = proj[pu.next];
+        const edgeLen = Math.max(1, Math.hypot(b0.x - a0.x, b0.y - a0.y));
+        pu.t += ((w / 160) * pu.pace) / edgeLen;
+        if (pu.t >= 1) {
+          pu.node = pu.next;
+          pu.next = pickNeighbor(pu.node, pu.next);
+          pu.t = 0;
+        }
+        const a = proj[pu.node], b = proj[pu.next];
+        pu.hx = a.x + (b.x - a.x) * pu.t;
+        pu.hy = a.y + (b.y - a.y) * pu.t;
+        pu.trail.push({ x: pu.hx, y: pu.hy });
+        if (pu.trail.length > 30) pu.trail.shift();
+      }
+      headX = pulses[0].hx;
+      headY = pulses[0].hy;
+    } else if (pulses.length) {
+      pulses = [];
+    }
+    const headActive = thinkAlpha > 0.02 && pulses.length > 0;
+    const igniteR = R * 0.55; // links inside this radius of the head burn yellow
+
+    nctx.clearRect(0, 0, w, h);
+    const cr = Math.round(neuralColor.r), cg = Math.round(neuralColor.g), cb = Math.round(neuralColor.b);
+
+    // Back glow disc.
+    const glow = nctx.createRadialGradient(cx, cy, 0, cx, cy, R * 1.5);
+    glow.addColorStop(0, `rgba(${cr},${cg},${cb},${Math.min(1, 0.08 * boost + speakEnergy * 0.12 + dragGlow * 0.1).toFixed(3)})`);
+    glow.addColorStop(1, 'rgba(0,0,0,0)');
+    nctx.fillStyle = glow;
+    nctx.fillRect(cx - R * 1.5, cy - R * 1.5, R * 3, R * 3);
+
+    // Ambient drifting dust motes.
+    for (let d = 0; d < dust.length; d++) {
+      const m = dust[d];
+      const dx = ((m.bx + t * m.sp) % 1) * w;
+      const dy = (m.by * h + Math.sin(t * 0.008 + m.tw) * h * 0.01 + h) % h;
+      const tw = 0.08 + 0.12 * (0.5 + 0.5 * Math.sin(t * 0.03 + m.tw));
+      nctx.fillStyle = `rgba(150,180,230,${tw.toFixed(3)})`;
+      nctx.fillRect(dx, dy, m.sz, m.sz);
+    }
+
+    // Edges — hairline wireframe, brighter toward the front. Links near the
+    // thought head ignite yellow, the same burn as the speaking state.
+    nctx.lineWidth = Math.max(0.6, w / 1400);
+    for (let e = 0; e < sphereEdges.length; e++) {
+      const a = proj[sphereEdges[e][0]], b = proj[sphereEdges[e][1]];
+      const depth = Math.max(0, Math.min(1, ((a.s + b.s) / 2 - 0.72) / 0.6));
+      let er = cr, eg = cg, eb = cb;
+      let alpha = Math.min(1, (0.025 + 0.22 * depth) * boost * grabBoost);
+      if (headActive) {
+        const hd = Math.hypot((a.x + b.x) / 2 - headX, (a.y + b.y) / 2 - headY);
+        const glow = Math.max(0, 1 - hd / igniteR) * thinkAlpha;
+        if (glow > 0) {
+          er = Math.round(cr + (255 - cr) * glow);
+          eg = Math.round(cg + (198 - cg) * glow);
+          eb = Math.round(cb + (80 - cb) * glow);
+          alpha = Math.min(1, alpha + glow * 0.35);
+        }
+      }
+      nctx.strokeStyle = `rgba(${er},${eg},${eb},${alpha.toFixed(3)})`;
+      nctx.beginPath();
+      nctx.moveTo(a.x, a.y);
+      nctx.lineTo(b.x, b.y);
+      nctx.stroke();
+    }
+
+    // Neurons: miniscule pinprick cores in varied sizes (stable per-node
+    // jitter), with a whisper of glow only on sparse "hub" neurons.
+    for (let i = 0; i < proj.length; i++) {
+      const p = proj[i];
+      const depth = Math.max(0, Math.min(1, (p.s - 0.72) / 0.6));
+      const jitter = 0.6 + 0.7 * (Math.abs(Math.sin(i * 12.9898) * 43758.5453) % 1);
+      const coreR = (0.32 + depth * 0.6) * jitter * (w / 1600 + 0.35);
+      // Neurons near the thought head catch the same yellow fire.
+      let hr = cr, hg = cg, hb = cb;
+      let cwr = 235, cwg = 244, cwb = 255;
+      if (headActive) {
+        const hd = Math.hypot(p.x - headX, p.y - headY);
+        const glow = Math.max(0, 1 - hd / igniteR) * thinkAlpha;
+        if (glow > 0) {
+          hr = Math.round(cr + (255 - cr) * glow);
+          hg = Math.round(cg + (198 - cg) * glow);
+          hb = Math.round(cb + (80 - cb) * glow);
+          cwg = Math.round(244 - 34 * glow);
+          cwb = Math.round(255 - 105 * glow);
+        }
+      }
+      if (i % 19 === 0) {
+        nctx.fillStyle = `rgba(${hr},${hg},${hb},${(0.18 * boost).toFixed(3)})`;
+        nctx.beginPath();
+        nctx.arc(p.x, p.y, coreR * 2.5, 0, Math.PI * 2);
+        nctx.fill();
+      }
+      nctx.fillStyle = `rgba(${cwr},${cwg},${cwb},${(0.45 + depth * 0.5).toFixed(3)})`;
+      nctx.beginPath();
+      nctx.arc(p.x, p.y, coreR, 0, Math.PI * 2);
+      nctx.fill();
+    }
+
+    // The thought streak itself: bright two-pass trail + shining head, drawn
+    // over the ignited links (advanced earlier, before the web was drawn).
+    if (headActive) {
+      nctx.save();
+      nctx.globalCompositeOperation = 'lighter';
+      nctx.lineCap = 'round';
+      nctx.lineJoin = 'round';
+      for (const pu of pulses) {
+        const px = pu.hx, py = pu.hy;
+        // Two-pass trail: wide soft aura under a bright core = long glow line.
+        for (let pass = 0; pass < 2; pass++) {
+          const wide = pass === 0;
+          for (let k = 1; k < pu.trail.length; k++) {
+            const frac = k / pu.trail.length;
+            const alpha = frac * (wide ? 0.28 : 0.9) * thinkAlpha;
+            nctx.strokeStyle = wide
+              ? `rgba(255,170,60,${alpha.toFixed(3)})`
+              : `rgba(255,${Math.round(200 + 45 * frac)},120,${alpha.toFixed(3)})`;
+            nctx.lineWidth = Math.max(1, frac * w / (wide ? 150 : 340));
+            nctx.beginPath();
+            nctx.moveTo(pu.trail[k - 1].x, pu.trail[k - 1].y);
+            nctx.lineTo(pu.trail[k].x, pu.trail[k].y);
+            nctx.stroke();
+          }
+        }
+        // Shining head.
+        const headR = Math.max(2, w / 340);
+        const halo = nctx.createRadialGradient(px, py, 0, px, py, headR * 6);
+        halo.addColorStop(0, `rgba(255,238,180,${(0.95 * thinkAlpha).toFixed(3)})`);
+        halo.addColorStop(1, 'rgba(255,180,60,0)');
+        nctx.fillStyle = halo;
+        nctx.beginPath();
+        nctx.arc(px, py, headR * 6, 0, Math.PI * 2);
+        nctx.fill();
+        nctx.fillStyle = `rgba(255,255,244,${(0.98 * thinkAlpha).toFixed(3)})`;
+        nctx.beginPath();
+        nctx.arc(px, py, headR, 0, Math.PI * 2);
+        nctx.fill();
+      }
+      nctx.restore();
+    } else if (pulses.length) {
+      pulses = [];
+    }
+
+  }
+
+  render();
+}
+
+/**
  * Renders the speech-output meter bars from the current meterLevel (0..1).
  */
 function renderMeter() {
@@ -626,6 +1066,7 @@ function initSettingsPanel() {
   const settingsModal = document.getElementById('settingsModal');
   const settingsBackdrop = document.getElementById('settingsBackdrop');
   const settingsCloseBtn = document.getElementById('settingsCloseBtn');
+  const userNameInput = document.getElementById('userNameInput');
   const openTabToggle = document.getElementById('openTabToggle');
   const voiceGenderMale = document.getElementById('voiceGenderMale');
   const voiceGenderFemale = document.getElementById('voiceGenderFemale');
@@ -647,6 +1088,13 @@ function initSettingsPanel() {
   if (!settingsBtn || !settingsModal) return;
 
   const settings = loadSettings();
+  if (userNameInput) {
+    userNameInput.value = settings.userName || '';
+    userNameInput.addEventListener('change', () => {
+      saveSettings({ userName: userNameInput.value.trim() });
+      applyUserIdentity();
+    });
+  }
   if (openTabToggle) openTabToggle.checked = settings.openTabOnSearch;
   if (voiceGenderMale) voiceGenderMale.checked = settings.voiceGender === 'male';
   if (voiceGenderFemale) voiceGenderFemale.checked = settings.voiceGender === 'female';
@@ -790,8 +1238,8 @@ function initSettingsPanel() {
           }
           voiceEngine.deepgramApiKey = deepgramKey;
           voiceEngine.engine = 'deepgram';
-          if (wasListening && voiceEngine.startListening() !== false && micBtn) {
-            micBtn.classList.add('active');
+          if (wasListening && voiceEngine.startListening() !== false) {
+            if (micBtn) micBtn.classList.add('active');
           }
         }
         deepgramKeyInput.value = '';
@@ -827,6 +1275,10 @@ function initSettingsPanel() {
         googleClientSecretInput.value = '';
         googleClientSecretInput.placeholder = keyPlaceholder('Google Client Secret', googleClientSecret);
       }
+      // Any previously-saved ElevenLabs key is now orphaned (feature removed):
+      // drop it so no dead credential lingers in storage.
+      localStorage.removeItem('jarvis_elevenlabs_api_key');
+      localStorage.removeItem('jarvis_elevenlabs_voice_id');
 
       if (apiKeysStatus) {
         if (openrouterKey || groqKey || geminiKey || deepgramKey || wolframAppId || spotifyClientId || spotifyClientSecret || googleClientId || googleClientSecret) {
@@ -1208,15 +1660,36 @@ function initTierControl() {
  * button (see launchSteamBtn, initTierControl) so logging, agent-state
  * updates, and the spoken confirmation all stay in one place.
  */
-function initCameraVisionPanel() {
-  const cameraToggleBtn = document.getElementById('cameraToggleBtn');
-  if (!cameraToggleBtn) return;
+/**
+ * Pushes the live camera state into every camera toggle button (Devices
+ * panel + sidebar shortcut) so their labels never lie about on/off.
+ */
+function syncCameraButtons() {
+  if (!jarvis) return;
+  const isOpen = Boolean(jarvis.cameraVisionHarness?.isOpen);
+  const panelBtn = document.getElementById('cameraToggleBtn');
+  if (panelBtn) panelBtn.textContent = isOpen ? 'CLOSE CAMERA 📷' : 'OPEN CAMERA 📷';
+  const sideBtn = document.getElementById('sideCameraBtn');
+  if (sideBtn) {
+    // Update only the label span so the inline SVG icon survives the sync.
+    // The label stays a single word in both states.
+    const label = sideBtn.querySelector('span');
+    if (label) label.textContent = 'Camera';
+    else sideBtn.textContent = 'Camera';
+  }
+}
 
-  cameraToggleBtn.addEventListener('click', () => {
+function initCameraVisionPanel() {
+  const toggleCamera = () => {
     if (!jarvis) return;
     const isOpen = Boolean(jarvis.cameraVisionHarness?.isOpen);
     jarvis.processUserInput(isOpen ? 'close camera' : 'open camera');
-  });
+  };
+
+  const cameraToggleBtn = document.getElementById('cameraToggleBtn');
+  if (cameraToggleBtn) cameraToggleBtn.addEventListener('click', toggleCamera);
+  const sideCameraBtn = document.getElementById('sideCameraBtn');
+  if (sideCameraBtn) sideCameraBtn.addEventListener('click', toggleCamera);
 }
 
 /**
@@ -1254,6 +1727,517 @@ function initLocationPanel() {
     statusEl.textContent = `Position locked at ${lat}, ${lon}.`;
     statusEl.style.color = 'var(--cyan-bright)';
   });
+}
+
+/**
+ * Mirrors console log entries into the right-rail Recent Activity feed.
+ * Safe to call before initDashboard runs — no-ops when the rail is absent.
+ */
+function pushActivity(type, message) {
+  const list = document.getElementById('activityList');
+  if (!list || !message) return;
+  const item = document.createElement('div');
+  item.className = 'activity-item';
+  const icon = type === 'USER' ? '💬' : (type === 'ARIA' ? '🔷' : (type === 'SUCCESS' ? '✅' : (type === 'WARNING' ? '⚠️' : '⚙️')));
+  const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const text = document.createElement('div');
+  text.innerHTML = `<div class="a-text"></div><div class="a-time">${time}</div>`;
+  text.querySelector('.a-text').textContent = String(message).slice(0, 140);
+  const iconEl = document.createElement('div');
+  iconEl.className = 'a-icon';
+  iconEl.textContent = icon;
+  item.appendChild(iconEl);
+  item.appendChild(text);
+  list.prepend(item);
+  while (list.children.length > 6) list.removeChild(list.lastChild);
+}
+
+/**
+ * Switches the visible dashboard view. 'settings' opens the Settings modal
+ * instead of switching views.
+ */
+function switchView(name) {
+  if (name === 'settings') {
+    const btn = document.getElementById('settingsBtn');
+    if (btn) btn.click();
+    return;
+  }
+  document.querySelectorAll('.nav-item[data-view]').forEach(el => {
+    el.classList.toggle('active', el.getAttribute('data-view') === name);
+  });
+  document.querySelectorAll('.view').forEach(el => {
+    el.classList.toggle('active', el.id === `view-${name}`);
+  });
+  if (name === 'calendar') refreshCalendar();
+  if (name === 'memory') refreshNotes();
+  if (name === 'devices' || name === 'skills') refreshDevices();
+}
+
+/**
+ * Reads this morning/afternoon/evening greeting + today's date into the
+ * Home view and the right-rail Today header.
+ */
+/**
+ * Display name from Settings (defaults to Avanish). Blank falls back to a
+ * bare greeting so a fresh profile never renders "Good evening, .".
+ */
+function currentUserName() {
+  try {
+    return String(loadSettings().userName || '').trim();
+  } catch (e) {
+    return 'Avanish';
+  }
+}
+
+/**
+ * Applies the Settings identity everywhere it surfaces: hero greeting,
+ * avatar initial, and account-menu name. Called on boot and right after
+ * the name is edited so it takes effect with no reload.
+ */
+function applyUserIdentity() {
+  const name = currentUserName();
+  renderGreeting();
+  const initial = ((name.match(/[A-Za-z0-9]/) || ['A'])[0]).toUpperCase();
+  const avatarBtn = document.getElementById('avatarBtn');
+  if (avatarBtn) avatarBtn.textContent = initial;
+  document.querySelectorAll('#avatarMenu .avatar-sm').forEach((el) => { el.textContent = initial; });
+  const nameEl = document.querySelector('#avatarMenu .avatar-name');
+  if (nameEl) nameEl.textContent = name || 'Local User';
+}
+
+function renderGreeting() {
+  const hour = new Date().getHours();
+  const part = hour < 5 ? 'Good night' : (hour < 12 ? 'Good morning' : (hour < 18 ? 'Good afternoon' : 'Good evening'));
+  const userName = currentUserName();
+  const title = document.getElementById('greetingTitle');
+  if (title) title.textContent = userName ? `${part}, ${userName}.` : `${part}.`;
+  const dateEl = document.getElementById('todayDate');
+  if (dateEl) {
+    dateEl.textContent = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+}
+
+const GREETING_SUB_DEFAULT = "I'm here, and I've got a few things for you.";
+
+/**
+ * Swaps the hero greeting for ARIA's latest spoken output.
+ */
+function showAriaResponse(text) {
+  if (!text) return;
+  const title = document.getElementById('greetingTitle');
+  const sub = document.getElementById('greetingSub');
+  if (title) {
+    title.textContent = text;
+    const wrap = title.closest('.sphere-greeting');
+    if (wrap) wrap.classList.add('responding');
+  }
+  if (sub) sub.textContent = '— ARIA';
+}
+
+/**
+ * Reverts the hero to the standby time-of-day greeting once ARIA is idle.
+ */
+function restoreGreeting() {
+  renderGreeting();
+  const sub = document.getElementById('greetingSub');
+  if (sub) sub.textContent = GREETING_SUB_DEFAULT;
+  const wrap = document.querySelector('.sphere-greeting');
+  if (wrap) wrap.classList.remove('responding');
+}
+
+/**
+ * Sidebar quote widget: shows a famous quote, rotating to the next one
+ * every minute with a rise-and-defocus animation. Sequential rotation so a
+ * quote never repeats until the full list has cycled.
+ */
+let quoteIndex = 0;
+
+function renderQuote() {
+  const card = document.getElementById('quoteCard');
+  const textEl = document.getElementById('quoteText');
+  const authorEl = document.getElementById('quoteAuthor');
+  if (!card || !textEl || !authorEl || !QUOTES.length) return;
+  const quote = QUOTES[quoteIndex % QUOTES.length];
+  textEl.textContent = quote.text;
+  authorEl.textContent = `— ${quote.author}`;
+  // Re-trigger the entrance animation on every rotation.
+  card.classList.remove('quote-in');
+  void card.offsetWidth;
+  card.classList.add('quote-in');
+}
+
+function initQuoteRotator() {
+  if (!QUOTES.length) return;
+  renderQuote();
+  setInterval(() => {
+    quoteIndex = nextQuoteIndex(quoteIndex);
+    renderQuote();
+  }, 60000);
+}
+
+function formatEventStart(start) {
+  if (!start) return '';
+  try {
+    const d = new Date(typeof start === 'string' ? start : (start.dateTime || start.date));
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+  } catch (e) {
+    return '';
+  }
+}
+
+function calendarConfigured() {
+  return Boolean(jarvis && jarvis.googleClientId && jarvis.googleClientSecret);
+}
+
+/**
+ * Read-only calendar fetch for the Home Upcoming card, Today rail card,
+ * and Calendar view. Never speaks — failures degrade to connect hints.
+ */
+async function refreshCalendar() {
+  const upcoming = document.getElementById('upcomingList');
+  const today = document.getElementById('todayList');
+  const calList = document.getElementById('calList');
+  const hint = document.getElementById('calConnectHint');
+
+  if (!calendarConfigured()) {
+    if (upcoming) upcoming.textContent = 'Connect Google Calendar in Settings to see events.';
+    if (today) today.innerHTML = '<div class="empty-note">Connect Google Calendar in Settings.</div>';
+    if (calList) calList.innerHTML = '';
+    if (hint) hint.style.display = 'flex';
+    return;
+  }
+  if (hint) hint.style.display = 'none';
+
+  let events = [];
+  try {
+    const result = await jarvis.calendarHarness.listUpcoming(jarvis.googleClientId, jarvis.googleClientSecret, 8);
+    if (result && result.success) events = result.events || [];
+  } catch (e) {
+    events = [];
+  }
+
+  if (upcoming) {
+    upcoming.innerHTML = events.length
+      ? events.slice(0, 2).map(ev => `<div><span class="ev-time">${formatEventStart(ev.start)}</span><br>${escapeHtml(ev.title || '(untitled)')}</div>`).join('')
+      : 'No upcoming events — enjoy the quiet.';
+  }
+  if (today) {
+    today.innerHTML = events.length
+      ? events.slice(0, 4).map(ev => `<div class="today-ev"><time>${formatEventStart(ev.start)}</time><span>${escapeHtml(ev.title || '(untitled)')}</span></div>`).join('')
+      : '<div class="empty-note">No events yet today.</div>';
+  }
+  if (calList) {
+    calList.innerHTML = events.length
+      ? events.map(ev => `<div class="cal-row"><time>${formatEventStart(ev.start)}</time><span>${escapeHtml(ev.title || '(untitled)')}</span></div>`).join('')
+      : '<div class="empty-note">Nothing on the calendar.</div>';
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+let filesHarness = null;
+
+/**
+ * Read-only notes fetch for the Memory view, via a renderer-side
+ * FileSystemHarness (Electron IPC; graceful "not available" outside it).
+ */
+async function refreshNotes() {
+  const list = document.getElementById('notesList');
+  if (!list) return;
+  if (!filesHarness && typeof FileSystemHarness !== 'undefined') {
+    try {
+      filesHarness = new FileSystemHarness({ onLog: () => {} });
+    } catch (e) {
+      filesHarness = null;
+    }
+  }
+  let result = null;
+  try {
+    result = filesHarness ? await filesHarness.listNotes() : null;
+  } catch (e) {
+    result = null;
+  }
+  if (!result || !result.success) {
+    list.innerHTML = `<div class="empty-hint">${escapeHtml((result && result.message) || 'Notes live in the ARIA desktop app — open this view in Electron to browse them.')}</div>`;
+    return;
+  }
+  if (!result.files.length) {
+    list.innerHTML = '<div class="empty-note">No notes saved yet — say "remember ..." and I\'ll keep it here.</div>';
+    return;
+  }
+  list.innerHTML = '';
+  result.files.forEach(f => {
+    const row = document.createElement('div');
+    row.className = 'note-row';
+    const label = document.createElement('span');
+    label.innerHTML = `<b></b> <span class="n-preview"></span>`;
+    label.querySelector('b').textContent = f.filename;
+    label.querySelector('.n-preview').textContent = f.preview ? `— ${f.preview}` : '';
+    const open = document.createElement('button');
+    open.className = 'btn-toggle';
+    open.textContent = 'READ';
+    open.addEventListener('click', async () => {
+      try {
+        const full = await filesHarness.readNote(f.filename);
+        if (full && full.success) {
+          label.querySelector('.n-preview').textContent = `— ${full.content.slice(0, 200)}`;
+        }
+      } catch (e) { /* keep the preview */ }
+    });
+    row.appendChild(label);
+    row.appendChild(open);
+    list.appendChild(row);
+  });
+}
+
+/**
+ * Rebuilds the right-rail Connected Devices rows from live status text the
+ * harness panels already maintain, plus the active mic engine.
+ */
+function refreshDevices() {
+  const list = document.getElementById('devicesList');
+  if (!list) return;
+  const textOf = (id, fallback) => {
+    const el = document.getElementById(id);
+    return el && el.textContent ? el.textContent.trim() : fallback;
+  };
+  const rows = [
+    { icon: '📧', name: 'Google Account', state: textOf('googleAccountStatus', 'Not connected') },
+    { icon: '🎵', name: 'Spotify', state: textOf('spotifyAccountStatus', 'Not connected') },
+    { icon: '🎮', name: 'Steam Library', state: textOf('steamLibraryStatus', 'Not connected') },
+    { icon: '🎙️', name: 'Voice Input', state: voiceEngine ? `${voiceEngine.engine} mic · ${voiceEngine.isListening ? 'listening' : 'idle'}` : 'Standby' }
+  ];
+  list.innerHTML = '';
+  rows.forEach(r => {
+    const off = /not connected|inactive|unavailable|standby|idle/i.test(r.state);
+    const row = document.createElement('div');
+    row.className = 'device-row';
+    row.innerHTML = `<div class="d-icon">${r.icon}</div><div><div></div><small class="${off ? 'off' : ''}"></small></div>`;
+    row.children[1].children[0].textContent = r.name;
+    row.children[1].children[1].textContent = off ? 'Offline' : 'Online';
+    row.children[1].children[1].textContent = r.state.length > 42 ? (off ? 'Offline' : 'Online') : r.state;
+    list.appendChild(row);
+  });
+
+  const provider = document.getElementById('sysProvider');
+  if (provider && jarvis && jarvis._activeProviderLabel) {
+    try { provider.textContent = `${jarvis._activeProviderLabel()} · Running`; } catch (e) { /* keep placeholder */ }
+  }
+  const net = document.getElementById('sysNet');
+  if (net) net.textContent = (typeof navigator !== 'undefined' && !navigator.onLine) ? 'Offline' : 'Connected';
+  const mic = document.getElementById('sysMic');
+  if (mic && voiceEngine) mic.textContent = voiceEngine.isListening ? 'Listening' : 'Standby';
+  const fill = document.getElementById('sysStorageFill');
+  const label = document.getElementById('sysStorageText');
+  try {
+    let bytes = 0;
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      bytes += (k || '').length + (localStorage.getItem(k) || '').length;
+    }
+    const pct = Math.min(100, Math.round((bytes / (5 * 1024 * 1024)) * 100));
+    if (fill) fill.style.width = `${Math.max(2, pct)}%`;
+    if (label) label.textContent = `${pct}% used`;
+  } catch (e) { /* storage estimate unavailable */ }
+}
+
+/**
+ * Renders the capability grid on the Skills view. State is derived from
+ * what's actually configured — keys present, Electron IPC available.
+ */
+function renderSkills() {
+  const grid = document.getElementById('skillsGrid');
+  if (!grid) return;
+  const has = (key) => { try { return Boolean(localStorage.getItem(key)); } catch (e) { return false; } };
+  const isElectron = typeof window !== 'undefined' && !!window.jarvisElectron?.isElectron;
+  const skills = [
+    { icon: '🎙️', name: 'Voice I/O', desc: 'Wake-word listening and spoken responses.', on: true },
+    { icon: '🔍', name: 'Web Search', desc: 'Live Google results with auto-opened tabs.', on: true },
+    { icon: '🎮', name: 'Steam', desc: 'Open the client or launch owned games by voice.', on: has('jarvis_steam_api_key') },
+    { icon: '🎵', name: 'Spotify', desc: 'Open, search, and play tracks or your library.', on: has('jarvis_spotify_client_id') },
+    { icon: '📧', name: 'Gmail', desc: 'Read-only inbox check, search, and read-aloud.', on: has('jarvis_google_client_id') },
+    { icon: '📅', name: 'Calendar', desc: 'List, search, and create Google Calendar events.', on: has('jarvis_google_client_id') },
+    { icon: '📷', name: 'Camera Vision', desc: 'Webcam feed with live object detection.', on: isElectron },
+    { icon: '🖥️', name: 'Screen Vision', desc: 'Screenshot Q&A through the vision model.', on: isElectron },
+    { icon: '🗺️', name: 'Maps & Places', desc: 'Nearby search and driving directions.', on: isElectron },
+    { icon: '🌦️', name: 'Weather', desc: 'Real conditions at your current position.', on: isElectron },
+    { icon: '🔢', name: 'Math', desc: 'WolframAlpha-backed computation.', on: has('jarvis_wolfram_app_id') },
+    { icon: '📝', name: 'Memory Notes', desc: 'Private on-device notes ARIA can recall.', on: isElectron }
+  ];
+  grid.innerHTML = '';
+  skills.forEach(s => {
+    const card = document.createElement('div');
+    card.className = 'skill-card';
+    card.innerHTML = `<div class="s-icon">${s.icon}</div><b></b><small></small><div class="s-state"></div>`;
+    card.querySelector('b').textContent = s.name;
+    card.querySelector('small').textContent = s.desc;
+    const state = card.querySelector('.s-state');
+    state.textContent = s.on ? '● READY' : '○ SETUP NEEDED';
+    if (!s.on) state.classList.add('off');
+    grid.appendChild(card);
+  });
+}
+
+/**
+ * Tasks view rendering over tasks-store.js (localStorage, per-device).
+ */
+function renderTasks() {
+  const list = document.getElementById('tasksList');
+  if (!list) return;
+  let tasks = [];
+  try { tasks = loadTasks(); } catch (e) { tasks = []; }
+  list.innerHTML = '';
+  if (!tasks.length) {
+    list.innerHTML = '<div class="empty-note">Nothing here yet — add your first task above, Sir.</div>';
+    return;
+  }
+  tasks.forEach(t => {
+    const row = document.createElement('div');
+    row.className = `task-row${t.done ? ' done' : ''}`;
+    const check = document.createElement('button');
+    check.className = 'task-check';
+    check.textContent = '✓';
+    check.title = 'Toggle done';
+    check.addEventListener('click', () => { try { toggleTask(t.id); } catch (e) {} renderTasks(); });
+    const label = document.createElement('span');
+    label.textContent = t.text;
+    const del = document.createElement('button');
+    del.className = 'task-del';
+    del.textContent = '✕';
+    del.title = 'Delete task';
+    del.addEventListener('click', () => { try { removeTask(t.id); } catch (e) {} renderTasks(); });
+    row.appendChild(check);
+    row.appendChild(label);
+    row.appendChild(del);
+    list.appendChild(row);
+  });
+  try {
+    if (tasks.some(t => t.done)) {
+      const clear = document.createElement('button');
+      clear.className = 'btn-toggle tasks-clear';
+      clear.textContent = 'CLEAR COMPLETED';
+      clear.addEventListener('click', () => { try { clearCompleted(); } catch (e) {} renderTasks(); });
+      list.appendChild(clear);
+    }
+  } catch (e) { /* read-only render */ }
+}
+
+/**
+ * Dashboard shell wiring: nav, top search, greeting, rail, tasks,
+ * calendar/memory refresh, and periodic device-status refresh.
+ */
+function initDashboard(onLog) {
+  document.querySelectorAll('.nav-item[data-view]').forEach(btn => {
+    btn.addEventListener('click', () => switchView(btn.getAttribute('data-view')));
+  });
+  document.querySelectorAll('[data-goto]').forEach(el => {
+    el.addEventListener('click', () => switchView(el.getAttribute('data-goto')));
+  });
+
+  const focusCommand = () => { if (textInput) textInput.focus(); };
+  const topSearch = document.getElementById('topSearch');
+  if (topSearch) {
+    topSearch.addEventListener('click', focusCommand);
+    topSearch.addEventListener('keydown', (e) => { if (e.key === 'Enter') focusCommand(); });
+  }
+  document.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      focusCommand();
+    }
+  });
+
+  if (stopBtn) stopBtn.addEventListener('click', () => { onStopBtn(); focusCommand(); });
+
+  // Press ripple on every interactive button (CSS animates .ripple; the host
+  // classes get position/clipping from the shared ripple-host rule).
+  document.addEventListener('pointerdown', (e) => {
+    const btn = e.target.closest('.btn-toggle,.btn-harness,button.side-shortcut,.nav-item,.icon-btn,.game-launch-btn,.btn-steam-save,.btn-steam-clear,.task-check,.task-del');
+    if (!btn || btn.disabled) return;
+    const rect = btn.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const ripple = document.createElement('span');
+    ripple.className = 'ripple';
+    const size = Math.max(rect.width, rect.height) * 2.2;
+    ripple.style.width = `${size}px`;
+    ripple.style.height = `${size}px`;
+    ripple.style.left = `${e.clientX - rect.left - size / 2}px`;
+    ripple.style.top = `${e.clientY - rect.top - size / 2}px`;
+    ripple.addEventListener('animationend', () => ripple.remove());
+    btn.appendChild(ripple);
+  });
+  // Account menu (top-right avatar): toggle on click, close on
+  // outside-click / Escape. Restart simply reloads the renderer.
+  const avatarBtn = document.getElementById('avatarBtn');
+  const avatarMenu = document.getElementById('avatarMenu');
+  if (avatarBtn && avatarMenu) {
+    avatarBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      avatarMenu.classList.toggle('open');
+    });
+    document.addEventListener('click', (e) => {
+      if (!avatarMenu.classList.contains('open')) return;
+      if (!e.target.closest('#avatarMenu') && !e.target.closest('#avatarBtn')) {
+        avatarMenu.classList.remove('open');
+      }
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') avatarMenu.classList.remove('open');
+    });
+    const avatarSettings = document.getElementById('avatarSettingsBtn');
+    if (avatarSettings) avatarSettings.addEventListener('click', () => {
+      avatarMenu.classList.remove('open');
+      const settings = document.getElementById('settingsBtn');
+      if (settings) settings.click();
+    });
+    const avatarRestart = document.getElementById('avatarRestartBtn');
+    if (avatarRestart) avatarRestart.addEventListener('click', () => {
+      window.location.reload();
+    });
+    const avatarVersion = document.getElementById('avatarVersion');
+    if (avatarVersion) {
+      try {
+        const maybeVersion = getCurrentVersion();
+        if (maybeVersion && typeof maybeVersion.then === 'function') {
+          maybeVersion.then((v) => { if (v) avatarVersion.textContent = `ARIA v${v}`; }).catch(() => {});
+        } else if (maybeVersion) {
+          avatarVersion.textContent = `ARIA v${maybeVersion}`;
+        }
+      } catch (e) { /* version stays generic outside Electron */ }
+    }
+  }
+
+  // Quote rotator: famous quotes, one per minute, animated swap.
+  initQuoteRotator();
+
+  applyUserIdentity();
+  renderSkills();
+  renderTasks();
+  refreshDevices();
+
+  const taskInput = document.getElementById('taskInput');
+  const taskAdd = document.getElementById('taskAddBtn');
+  const submitTask = () => {
+    if (!taskInput) return;
+    try { addTask(taskInput.value); } catch (e) {}
+    taskInput.value = '';
+    renderTasks();
+  };
+  if (taskAdd) taskAdd.addEventListener('click', submitTask);
+  if (taskInput) taskInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitTask(); });
+
+  const calRefresh = document.getElementById('calRefreshBtn');
+  if (calRefresh) calRefresh.addEventListener('click', refreshCalendar);
+  const notesRefresh = document.getElementById('notesRefreshBtn');
+  if (notesRefresh) notesRefresh.addEventListener('click', refreshNotes);
+
+  refreshCalendar();
+  setInterval(() => { refreshDevices(); }, 30000);
+
+  if (onLog) onLog({ type: 'SUCCESS', message: '[DASHBOARD] ARIA home interface ready.' });
 }
 
 // Launch application on DOM load

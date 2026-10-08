@@ -5,7 +5,7 @@ import { ConversationController } from '../src/conversation-controller.js';
 test('wake word + command in one breath dispatches immediately and starts a conversation', () => {
   const controller = new ConversationController();
 
-  const result = controller.handleTranscript('Hey Jarvis, play Dota');
+  const result = controller.handleTranscript('Hey Aria, play Dota');
 
   assert.deepEqual(result, { action: 'DISPATCH_COMMAND', command: 'play Dota', alternatives: [], conversationStarting: true, chime: true });
   assert.equal(controller.isConversationActive, true);
@@ -15,7 +15,7 @@ test('wake word + command in one breath dispatches immediately and starts a conv
 test('wake word alone awaits a command, then the next utterance dispatches it', () => {
   const controller = new ConversationController();
 
-  const first = controller.handleTranscript('Jarvis');
+  const first = controller.handleTranscript('Aria');
   assert.deepEqual(first, { action: 'AWAIT_COMMAND' });
   assert.equal(controller.isAwaitingCommand, true);
 
@@ -28,7 +28,7 @@ test('wake word alone awaits a command, then the next utterance dispatches it', 
 test('onWakeTimeout clears awaitingCommand without starting a conversation', () => {
   const controller = new ConversationController();
 
-  controller.handleTranscript('Jarvis');
+  controller.handleTranscript('Aria');
   assert.equal(controller.isAwaitingCommand, true);
 
   controller.onWakeTimeout();
@@ -40,7 +40,7 @@ test('onWakeTimeout clears awaitingCommand without starting a conversation', () 
 test('while a conversation is active, a plain command needs no wake word', () => {
   const controller = new ConversationController();
 
-  controller.handleTranscript('Hey Jarvis, play Dota'); // starts conversation
+  controller.handleTranscript('Hey Aria, play Dota'); // starts conversation
   const result = controller.handleTranscript('now pause it');
 
   assert.deepEqual(result, { action: 'DISPATCH_COMMAND', command: 'now pause it', alternatives: [], conversationStarting: false, chime: false });
@@ -50,8 +50,8 @@ test('while a conversation is active, a plain command needs no wake word', () =>
 test('while a conversation is active, saying the wake word out of habit still works', () => {
   const controller = new ConversationController();
 
-  controller.handleTranscript('Hey Jarvis, play Dota');
-  const result = controller.handleTranscript('Jarvis, now pause it');
+  controller.handleTranscript('Hey Aria, play Dota');
+  const result = controller.handleTranscript('Aria, now pause it');
 
   assert.deepEqual(result, { action: 'DISPATCH_COMMAND', command: 'now pause it', alternatives: [], conversationStarting: false, chime: false });
 });
@@ -65,15 +65,15 @@ test('stop phrases end an active conversation', () => {
     'Stop the conversation.',
     "that's all",
     'thats all',
-    'goodbye jarvis',
-    "Jarvis, that's all",
-    'Hey Jarvis, stop conversation',
-    'Hey Jarvis, stop the conversation'
+    'goodbye aria',
+    "Aria, that's all",
+    'Hey Aria, stop conversation',
+    'Hey Aria, stop the conversation'
   ];
 
   for (const phrase of phrases) {
     const controller = new ConversationController();
-    controller.handleTranscript('Hey Jarvis, play Dota'); // starts conversation
+    controller.handleTranscript('Hey Aria, play Dota'); // starts conversation
 
     const result = controller.handleTranscript(phrase);
 
@@ -84,7 +84,7 @@ test('stop phrases end an active conversation', () => {
 
 test('a stop phrase embedded mid-sentence does not end the conversation', () => {
   const controller = new ConversationController();
-  controller.handleTranscript('Hey Jarvis, play Dota');
+  controller.handleTranscript('Hey Aria, play Dota');
 
   const result = controller.handleTranscript("search for that's all folks bugs bunny");
 
@@ -94,7 +94,7 @@ test('a stop phrase embedded mid-sentence does not end the conversation', () => 
 
 test('a stop phrase with a curly (typographic) apostrophe still ends the conversation', () => {
   const controller = new ConversationController();
-  controller.handleTranscript('Hey Jarvis, play Dota');
+  controller.handleTranscript('Hey Aria, play Dota');
 
   const result = controller.handleTranscript('that’s all');
 
@@ -114,16 +114,16 @@ test('bare "stop" and trailing-comma variants end an active conversation', () =>
   const phrases = ['stop', 'Stop.', 'stop,', 'end conversation,', 'end,', 'goodbye'];
   for (const phrase of phrases) {
     const controller = new ConversationController();
-    controller.handleTranscript('Hey Jarvis, play Dota');
+    controller.handleTranscript('Hey Aria, play Dota');
     const result = controller.handleTranscript(phrase);
     assert.deepEqual(result, { action: 'END_CONVERSATION' }, `"${phrase}" should end the conversation`);
     assert.equal(controller.isConversationActive, false, `"${phrase}" should clear isConversationActive`);
   }
 });
 
-test('a just-addressed "Hey Jarvis, stop" ends even without an active conversation', () => {
+test('a just-addressed "Hey Aria, stop" ends even without an active conversation', () => {
   const controller = new ConversationController();
-  const result = controller.handleTranscript('Hey Jarvis, stop');
+  const result = controller.handleTranscript('Hey Aria, stop');
   assert.deepEqual(result, { action: 'END_CONVERSATION' });
   assert.equal(controller.isConversationActive, false);
 });
@@ -149,7 +149,7 @@ test('ambient speech with no wake word is ignored while idle', () => {
 
 test('onConversationTimeout ends an active conversation', () => {
   const controller = new ConversationController();
-  controller.handleTranscript('Hey Jarvis, play Dota');
+  controller.handleTranscript('Hey Aria, play Dota');
 
   controller.onConversationTimeout();
 
@@ -166,7 +166,7 @@ test('onConversationTimeout is a no-op when no conversation is active', () => {
 
 test('reset clears an active conversation', () => {
   const controller = new ConversationController();
-  controller.handleTranscript('Hey Jarvis, play Dota');
+  controller.handleTranscript('Hey Aria, play Dota');
 
   controller.reset();
 
@@ -176,7 +176,7 @@ test('reset clears an active conversation', () => {
 
 test('reset clears an in-progress await-command window', () => {
   const controller = new ConversationController();
-  controller.handleTranscript('Jarvis');
+  controller.handleTranscript('Aria');
 
   controller.reset();
 
@@ -187,7 +187,7 @@ test('reset clears an in-progress await-command window', () => {
 test('alternatives are threaded through and wake-word-stripped on a wake+command DISPATCH_COMMAND', () => {
   const controller = new ConversationController();
 
-  const result = controller.handleTranscript('Hey Jarvis, play Dota', ['Hey Jarvis, play Dotay', 'Play Dota']);
+  const result = controller.handleTranscript('Hey Aria, play Dota', ['Hey Aria, play Dotay', 'Play Dota']);
 
   assert.deepEqual(result, {
     action: 'DISPATCH_COMMAND',
@@ -201,16 +201,16 @@ test('alternatives are threaded through and wake-word-stripped on a wake+command
 test('alternatives default to an empty array when not provided', () => {
   const controller = new ConversationController();
 
-  const result = controller.handleTranscript('Hey Jarvis, play Dota');
+  const result = controller.handleTranscript('Hey Aria, play Dota');
 
   assert.deepEqual(result.alternatives, []);
 });
 
-test('a bare wake word mid-conversation re-arms the command window instead of dispatching "Jarvis" as chat', () => {
+test('a bare wake word mid-conversation re-arms the command window instead of dispatching "Aria" as chat', () => {
   const controller = new ConversationController();
-  controller.handleTranscript('Hey Jarvis, play Dota');
+  controller.handleTranscript('Hey Aria, play Dota');
 
-  const result = controller.handleTranscript('Jarvis');
+  const result = controller.handleTranscript('Aria');
 
   assert.deepEqual(result, { action: 'AWAIT_COMMAND' }, 'bare wake word must not dispatch literal chat');
   assert.equal(controller.isConversationActive, false);
@@ -222,9 +222,9 @@ test('a bare wake word mid-conversation re-arms the command window instead of di
 
 test('a repeated bare wake word while already awaiting keeps the window armed', () => {
   const controller = new ConversationController();
-  controller.handleTranscript('Jarvis');
+  controller.handleTranscript('Aria');
 
-  const result = controller.handleTranscript('Hey Jarvis');
+  const result = controller.handleTranscript('Hey Aria');
 
   assert.deepEqual(result, { action: 'AWAIT_COMMAND' });
   assert.equal(controller.isAwaitingCommand, true);
@@ -234,7 +234,7 @@ test('a repeated bare wake word while already awaiting keeps the window armed', 
 test('after a bare wake word (awaiting command), "stop"/"end conversation"/"goodbye" end the session instead of dispatching as chat', () => {
   for (const phrase of ['stop', 'Stop.', 'end conversation', 'goodbye']) {
     const controller = new ConversationController();
-    const first = controller.handleTranscript('Jarvis');
+    const first = controller.handleTranscript('Aria');
     assert.deepEqual(first, { action: 'AWAIT_COMMAND' });
 
     const result = controller.handleTranscript(phrase);
@@ -248,7 +248,7 @@ test('after a bare wake word (awaiting command), "stop"/"end conversation"/"good
 test('an alternative that is only the wake word is dropped instead of kept as raw text', () => {
   const controller = new ConversationController();
 
-  const result = controller.handleTranscript('Hey Jarvis, play Dota', ['Jarvis']);
+  const result = controller.handleTranscript('Hey Aria, play Dota', ['Aria']);
 
   assert.deepEqual(result.alternatives, []);
 });

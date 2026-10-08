@@ -5,7 +5,7 @@ import { buildJarvisMessages } from '../src/llm-persona.js';
 test('buildJarvisMessages puts a system prompt first and the user message last', () => {
   const messages = buildJarvisMessages('What time is it?', []);
   assert.equal(messages[0].role, 'system');
-  assert.match(messages[0].content, /J\.A\.R\.V\.I\.S/);
+  assert.match(messages[0].content, /ARIA/);
   assert.deepEqual(messages.at(-1), { role: 'user', content: 'What time is it?' });
 });
 

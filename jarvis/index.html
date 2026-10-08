@@ -3,91 +3,420 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>J.A.R.V.I.S. Autonomous AI Engine</title>
+  <title>ARIA — Adaptive Reasoning & Intelligent Automation</title>
   <!-- TensorFlow.js + COCO-SSD for the Camera Vision Harness's live bounding-box overlay -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
   <link rel="stylesheet" href="/src/styles.css">
 </head>
 <body>
-  <div class="grid-bg"></div>
+  <!-- Boot screen: shows instantly on load, fades when initApp completes -->
+  <div id="boot-screen">
+    <div class="boot-inner">
+      <svg class="boot-outline" viewBox="0 0 600 214" role="img" aria-label="ARIA">
+<g transform="translate(0.000000,214.000000) scale(0.100000,-0.100000)"
+fill="#1E90FF" stroke="#1E90FF" stroke-width="8" stroke-linejoin="round" stroke-linecap="round">
+<path class="l-draw" style="animation-delay: 0.05s" d="M1374 1597 c-32 -37 -64 -85 -64 -97 0 -6 -5 -8 -12 -4 -7 4 -8 3 -4
+-4 4 -7 3 -12 -3 -12 -5 0 -21 -18 -34 -40 -13 -22 -27 -37 -31 -33 -4 4 -5 1
+-1 -7 3 -8 -6 -27 -19 -41 -14 -15 -22 -30 -19 -33 4 -3 1 -6 -5 -6 -6 0 -14
+-9 -17 -20 -3 -11 -12 -26 -18 -33 -24 -25 -57 -76 -57 -87 0 -6 -4 -9 -9 -6
+-5 3 -12 -6 -16 -21 -5 -21 -8 -24 -16 -12 -7 11 -9 9 -9 -7 0 -12 -7 -27 -15
+-34 -8 -7 -15 -19 -15 -26 0 -8 -4 -14 -10 -14 -5 0 -16 -16 -25 -35 -9 -19
+-27 -46 -40 -60 -13 -14 -21 -25 -17 -25 4 0 2 -4 -4 -8 -6 -4 -21 -25 -33
+-47 -11 -22 -21 -36 -21 -30 0 5 -14 -13 -31 -41 -17 -27 -36 -52 -41 -55 -5
+-3 -9 -9 -9 -13 1 -7 -29 -57 -40 -66 -3 -3 -24 -33 -47 -66 -40 -60 -41 -62
+-22 -79 27 -24 238 -29 266 -6 24 20 84 106 84 120 0 6 4 11 8 11 9 0 102 138
+102 151 0 5 8 6 18 3 12 -4 13 -3 4 3 -9 7 -5 17 18 43 16 18 30 37 30 40 0 4
+9 17 20 30 11 13 20 29 20 37 0 7 4 13 8 13 5 0 17 15 27 34 11 19 23 32 28
+29 6 -3 7 -1 3 5 -4 6 2 19 13 29 11 9 18 20 15 25 -3 4 -1 8 4 8 5 0 17 16
+28 35 22 42 36 44 55 8 8 -16 24 -39 37 -53 12 -14 25 -33 28 -42 3 -10 10
+-18 16 -18 5 0 8 -5 6 -12 -2 -6 5 -21 16 -33 19 -20 84 -117 114 -171 7 -13
+18 -24 24 -24 6 0 8 -3 5 -7 -4 -3 1 -15 10 -26 17 -19 15 -19 -157 -17 -318
+4 -308 5 -343 -32 -16 -18 -34 -32 -39 -30 -5 1 -7 -2 -3 -8 6 -9 -29 -67 -50
+-82 -5 -4 -6 -8 -1 -8 5 0 2 -8 -8 -18 -15 -18 -15 -20 4 -37 20 -18 49 -19
+515 -20 468 -2 496 -1 511 16 13 14 14 22 5 32 -6 8 -8 17 -4 20 3 4 2 7 -4 7
+-5 0 -18 16 -29 35 -10 19 -22 35 -26 35 -5 0 -8 6 -8 14 0 7 -14 31 -31 52
+-17 22 -35 49 -40 62 -5 12 -13 22 -19 22 -6 0 -10 6 -8 13 2 7 -3 19 -10 27
+-47 55 -170 235 -166 241 3 5 0 9 -6 9 -6 0 -15 12 -20 26 -6 14 -26 46 -46
+70 -22 26 -33 48 -28 56 4 7 4 10 -1 6 -9 -9 -26 8 -42 42 -7 14 -25 41 -40
+59 -16 19 -21 31 -13 26 13 -8 13 -6 1 8 -7 9 -18 14 -25 10 -6 -3 -8 -2 -3 2
+4 5 -4 21 -19 36 -14 15 -26 31 -26 36 -1 17 -13 39 -35 63 -13 14 -23 30 -23
+36 0 12 -30 28 -37 20 -3 -3 19 -40 47 -83 29 -43 181 -269 338 -503 157 -234
+291 -432 299 -441 7 -8 13 -19 13 -22 0 -4 -227 -7 -505 -7 -278 0 -505 4
+-505 9 0 4 8 19 18 32 11 13 38 52 62 87 l43 63 261 -3 262 -3 -170 255 -171
+255 -135 -200 c-74 -111 -180 -267 -235 -348 l-100 -146 -122 -1 c-68 0 -123
+2 -123 5 0 3 19 33 43 68 24 34 83 121 132 192 185 272 311 455 412 600 82
+118 136 205 131 211 -3 2 -13 -6 -24 -19z"/>
+<path class="l-draw" style="animation-delay: 0.3s" d="M2323 1612 c-65 -2 -105 -7 -111 -15 -6 -7 -12 -56 -13 -110 -2 -77
+0 -100 12 -108 16 -10 92 -12 484 -10 344 2 369 -2 408 -62 51 -77 29 -159
+-51 -191 -40 -17 -78 -19 -438 -18 -387 0 -395 0 -405 -20 -15 -28 -12 -523 3
+-547 9 -15 24 -17 107 -14 64 2 100 8 109 17 10 10 14 53 15 172 l2 159 168
+-2 168 -2 57 -59 c31 -32 64 -67 73 -78 9 -10 26 -26 37 -34 12 -8 22 -21 22
+-29 0 -8 3 -12 6 -9 3 4 22 -12 42 -35 57 -64 59 -66 66 -60 3 4 6 1 6 -6 0
+-7 17 -19 37 -28 29 -12 63 -14 156 -10 66 3 124 10 130 16 13 13 17 52 5 45
+-4 -3 -8 -1 -8 4 0 6 -31 42 -70 81 -38 38 -70 75 -70 81 0 5 -6 9 -12 7 -7
+-1 -12 4 -11 11 2 6 -2 12 -8 12 -16 0 -101 90 -96 103 2 7 19 17 37 23 46 15
+133 103 164 164 35 69 51 185 34 249 -15 60 -68 159 -99 185 -18 16 -24 26
+-16 29 7 3 4 6 -6 6 -11 1 -28 11 -39 24 -11 12 -17 16 -13 9 4 -8 -6 -5 -27
+6 -73 41 -99 44 -431 45 -177 1 -368 1 -424 -1z m821 -51 c75 -30 148 -101
+184 -179 24 -50 27 -69 27 -152 -1 -76 -5 -105 -22 -142 -41 -88 -120 -157
+-220 -192 l-33 -11 173 -173 172 -173 -162 1 c-123 1 -161 5 -157 14 3 7 -12
+28 -33 48 -21 19 -94 92 -162 162 l-124 126 -184 0 -183 0 0 -175 0 -175 -100
+0 -100 0 0 268 0 267 408 0 c376 0 410 1 444 19 101 50 110 200 16 268 l-33
+23 -417 3 -418 3 0 100 0 100 433 -3 c429 -3 432 -3 491 -27z"/>
+<path class="l-fade" style="animation-delay: 1s" d="M3209 993 c-13 -16 -12 -17 4 -4 9 7 17 15 17 17 0 8 -8 3 -21 -13z"/>
+<path class="l-draw" style="animation-delay: 0.55s" d="M3631 1610 c-18 -5 -37 -14 -42 -22 -11 -16 -12 -1028 -1 -1044 16
+-25 53 -33 128 -30 124 6 114 -43 114 561 -1 436 -3 515 -15 525 -18 15 -136
+21 -184 10z m174 -545 l0 -525 -102 0 -103 0 0 525 0 525 103 0 102 0 0 -525z"/>
+<path class="l-draw" style="animation-delay: 0.8s" d="M4602 1583 c-12 -16 -53 -75 -92 -133 -38 -58 -83 -123 -99 -145 -17
+-22 -51 -75 -77 -117 -26 -43 -52 -78 -56 -78 -5 0 -16 -15 -24 -32 -14 -30
+-50 -86 -73 -114 -5 -7 -7 -15 -4 -18 4 -3 1 -6 -4 -6 -6 0 -26 -24 -43 -52
+-18 -29 -38 -56 -44 -60 -6 -4 -7 -8 -2 -8 5 0 0 -10 -11 -22 -11 -13 -30 -40
+-42 -61 -13 -20 -31 -42 -42 -47 -10 -6 -19 -16 -19 -23 0 -7 4 -6 10 3 6 9
+10 10 10 3 0 -7 -6 -16 -13 -20 -7 -4 -25 -28 -41 -52 -35 -55 -27 -73 35 -82
+24 -4 250 -6 501 -5 349 1 460 4 469 13 22 22 19 46 -9 83 -44 56 -72 100 -65
+100 3 0 -6 9 -20 20 -24 19 -44 21 -234 25 -114 3 -214 1 -222 -4 -7 -5 -22
+-6 -32 -4 -18 5 -18 6 2 32 50 65 109 149 109 155 0 6 42 72 85 133 9 13 15
+24 13 25 -1 2 9 14 23 28 14 14 30 34 36 45 11 19 12 19 32 -5 11 -14 21 -29
+21 -35 0 -5 14 -25 31 -43 16 -17 27 -37 24 -42 -3 -6 -2 -10 3 -10 6 0 22
+-20 36 -45 15 -25 31 -45 36 -45 5 0 6 -7 3 -17 -4 -11 -3 -14 5 -9 7 4 12 1
+12 -8 0 -8 9 -20 20 -26 11 -6 19 -14 16 -18 -2 -4 9 -25 25 -47 15 -22 38
+-57 49 -77 11 -21 25 -38 30 -38 5 0 6 -7 3 -17 -4 -10 -2 -14 4 -10 13 8 26
+-20 16 -35 -3 -7 -1 -8 5 -4 7 4 23 -11 42 -40 46 -73 62 -80 189 -79 98 0
+112 2 125 20 13 18 13 23 -4 53 -11 18 -24 38 -30 45 -32 38 -55 73 -57 86 -1
+9 -13 26 -27 37 -14 12 -23 24 -21 26 2 2 -18 34 -46 71 -27 37 -49 72 -49 77
+0 6 -5 10 -11 10 -5 0 -7 5 -4 10 3 6 3 10 -2 10 -4 0 -24 24 -43 54 -19 30
+-38 52 -42 50 -4 -3 -5 1 -3 8 3 8 -6 25 -20 38 -14 13 -25 29 -25 35 0 7 -9
+20 -20 30 -11 10 -20 24 -20 32 0 7 -4 13 -9 13 -5 0 -25 28 -45 63 -19 34
+-46 75 -60 91 -15 16 -26 34 -26 40 0 6 -14 25 -30 43 -17 18 -30 38 -30 45 0
+8 -9 20 -20 28 -11 8 -20 23 -20 33 0 10 -4 16 -9 13 -5 -3 -11 3 -14 14 -7
+28 -38 25 -65 -7z m269 -331 c123 -182 279 -414 347 -515 68 -100 126 -185
+128 -189 3 -5 -50 -8 -118 -8 l-124 0 -103 153 c-56 83 -159 238 -229 344 -70
+105 -129 192 -132 192 -5 0 -332 -482 -338 -497 -1 -4 115 -6 257 -4 l259 3
+65 -96 66 -95 -510 0 c-280 0 -509 2 -509 5 0 3 29 47 63 98 35 51 126 184
+202 297 76 113 205 303 287 424 81 120 148 223 148 229 0 17 5 11 241 -341z"/>
+<path class="l-fade" style="animation-delay: 1s" d="M4537 1357 c-3 -8 1 -14 8 -14 7 0 11 6 8 14 -3 7 -6 13 -8 13 -2 0
+-5 -6 -8 -13z"/>
+<path class="l-fade" style="animation-delay: 1s" d="M4451 1224 c0 -11 3 -14 6 -6 3 7 2 16 -1 19 -3 4 -6 -2 -5 -13z"/>
+<path class="l-fade" style="animation-delay: 1s" d="M4370 1121 c0 -6 4 -13 10 -16 6 -3 7 1 4 9 -7 18 -14 21 -14 7z"/>
+<path class="l-fade" style="animation-delay: 1s" d="M4781 1104 c0 -11 3 -14 6 -6 3 7 2 16 -1 19 -3 4 -6 -2 -5 -13z"/>
+<path class="l-fade" style="animation-delay: 1s" d="M4215 870 c-3 -5 -1 -10 4 -10 6 0 11 5 11 10 0 6 -2 10 -4 10 -3 0
+-8 -4 -11 -10z"/>
+<path class="l-fade" style="animation-delay: 1s" d="M5141 764 c0 -11 3 -14 6 -6 3 7 2 16 -1 19 -3 4 -6 -2 -5 -13z"/>
+<path class="l-fade" style="animation-delay: 1s" d="M1440 1435 c0 -5 5 -17 10 -25 5 -8 10 -10 10 -5 0 6 -5 17 -10 25
+-5 8 -10 11 -10 5z"/>
+<path class="l-fade" style="animation-delay: 1s" d="M1255 1319 c-4 -6 -5 -12 -2 -15 2 -3 7 2 10 11 7 17 1 20 -8 4z"/>
+<path class="l-fade" style="animation-delay: 1s" d="M1261 1274 c0 -11 3 -14 6 -6 3 7 2 16 -1 19 -3 4 -6 -2 -5 -13z"/>
+<path class="l-fade" style="animation-delay: 1s" d="M1186 1193 c-6 -14 -5 -15 5 -6 7 7 10 15 7 18 -3 3 -9 -2 -12 -12z"/>
+<path class="l-fade" style="animation-delay: 1s" d="M1216 1087 c3 -10 9 -15 12 -12 3 3 0 11 -7 18 -10 9 -11 8 -5 -6z"/>
+<path class="l-fade" style="animation-delay: 1s" d="M1224 1048 l-19 -23 23 19 c21 18 27 26 19 26 -2 0 -12 -10 -23 -22z"/>
+<path class="l-fade" style="animation-delay: 1s" d="M2528 853 c7 -3 16 -2 19 1 4 3 -2 6 -13 5 -11 0 -14 -3 -6 -6z"/>
+<path class="l-fade" style="animation-delay: 1s" d="M1850 795 c0 -7 30 -13 34 -7 3 4 -4 9 -15 9 -10 1 -19 0 -19 -2z"/>
+</g>
+</svg>
+      <div class="boot-tag">Adaptive Reasoning &amp; Intelligent Automation</div>
+      <div class="boot-bar"><span></span></div>
+      <div class="boot-status" id="bootStatus">Initializing ARIA systems…</div>
+    </div>
+  </div>
 
-  <div id="hud-container">
-    <!-- HUD Header -->
-    <div id="hud-header">
-      <div class="hud-title">
-        <div class="hud-status-badge"></div>
-        <strong>J.A.R.V.I.S.</strong>
+  <div class="scene" aria-hidden="true"></div>
+
+  <div id="app">
+    <!-- Left Sidebar -->
+    <aside id="sidebar">
+      <div class="brand">
+        <svg class="brand-outline" viewBox="0 0 600 214" role="img" aria-label="ARIA">
+<g transform="translate(0.000000,214.000000) scale(0.100000,-0.100000)"
+fill="#1E90FF" stroke="#1E90FF" stroke-width="8" stroke-linejoin="round" stroke-linecap="round">
+<path d="M1374 1597 c-32 -37 -64 -85 -64 -97 0 -6 -5 -8 -12 -4 -7 4 -8 3 -4
+-4 4 -7 3 -12 -3 -12 -5 0 -21 -18 -34 -40 -13 -22 -27 -37 -31 -33 -4 4 -5 1
+-1 -7 3 -8 -6 -27 -19 -41 -14 -15 -22 -30 -19 -33 4 -3 1 -6 -5 -6 -6 0 -14
+-9 -17 -20 -3 -11 -12 -26 -18 -33 -24 -25 -57 -76 -57 -87 0 -6 -4 -9 -9 -6
+-5 3 -12 -6 -16 -21 -5 -21 -8 -24 -16 -12 -7 11 -9 9 -9 -7 0 -12 -7 -27 -15
+-34 -8 -7 -15 -19 -15 -26 0 -8 -4 -14 -10 -14 -5 0 -16 -16 -25 -35 -9 -19
+-27 -46 -40 -60 -13 -14 -21 -25 -17 -25 4 0 2 -4 -4 -8 -6 -4 -21 -25 -33
+-47 -11 -22 -21 -36 -21 -30 0 5 -14 -13 -31 -41 -17 -27 -36 -52 -41 -55 -5
+-3 -9 -9 -9 -13 1 -7 -29 -57 -40 -66 -3 -3 -24 -33 -47 -66 -40 -60 -41 -62
+-22 -79 27 -24 238 -29 266 -6 24 20 84 106 84 120 0 6 4 11 8 11 9 0 102 138
+102 151 0 5 8 6 18 3 12 -4 13 -3 4 3 -9 7 -5 17 18 43 16 18 30 37 30 40 0 4
+9 17 20 30 11 13 20 29 20 37 0 7 4 13 8 13 5 0 17 15 27 34 11 19 23 32 28
+29 6 -3 7 -1 3 5 -4 6 2 19 13 29 11 9 18 20 15 25 -3 4 -1 8 4 8 5 0 17 16
+28 35 22 42 36 44 55 8 8 -16 24 -39 37 -53 12 -14 25 -33 28 -42 3 -10 10
+-18 16 -18 5 0 8 -5 6 -12 -2 -6 5 -21 16 -33 19 -20 84 -117 114 -171 7 -13
+18 -24 24 -24 6 0 8 -3 5 -7 -4 -3 1 -15 10 -26 17 -19 15 -19 -157 -17 -318
+4 -308 5 -343 -32 -16 -18 -34 -32 -39 -30 -5 1 -7 -2 -3 -8 6 -9 -29 -67 -50
+-82 -5 -4 -6 -8 -1 -8 5 0 2 -8 -8 -18 -15 -18 -15 -20 4 -37 20 -18 49 -19
+515 -20 468 -2 496 -1 511 16 13 14 14 22 5 32 -6 8 -8 17 -4 20 3 4 2 7 -4 7
+-5 0 -18 16 -29 35 -10 19 -22 35 -26 35 -5 0 -8 6 -8 14 0 7 -14 31 -31 52
+-17 22 -35 49 -40 62 -5 12 -13 22 -19 22 -6 0 -10 6 -8 13 2 7 -3 19 -10 27
+-47 55 -170 235 -166 241 3 5 0 9 -6 9 -6 0 -15 12 -20 26 -6 14 -26 46 -46
+70 -22 26 -33 48 -28 56 4 7 4 10 -1 6 -9 -9 -26 8 -42 42 -7 14 -25 41 -40
+59 -16 19 -21 31 -13 26 13 -8 13 -6 1 8 -7 9 -18 14 -25 10 -6 -3 -8 -2 -3 2
+4 5 -4 21 -19 36 -14 15 -26 31 -26 36 -1 17 -13 39 -35 63 -13 14 -23 30 -23
+36 0 12 -30 28 -37 20 -3 -3 19 -40 47 -83 29 -43 181 -269 338 -503 157 -234
+291 -432 299 -441 7 -8 13 -19 13 -22 0 -4 -227 -7 -505 -7 -278 0 -505 4
+-505 9 0 4 8 19 18 32 11 13 38 52 62 87 l43 63 261 -3 262 -3 -170 255 -171
+255 -135 -200 c-74 -111 -180 -267 -235 -348 l-100 -146 -122 -1 c-68 0 -123
+2 -123 5 0 3 19 33 43 68 24 34 83 121 132 192 185 272 311 455 412 600 82
+118 136 205 131 211 -3 2 -13 -6 -24 -19z"/>
+<path d="M2323 1612 c-65 -2 -105 -7 -111 -15 -6 -7 -12 -56 -13 -110 -2 -77
+0 -100 12 -108 16 -10 92 -12 484 -10 344 2 369 -2 408 -62 51 -77 29 -159
+-51 -191 -40 -17 -78 -19 -438 -18 -387 0 -395 0 -405 -20 -15 -28 -12 -523 3
+-547 9 -15 24 -17 107 -14 64 2 100 8 109 17 10 10 14 53 15 172 l2 159 168
+-2 168 -2 57 -59 c31 -32 64 -67 73 -78 9 -10 26 -26 37 -34 12 -8 22 -21 22
+-29 0 -8 3 -12 6 -9 3 4 22 -12 42 -35 57 -64 59 -66 66 -60 3 4 6 1 6 -6 0
+-7 17 -19 37 -28 29 -12 63 -14 156 -10 66 3 124 10 130 16 13 13 17 52 5 45
+-4 -3 -8 -1 -8 4 0 6 -31 42 -70 81 -38 38 -70 75 -70 81 0 5 -6 9 -12 7 -7
+-1 -12 4 -11 11 2 6 -2 12 -8 12 -16 0 -101 90 -96 103 2 7 19 17 37 23 46 15
+133 103 164 164 35 69 51 185 34 249 -15 60 -68 159 -99 185 -18 16 -24 26
+-16 29 7 3 4 6 -6 6 -11 1 -28 11 -39 24 -11 12 -17 16 -13 9 4 -8 -6 -5 -27
+6 -73 41 -99 44 -431 45 -177 1 -368 1 -424 -1z m821 -51 c75 -30 148 -101
+184 -179 24 -50 27 -69 27 -152 -1 -76 -5 -105 -22 -142 -41 -88 -120 -157
+-220 -192 l-33 -11 173 -173 172 -173 -162 1 c-123 1 -161 5 -157 14 3 7 -12
+28 -33 48 -21 19 -94 92 -162 162 l-124 126 -184 0 -183 0 0 -175 0 -175 -100
+0 -100 0 0 268 0 267 408 0 c376 0 410 1 444 19 101 50 110 200 16 268 l-33
+23 -417 3 -418 3 0 100 0 100 433 -3 c429 -3 432 -3 491 -27z"/>
+<path d="M3209 993 c-13 -16 -12 -17 4 -4 9 7 17 15 17 17 0 8 -8 3 -21 -13z"/>
+<path d="M3631 1610 c-18 -5 -37 -14 -42 -22 -11 -16 -12 -1028 -1 -1044 16
+-25 53 -33 128 -30 124 6 114 -43 114 561 -1 436 -3 515 -15 525 -18 15 -136
+21 -184 10z m174 -545 l0 -525 -102 0 -103 0 0 525 0 525 103 0 102 0 0 -525z"/>
+<path d="M4602 1583 c-12 -16 -53 -75 -92 -133 -38 -58 -83 -123 -99 -145 -17
+-22 -51 -75 -77 -117 -26 -43 -52 -78 -56 -78 -5 0 -16 -15 -24 -32 -14 -30
+-50 -86 -73 -114 -5 -7 -7 -15 -4 -18 4 -3 1 -6 -4 -6 -6 0 -26 -24 -43 -52
+-18 -29 -38 -56 -44 -60 -6 -4 -7 -8 -2 -8 5 0 0 -10 -11 -22 -11 -13 -30 -40
+-42 -61 -13 -20 -31 -42 -42 -47 -10 -6 -19 -16 -19 -23 0 -7 4 -6 10 3 6 9
+10 10 10 3 0 -7 -6 -16 -13 -20 -7 -4 -25 -28 -41 -52 -35 -55 -27 -73 35 -82
+24 -4 250 -6 501 -5 349 1 460 4 469 13 22 22 19 46 -9 83 -44 56 -72 100 -65
+100 3 0 -6 9 -20 20 -24 19 -44 21 -234 25 -114 3 -214 1 -222 -4 -7 -5 -22
+-6 -32 -4 -18 5 -18 6 2 32 50 65 109 149 109 155 0 6 42 72 85 133 9 13 15
+24 13 25 -1 2 9 14 23 28 14 14 30 34 36 45 11 19 12 19 32 -5 11 -14 21 -29
+21 -35 0 -5 14 -25 31 -43 16 -17 27 -37 24 -42 -3 -6 -2 -10 3 -10 6 0 22
+-20 36 -45 15 -25 31 -45 36 -45 5 0 6 -7 3 -17 -4 -11 -3 -14 5 -9 7 4 12 1
+12 -8 0 -8 9 -20 20 -26 11 -6 19 -14 16 -18 -2 -4 9 -25 25 -47 15 -22 38
+-57 49 -77 11 -21 25 -38 30 -38 5 0 6 -7 3 -17 -4 -10 -2 -14 4 -10 13 8 26
+-20 16 -35 -3 -7 -1 -8 5 -4 7 4 23 -11 42 -40 46 -73 62 -80 189 -79 98 0
+112 2 125 20 13 18 13 23 -4 53 -11 18 -24 38 -30 45 -32 38 -55 73 -57 86 -1
+9 -13 26 -27 37 -14 12 -23 24 -21 26 2 2 -18 34 -46 71 -27 37 -49 72 -49 77
+0 6 -5 10 -11 10 -5 0 -7 5 -4 10 3 6 3 10 -2 10 -4 0 -24 24 -43 54 -19 30
+-38 52 -42 50 -4 -3 -5 1 -3 8 3 8 -6 25 -20 38 -14 13 -25 29 -25 35 0 7 -9
+20 -20 30 -11 10 -20 24 -20 32 0 7 -4 13 -9 13 -5 0 -25 28 -45 63 -19 34
+-46 75 -60 91 -15 16 -26 34 -26 40 0 6 -14 25 -30 43 -17 18 -30 38 -30 45 0
+8 -9 20 -20 28 -11 8 -20 23 -20 33 0 10 -4 16 -9 13 -5 -3 -11 3 -14 14 -7
+28 -38 25 -65 -7z m269 -331 c123 -182 279 -414 347 -515 68 -100 126 -185
+128 -189 3 -5 -50 -8 -118 -8 l-124 0 -103 153 c-56 83 -159 238 -229 344 -70
+105 -129 192 -132 192 -5 0 -332 -482 -338 -497 -1 -4 115 -6 257 -4 l259 3
+65 -96 66 -95 -510 0 c-280 0 -509 2 -509 5 0 3 29 47 63 98 35 51 126 184
+202 297 76 113 205 303 287 424 81 120 148 223 148 229 0 17 5 11 241 -341z"/>
+<path d="M4537 1357 c-3 -8 1 -14 8 -14 7 0 11 6 8 14 -3 7 -6 13 -8 13 -2 0
+-5 -6 -8 -13z"/>
+<path d="M4451 1224 c0 -11 3 -14 6 -6 3 7 2 16 -1 19 -3 4 -6 -2 -5 -13z"/>
+<path d="M4370 1121 c0 -6 4 -13 10 -16 6 -3 7 1 4 9 -7 18 -14 21 -14 7z"/>
+<path d="M4781 1104 c0 -11 3 -14 6 -6 3 7 2 16 -1 19 -3 4 -6 -2 -5 -13z"/>
+<path d="M4215 870 c-3 -5 -1 -10 4 -10 6 0 11 5 11 10 0 6 -2 10 -4 10 -3 0
+-8 -4 -11 -10z"/>
+<path d="M5141 764 c0 -11 3 -14 6 -6 3 7 2 16 -1 19 -3 4 -6 -2 -5 -13z"/>
+<path d="M1440 1435 c0 -5 5 -17 10 -25 5 -8 10 -10 10 -5 0 6 -5 17 -10 25
+-5 8 -10 11 -10 5z"/>
+<path d="M1255 1319 c-4 -6 -5 -12 -2 -15 2 -3 7 2 10 11 7 17 1 20 -8 4z"/>
+<path d="M1261 1274 c0 -11 3 -14 6 -6 3 7 2 16 -1 19 -3 4 -6 -2 -5 -13z"/>
+<path d="M1186 1193 c-6 -14 -5 -15 5 -6 7 7 10 15 7 18 -3 3 -9 -2 -12 -12z"/>
+<path d="M1216 1087 c3 -10 9 -15 12 -12 3 3 0 11 -7 18 -10 9 -11 8 -5 -6z"/>
+<path d="M1224 1048 l-19 -23 23 19 c21 18 27 26 19 26 -2 0 -12 -10 -23 -22z"/>
+<path d="M2528 853 c7 -3 16 -2 19 1 4 3 -2 6 -13 5 -11 0 -14 -3 -6 -6z"/>
+<path d="M1850 795 c0 -7 30 -13 34 -7 3 4 -4 9 -15 9 -10 1 -19 0 -19 -2z"/>
+</g>
+</svg>
+        <div class="brand-text">
+          <span>Adaptive Reasoning &amp; Intelligent Automation</span>
+        </div>
       </div>
 
-      <div class="header-actions">
-        <button class="btn-toggle" id="settingsBtn" style="position: relative;" title="Settings">
-          ⚙ SETTINGS
+      <nav class="nav" aria-label="Primary">
+        <button class="nav-item active" data-view="home">
+          <svg viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5M5.5 10.5V20h13v-9.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Home</span>
+        </button>
+        <button class="nav-item" data-view="chat">
+          <svg viewBox="0 0 24 24"><path d="M4 6h16v10H9l-5 4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          <span>Chat</span>
+        </button>
+        <button class="nav-item" data-view="tasks">
+          <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m8.5 12.5 2.5 2.5 5-5.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Tasks</span>
+        </button>
+        <button class="nav-item" data-view="calendar">
+          <svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M4 10h16M8.5 3v4M15.5 3v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          <span>Calendar</span>
+        </button>
+        <button class="nav-item" data-view="memory">
+          <svg viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7z M15 3v4h4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="13" r="2.4" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 15.4V18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          <span>Memory</span>
+        </button>
+        <button class="nav-item" data-view="devices">
+          <svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="12" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9.5 20.5h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          <span>Devices</span>
+        </button>
+        <button class="nav-item" data-view="skills">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2.8v3M12 18.2v3M2.8 12h3M18.2 12h3M5.5 5.5l2.1 2.1M16.4 16.4l2.1 2.1M18.5 5.5l-2.1 2.1M7.6 16.4l-2.1 2.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          <span>Skills</span>
+        </button>
+      </nav>
+
+      <div class="side-shortcuts">
+        <button class="side-shortcut" id="sideCameraBtn">
+          <svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="13.5" r="3.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8.5 7 10 4.5h4L15.5 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          <span>Camera</span>
+        </button>
+        <button class="btn-harness side-shortcut" data-query="check my email">
+          <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m4.5 7.5 7.5 6 7.5-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Check Email</span>
+        </button>
+        <button class="btn-harness side-shortcut" data-query="open spotify">
+          <svg viewBox="0 0 24 24"><circle cx="6" cy="18" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="18" cy="16" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9 18V5l12-2v13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Spotify</span>
+        </button>
+        <button class="btn-harness side-shortcut" data-query="What's the weather here">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          <span>Weather Here</span>
+        </button>
+        <button class="side-shortcut" data-goto="devices">
+          <svg viewBox="0 0 24 24"><path d="M9 4 4 6v14l5-2 6 2 5-2V4l-5 2-6-2ZM9 4v14M15 6v14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          <span>Map & Devices</span>
+        </button>
+      </div>
+
+      <div class="side-bottom">
+        <button class="nav-item" id="settingsBtn" title="Settings">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19 12a7 7 0 0 0-.14-1.4l2-1.55-2-3.46-2.35.94A7 7 0 0 0 14.1 5.1L13.75 2.6h-3.5L9.9 5.1a7 7 0 0 0-2.42 1.4l-2.35-.94-2 3.46 2 1.55a7 7 0 0 0 0 2.8l-2 1.55 2 3.46 2.35-.94a7 7 0 0 0 2.42 1.4l.35 2.5h3.5l.35-2.5a7 7 0 0 0 2.42-1.4l2.35.94 2-3.46-2-1.55c.1-.46.14-.93.14-1.4Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+          <span>Settings</span>
           <span class="settings-update-badge" id="settingsUpdateBadge"></span>
         </button>
 
-        <button class="btn-toggle" id="muteBtn" style="border-color: var(--border-gold); color: var(--gold-glow);" title="Toggle Voice Output">
-          🔊 VOICE: ON
-        </button>
-
-        <div class="status-badge" id="statusBadge">
-          <div class="status-dot" id="statusDot"></div>
-          <span id="statusText">SYSTEM ONLINE</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Model Tier Bar (designated space for the Quick→Ultra slider) -->
-    <div class="tier-bar">
-      <span class="tier-bar-icon">🧠</span>
-      <div class="tier-control-track">
-        <input type="range" id="tierSlider" class="tier-slider" min="0" max="3" step="1" value="0" disabled />
-        <div class="tier-control-ticks">
-          <span>Quick</span><span>Medium</span><span>High</span><span>Ultra</span>
-        </div>
-      </div>
-      <span class="tier-control-label" id="tierControlLabel">Add Groq or Gemini key</span>
-    </div>
-
-    <!-- Main Viewport Stage -->
-    <div id="central-stage">
-      <!-- Left Utilities Dock -->
-      <div id="widget-dock">
-        <div class="hud-card collapsed" id="card-swarm" data-click-toggle>
-          <div class="hud-card-header">
-            <span>🛡️ SWARM TELEMETRY</span>
-            <div class="card-controls">
-              <span class="agent-badge">6 AGENTS</span>
-              <button class="window-btn" data-toggle="collapse" title="Minimize">▁</button>
-              <button class="window-btn" data-toggle="maximize" title="Maximize">▢</button>
-            </div>
+        <div class="side-card status-card">
+          <div class="status-row">
+            <div class="status-dot" id="statusDot"></div>
+            <span id="statusText">SYSTEM ONLINE</span>
           </div>
-          <div class="hud-card-body">
-            <div class="swarm-list" id="swarmList">
-              <!-- Swarm agent cards dynamically populated by JS -->
-            </div>
-            <div class="swarm-meta-box">
-              <div class="swarm-meta-title">SWARM ARCHITECTURE: 6-AGENT MESH</div>
-              <div class="swarm-meta-body">
-                Topology: Collaborative Swarm<br>
-                Autonomous Reasoner: Active<br>
-                Consensus: Byzantine (ADR-324)<br>
-                Steam Protocol: Enabled
+          <div class="status-sub">Local mode · Privacy first</div>
+        </div>
+
+        <div class="quote-card" id="quoteCard">
+          <p id="quoteText">Small steps every day lead to big results.</p>
+          <span id="quoteAuthor">— ARIA</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Column -->
+    <main id="main">
+      <header id="topbar">
+        <div class="top-search" id="topSearch" title="Type a command, Enter to send">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m16 16 5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          <input type="text" class="top-search-input" id="textInput" placeholder="Ask ARIA anything..." autocomplete="off" />
+        </div>
+        <div class="top-actions">
+          <button class="icon-btn" id="stopBtn" title="Stop current task">
+            <svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor"/></svg>
+          </button>
+          <button class="btn-toggle top-mute" id="muteBtn" title="Toggle Voice Output">🔊 VOICE: ON</button>
+          <div class="avatar-wrap">
+            <button class="avatar" id="avatarBtn" title="Account">A</button>
+            <div class="avatar-menu" id="avatarMenu" role="menu" aria-label="Account">
+              <div class="avatar-menu-head">
+                <div class="avatar avatar-sm">A</div>
+                <div>
+                  <div class="avatar-name">Avanish</div>
+                  <div class="avatar-sub">Local mode · <span id="avatarVersion">ARIA</span></div>
+                </div>
               </div>
+              <button class="avatar-item" id="avatarSettingsBtn" role="menuitem">⚙️ Settings</button>
+              <button class="avatar-item" id="avatarRestartBtn" role="menuitem">↻ Restart Interface</button>
             </div>
           </div>
         </div>
+      </header>
 
-        <div class="hud-card" id="card-steam" data-click-toggle>
-          <div class="hud-card-header">
-            <span>🎮 STEAM LAUNCHER HARNESS</span>
-            <div class="card-controls">
-              <button class="btn-toggle" id="launchSteamBtn" title="Open Steam">OPEN STEAM 🚀</button>
-              <button class="window-btn" data-toggle="collapse" title="Minimize">▁</button>
-              <button class="window-btn" data-toggle="maximize" title="Maximize">▢</button>
-            </div>
+      <!-- HOME VIEW -->
+      <section class="view active" id="view-home">
+        <div class="sphere-stage" id="sphereStage">
+          <canvas id="neuralSphere"></canvas>
+          <div class="greeting sphere-greeting">
+            <h1 id="greetingTitle">Good evening, Avanish.</h1>
+            <p id="greetingSub">I'm here, and I've got a few things for you.</p>
           </div>
-          <div class="hud-card-body">
+        </div>
+
+      </section>
+
+      <!-- CHAT VIEW -->
+      <section class="view" id="view-chat">
+        <div class="view-head">
+          <h2>Chat</h2>
+          <p>Every command and response, in one place.</p>
+        </div>
+        <div class="terminal-box chat-terminal" id="terminalBox">
+          <div class="log-entry ARIA">[SYSTEM INITIALIZED] ARIA Voice Core online.</div>
+          <div class="log-entry SUCCESS">[HARNESS READY] Google search &amp; Steam automation active.</div>
+          <div class="log-entry HARNESS">[AUTONOMOUS REASONER] Proactive intent classifier initialized.</div>
+        </div>
+      </section>
+
+      <!-- TASKS VIEW -->
+      <section class="view" id="view-tasks">
+        <div class="view-head">
+          <h2>Tasks</h2>
+          <p>Kept on this device, no account needed.</p>
+        </div>
+        <div class="tasks-add">
+          <input type="text" class="text-input" id="taskInput" placeholder="Add a task, Sir..." />
+          <button class="btn-toggle" id="taskAddBtn">ADD</button>
+        </div>
+        <div id="tasksList" class="tasks-list"></div>
+      </section>
+
+      <!-- CALENDAR VIEW -->
+      <section class="view" id="view-calendar">
+        <div class="view-head">
+          <h2>Calendar</h2>
+          <p>Reads your Google Calendar when connected — never writes without asking.</p>
+        </div>
+        <div id="calConnectHint" class="empty-hint" style="display: none;">
+          Connect your Google account in Settings to see events here.
+          <button class="btn-toggle" data-goto="settings">OPEN SETTINGS</button>
+        </div>
+        <div class="row-actions">
+          <button class="btn-toggle" id="calRefreshBtn">REFRESH EVENTS</button>
+          <button class="btn-toggle btn-harness" data-query="Schedule a meeting called Standup for tomorrow at 9am">+ NEW EVENT</button>
+        </div>
+        <div id="calList" class="cal-list"></div>
+      </section>
+
+      <!-- MEMORY VIEW -->
+      <section class="view" id="view-memory">
+        <div class="view-head">
+          <h2>Memory</h2>
+          <p>Notes you've asked ARIA to remember, stored privately on this device.</p>
+        </div>
+        <div class="row-actions">
+          <button class="btn-toggle" id="notesRefreshBtn">REFRESH NOTES</button>
+          <button class="btn-toggle btn-harness" data-query="What notes are saved">ASK ARIA TO RECALL</button>
+        </div>
+        <div id="notesList" class="notes-list"></div>
+      </section>
+
+      <!-- DEVICES VIEW -->
+      <section class="view" id="view-devices">
+        <div class="view-head">
+          <h2>Devices</h2>
+          <p>Connected accounts, camera, location, and live harness output.</p>
+        </div>
+
+        <div class="device-grid">
+          <div class="panel">
+            <div class="panel-head"><span>🎮 STEAM LAUNCHER HARNESS</span>
+              <button class="btn-toggle" id="launchSteamBtn" title="Open Steam">OPEN STEAM 🚀</button>
+            </div>
             <div class="steam-setup-box" id="steamSetupBox">
               <div class="steam-setup-title">🔑 CONNECT STEAM LIBRARY</div>
               <div class="steam-setup-hint">
@@ -98,147 +427,93 @@
               <input type="password" id="steamApiKeyInput" class="steam-input" placeholder="Steam Web API Key" autocomplete="off" />
               <input type="text" id="steamIdInput" class="steam-input" placeholder="Steam ID (17-digit number)" autocomplete="off" />
               <div style="display: flex; gap: 8px;">
-                <button class="btn-steam-save" id="steamSaveBtn">SAVE & LOAD LIBRARY</button>
+                <button class="btn-steam-save" id="steamSaveBtn">SAVE &amp; LOAD LIBRARY</button>
                 <button class="btn-steam-clear" id="steamClearBtn">CLEAR</button>
               </div>
               <div class="steam-library-status" id="steamLibraryStatus">Not connected</div>
             </div>
-
-            <div class="steam-games-grid" id="steamGamesGrid">
-              <!-- Game cards populated by JS -->
-            </div>
+            <div class="steam-games-grid" id="steamGamesGrid"></div>
           </div>
-        </div>
 
-        <div class="hud-card collapsed" id="card-location" data-click-toggle>
-          <div class="hud-card-header">
-            <span>🛰️ LOCATION</span>
-            <div class="card-controls">
-              <button class="window-btn" data-toggle="collapse" title="Minimize">▁</button>
-              <button class="window-btn" data-toggle="maximize" title="Maximize">▢</button>
+          <div class="panel">
+            <div class="panel-head"><span>📷 CAMERA VISION HARNESS</span>
+              <button class="btn-toggle" id="cameraToggleBtn" title="Toggle camera feed">OPEN CAMERA 📷</button>
             </div>
+            <div class="camera-viewport" id="cameraViewport">
+              <video class="camera-video" id="cameraVideo" autoplay playsinline muted></video>
+              <canvas class="camera-overlay-canvas" id="cameraOverlayCanvas"></canvas>
+            </div>
+            <div class="steam-library-status" id="cameraStatus">Camera inactive — say "open camera" or click OPEN CAMERA</div>
           </div>
-          <div class="hud-card-body">
+
+          <div class="panel">
+            <div class="panel-head"><span>🛰️ LOCATION</span></div>
             <div class="location-map" id="locationMap"></div>
             <div class="steam-library-status" id="locationStatus">Acquiring your position...</div>
           </div>
-        </div>
-      </div>
 
-      <!-- Central Arc Reactor Focus -->
-      <div id="reactor-wrapper" class="arc-reactor-container">
-        <div class="spoken-line" id="spokenLine"></div>
-
-        <div id="reactor-target">
-          <div class="ring outer"></div>
-          <div class="ring middle"></div>
-          <div class="ring inner"></div>
-          <div class="ring core" id="reactor-core"></div>
-          <canvas id="visualizerCanvas" width="280" height="280"></canvas>
-        </div>
-
-        <div class="speech-meter" id="speechMeter" title="Voice output meter — reacts to JARVIS's speech cadence, not a literal decibel reading">
-          <div class="speech-meter-bar"></div>
-          <div class="speech-meter-bar"></div>
-          <div class="speech-meter-bar"></div>
-          <div class="speech-meter-bar"></div>
-          <div class="speech-meter-bar"></div>
-          <div class="speech-meter-bar"></div>
-          <div class="speech-meter-bar"></div>
-          <div class="speech-meter-bar"></div>
-        </div>
-
-        <div id="status-display" class="hud-status-display">SYSTEM ONLINE</div>
-
-        <div class="voice-controls">
-          <button class="mic-button" id="micBtn" title="Click to pause/resume wake-word listening">
-            🎙️
-          </button>
-
-          <div class="transcript-display" id="transcriptDisplay">
-            Say "Jarvis" or "Hey Jarvis" to wake me, then give your command...
-          </div>
-
-          <div class="input-bar">
-            <input type="text" class="text-input" id="textInput" placeholder="Ask JARVIS, search Google, or command Steam..." />
-            <button class="btn-toggle" id="sendBtn">EXECUTE</button>
-          </div>
-
-          <!-- Quick Action Harness Bar -->
-          <div class="quick-harness-bar">
-            <button class="btn-harness" data-query="Search Google for quantum computing">🔍 Google Quantum</button>
-            <button class="btn-harness" data-query="Play Counter-Strike">🔫 Play Counter-Strike</button>
-            <button class="btn-harness" data-query="Open Steam">🎮 Open Steam</button>
-            <button class="btn-harness" data-query="Search Google for AI Swarms">🐝 Search Swarms</button>
-            <button class="btn-harness" data-query="Play Cyberpunk 2077">🤖 Play Cyberpunk</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Right Console & Viewport -->
-      <div id="console-dock">
-        <div class="hud-card" id="card-console" data-click-toggle>
-          <div class="hud-card-header">
-            <span>💻 SYSTEM CONSOLE</span>
-            <div class="card-controls">
+          <div class="panel">
+            <div class="panel-head"><span id="viewportTitle">🌐 GOOGLE HARNESS VIEWPORT</span>
               <span style="font-family: var(--font-mono); font-size: 0.6rem; color: var(--text-dim);" id="tabsOpenedCount">TABS OPENED: 0</span>
-              <button class="window-btn" data-toggle="collapse" title="Minimize">▁</button>
-              <button class="window-btn" data-toggle="maximize" title="Maximize">▢</button>
-            </div>
-          </div>
-          <div class="hud-card-body">
-            <div class="terminal-box" id="terminalBox">
-              <div class="log-entry JARVIS">[SYSTEM INITIALIZED] JARVIS Voice Core online.</div>
-              <div class="log-entry SUCCESS">[HARNESS READY] Google search & Steam automation active.</div>
-              <div class="log-entry HARNESS">[AUTONOMOUS REASONER] Proactive intent classifier initialized.</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="hud-card harness-viewport" id="card-viewport" data-click-toggle>
-          <div class="hud-card-header">
-            <span id="viewportTitle">🌐 GOOGLE HARNESS VIEWPORT</span>
-            <div class="card-controls">
               <a href="#" id="viewportExternalLink" target="_blank" style="color: var(--cyan-bright); text-decoration: none; display: none;">OPEN TAB ↗</a>
-              <button class="window-btn" data-toggle="collapse" title="Minimize">▁</button>
-              <button class="window-btn" data-toggle="maximize" title="Maximize">▢</button>
             </div>
-          </div>
-          <div class="hud-card-body">
             <div class="viewport-placeholder" id="viewportPlaceholder">
               <div style="font-size: 2.2rem;">🌐</div>
               <div>Google Search Viewport Standby</div>
               <div style="font-size: 0.7rem; color: var(--text-dim);">
-                Speak or ask JARVIS to search for anything to view live web output here.
+                Speak or ask ARIA to search for anything to view live web output here.
               </div>
             </div>
             <iframe class="viewport-content" id="viewportFrame" style="display: none;" src="about:blank"></iframe>
           </div>
         </div>
-      </div>
+      </section>
 
-      <!-- Floating Camera Window (bottom right) -->
-      <div class="hud-card camera-float" id="card-camera" data-click-toggle>
-        <div class="hud-card-header">
-          <span>📷 CAMERA VISION HARNESS</span>
-          <div class="card-controls">
-            <button class="btn-toggle" id="cameraToggleBtn" title="Toggle camera feed">OPEN CAMERA 📷</button>
-            <button class="window-btn" data-toggle="collapse" title="Minimize">▁</button>
-            <button class="window-btn" data-toggle="maximize" title="Maximize">▢</button>
-          </div>
+      <!-- SKILLS VIEW -->
+      <section class="view" id="view-skills">
+        <div class="view-head">
+          <h2>Skills</h2>
+          <p>Every capability ARIA can reach for, and the swarm behind them.</p>
         </div>
-        <div class="hud-card-body">
-          <div class="camera-viewport" id="cameraViewport">
-            <video class="camera-video" id="cameraVideo" autoplay playsinline muted></video>
-            <canvas class="camera-overlay-canvas" id="cameraOverlayCanvas"></canvas>
+        <div class="tier-bar">
+          <span class="tier-bar-icon">🧠</span>
+          <div class="tier-control-track">
+            <input type="range" id="tierSlider" class="tier-slider" min="0" max="3" step="1" value="0" disabled />
+            <div class="tier-control-ticks">
+              <span>Quick</span><span>Medium</span><span>High</span><span>Ultra</span>
+            </div>
           </div>
-          <div class="steam-library-status" id="cameraStatus">Camera inactive — say "open camera" or click OPEN CAMERA</div>
+          <span class="tier-control-label" id="tierControlLabel">Add Groq or Gemini key</span>
         </div>
-      </div>
-    </div>
+        <div id="skillsGrid" class="skills-grid"></div>
+        <h3 class="sub-head">Swarm telemetry</h3>
+        <div class="swarm-list" id="swarmList"></div>
+      </section>
 
-    <!-- Window backdrop shown when a hud-card is maximized -->
-    <div id="window-backdrop"></div>
+    </main>
+
+    <!-- Right Rail -->
+    <aside id="rail">
+      <div class="rail-card">
+        <div class="rail-head"><span>📅 <b id="todayTitle">Today</b></span><span class="rail-date" id="todayDate"></span><span class="rail-more" data-goto="calendar">›</span></div>
+        <div id="todayList" class="today-list"><div class="empty-note">No events yet today.</div></div>
+      </div>
+      <div class="rail-card">
+        <div class="rail-head"><span>📝 <b>Recent Activity</b></span><span class="rail-more" data-goto="chat">View all</span></div>
+        <div id="activityList" class="activity-list"></div>
+      </div>
+      <div class="rail-card">
+        <div class="rail-head"><span>🖥️ <b>Connected Devices</b></span><span class="rail-more" data-goto="devices">View all</span></div>
+        <div id="devicesList" class="devices-list"></div>
+      </div>
+      <div class="rail-card">
+        <div class="rail-head"><span>⚙️ <b>System Status</b></span></div>
+        <div class="sys-row"><span>🧠 Local LLM</span><span class="sys-ok"><i class="dot"></i><b id="sysProvider">Starting…</b></span></div>
+        <div class="sys-row"><span>👁 Internet</span><span class="sys-ok"><i class="dot"></i><b id="sysNet">Checking…</b></span></div>
+        <div class="sys-row"><span>🎙️ Voice</span><span class="sys-ok"><i class="dot"></i><b id="sysMic">Standby</b></span></div>
+        <div class="sys-row"><span>💾 Storage</span><span class="storage-bar"><span id="sysStorageFill"></span></span><b id="sysStorageText"></b></div>
+      </div>
+    </aside>
   </div>
 
   <!-- Settings Modal -->
@@ -246,12 +521,16 @@
     <div class="settings-backdrop" id="settingsBackdrop"></div>
     <div class="settings-panel">
       <div class="settings-panel-header">
-        <span class="panel-title">⚙️ JARVIS Settings</span>
+        <span class="panel-title">⚙️ ARIA Settings</span>
         <button class="settings-close-btn" id="settingsCloseBtn" title="Close">✕</button>
       </div>
 
       <div class="settings-section">
         <div class="settings-section-title">General</div>
+        <label class="settings-row">
+          <span>Display name</span>
+          <input type="text" id="userNameInput" class="steam-input" placeholder="Avanish" autocomplete="off" style="max-width: 200px;" />
+        </label>
         <label class="settings-row">
           <span>Open browser tab when searching Google</span>
           <input type="checkbox" id="openTabToggle" class="settings-switch" />
@@ -280,7 +559,7 @@
       <div class="settings-section">
         <div class="settings-section-title">Voice Output Meter</div>
         <label class="settings-row">
-          <span>Show meter while JARVIS is speaking</span>
+          <span>Show meter while ARIA is speaking</span>
           <input type="checkbox" id="soundMeterToggle" class="settings-switch" />
         </label>
         <div class="settings-hint">
@@ -304,9 +583,9 @@
           <a href="https://products.wolframalpha.com/api" target="_blank">Get a WolframAlpha AppID</a>
           (optional, grounds math answers in a real computation) ·
           <a href="https://developer.spotify.com/dashboard" target="_blank">Get Spotify Client ID/Secret</a>
-          (optional, lets JARVIS play the exact song instead of just opening search) ·
+          (optional, lets ARIA play the exact song instead of just opening search) ·
           <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Get a Google Client ID/Secret</a>
-          (optional, lets JARVIS check/search/read your Gmail — see Google Account below)
+          (optional, lets ARIA check/search/read your Gmail — see Google Account below)
         </div>
         <input type="password" id="openrouterKeyInput" class="steam-input" placeholder="OpenRouter API Key" autocomplete="off" />
         <input type="password" id="groqKeyInput" class="steam-input" placeholder="Groq API Key (optional, get one at console.groq.com/keys)" autocomplete="off" />
@@ -317,7 +596,7 @@
         <input type="password" id="spotifyClientSecretInput" class="steam-input" placeholder="Spotify Client Secret (optional)" autocomplete="off" />
         <input type="password" id="googleClientIdInput" class="steam-input" placeholder="Google Client ID (optional, console.cloud.google.com/apis/credentials)" autocomplete="off" />
         <input type="password" id="googleClientSecretInput" class="steam-input" placeholder="Google Client Secret (optional)" autocomplete="off" />
-        <div class="settings-hint">Restart JARVIS after adding/changing the Deepgram key to activate it.</div>
+        <div class="settings-hint">Restart ARIA after adding/changing the Deepgram key to activate it.</div>
         <button class="btn-steam-save" id="apiKeysSaveBtn">SAVE KEYS</button>
         <div class="steam-library-status" id="apiKeysStatus"></div>
       </div>
@@ -325,7 +604,7 @@
       <div class="settings-section" id="spotifyAccountSection" style="display: none;">
         <div class="settings-section-title">🎵 Spotify Account</div>
         <div class="settings-hint">
-          Connect your own Spotify account so JARVIS can play your saved playlists and
+          Connect your own Spotify account so ARIA can play your saved playlists and
           albums by name (e.g. "play my Chill playlist") and your Liked Songs. Requires a
           Spotify Client ID/Secret above, and this exact Redirect URI added under your
           app's settings on the
@@ -342,7 +621,7 @@
       <div class="settings-section" id="googleAccountSection" style="display: none;">
         <div class="settings-section-title">📧 Google Account</div>
         <div class="settings-hint">
-          Connect your Google account so JARVIS can check, search, and read your Gmail
+          Connect your Google account so ARIA can check, search, and read your Gmail
           (e.g. "check my email", "read me the email from Sarah") and list, search, and
           create events on your Google Calendar (e.g. "what's on my calendar", "schedule
           a meeting called Standup for tomorrow at 9am"). Requires a Google Client
@@ -350,7 +629,7 @@
           "Authorized redirect URIs" for that OAuth client in the
           <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console</a>:
           <code>http://127.0.0.1:43418/callback</code>
-          Gmail stays read-only — JARVIS can never send, delete, or modify your mailbox.
+          Gmail stays read-only — ARIA can never send, delete, or modify your mailbox.
           If you connected your account before Calendar support shipped, disconnect and
           reconnect once (Settings → Google Account) so the new Calendar scope takes effect.
         </div>
@@ -376,70 +655,22 @@
     </div>
   </div>
 
-  <!-- Window controls: collapse / maximize every hud-card like a browser tab -->
   <script>
-    (function () {
-      var BACKDROP = 'window-backdrop';
-
-      function allCards() {
-        return Array.from(document.querySelectorAll('#widget-dock .hud-card, #console-dock .hud-card, .camera-float'));
-      }
-
-      function syncBackdrop() {
-        var body = document.body;
-        var anyMax = allCards().some(function (c) { return c.classList.contains('maximized'); });
-        body.classList.toggle('has-maximized', anyMax);
-        var bd = document.getElementById(BACKDROP);
-        if (bd) bd.classList.toggle('visible', anyMax);
-      }
-
-      function minimizeCard(card) {
-        card.classList.add('collapsed');
-        card.classList.remove('maximized');
-      }
-
-      function toggleCard(card, action) {
-        if (!card) return;
-        if (action === 'collapse') {
-          card.classList.toggle('collapsed');
-          if (card.classList.contains('maximized')) card.classList.remove('maximized');
-        } else if (action === 'maximize') {
-          // Exclusive maximize: any other maximized window is minimized first
-          // so two floating windows never overlap.
-          allCards().forEach(function (c) {
-            if (c !== card && c.classList.contains('maximized')) minimizeCard(c);
-          });
-          card.classList.remove('collapsed');
-          card.classList.toggle('maximized');
-        }
-        syncBackdrop();
-      }
-
-      document.addEventListener('click', function (e) {
-        var toggle = e.target.closest('[data-toggle]');
-        if (toggle) {
-          e.stopPropagation();
-          toggleCard(toggle.closest('.hud-card'), toggle.getAttribute('data-toggle'));
-          return;
-        }
-        var card = e.target.closest('[data-click-toggle]');
-        if (card && !e.target.closest('button, a, input, iframe, select, .window-btn, .card-controls')) {
-          if (card.classList.contains('maximized')) return;
-          card.classList.toggle('collapsed');
-          syncBackdrop();
-        }
-      });
-
-      // Clicking the backdrop un-maximizes the floating window.
-      document.addEventListener('click', function (e) {
-        if (e.target.id === BACKDROP) {
-          allCards().forEach(function (c) { c.classList.remove('maximized'); });
-          syncBackdrop();
-        }
-      });
-    })();
+    // Boot-screen timing: guarantees a minimum 1.4s showcase, then fades.
+    // main.js calls __ariaHideBoot() when init completes; the 9s failsafe
+    // below ensures a module-load failure can never trap the user here.
+    window.__ariaBootT0 = performance.now();
+    window.__ariaHideBoot = function () {
+      var el = document.getElementById('boot-screen');
+      if (!el || el.classList.contains('done')) return;
+      var wait = Math.max(0, 1400 - (performance.now() - window.__ariaBootT0));
+      setTimeout(function () {
+        el.classList.add('done');
+        setTimeout(function () { el.style.display = 'none'; }, 700);
+      }, wait);
+    };
+    setTimeout(window.__ariaHideBoot, 9000);
   </script>
-
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>

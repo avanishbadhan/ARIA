@@ -1,5 +1,5 @@
 /**
- * JARVIS Voice Engine
+ * ARIA Voice Engine
  * Handles Speech-to-Text (STT), Text-to-Speech (TTS), Web Audio FX Synthesis,
  * and visualizer frequency analyzer.
  */
@@ -15,6 +15,10 @@ export class VoiceEngine {
     this.onStateChange = options.onStateChange || (() => {});
     this.onVolumeChange = options.onVolumeChange || (() => {});
     this.onSpeechMeter = options.onSpeechMeter || (() => {});
+    // Surfaces mic/TTS failures in the UI terminal (Chat view + activity
+    // feed). Previously these only went to console.warn, so a dead mic or a
+    // rejected ElevenLabs key failed silently from the user's perspective.
+    this.onLog = options.onLog || (() => {});
 
     this.recognition = null;
     this.isElectronMic = Boolean(typeof window !== 'undefined' && window.jarvisElectron?.mic);
@@ -136,7 +140,7 @@ export class VoiceEngine {
       // consecutive-error safety net can reset.
       this._consecutiveErrors = 0;
 
-      // Ignore transcript if JARVIS is speaking or in post-speech suppression window
+      // Ignore transcript if ARIA is speaking or in post-speech suppression window
       if (this.isSpeaking || this.suppressMic || (this.synthesis && this.synthesis.speaking)) {
         return;
       }
@@ -180,11 +184,13 @@ export class VoiceEngine {
         this.continuousMode = false;
         this._fatalMicError = true;
         const messages = {
-          'not-allowed': 'Microphone access denied. Allow microphone permission for this site, then click the mic button to retry.',
-          'audio-capture': 'No microphone detected. Check your audio input device, then click the mic button to retry.',
-          'service-not-allowed': 'Speech recognition service unavailable. Click the mic button to retry.'
+          'not-allowed': 'Microphone access denied. Allow microphone permission for this site, then click the stop (■) button to retry listening.',
+          'audio-capture': 'No microphone detected. Check your audio input device, then click the stop (■) button to retry listening.',
+          'service-not-allowed': 'Speech recognition service unavailable. Click the stop (■) button to retry listening.'
         };
-        this.onStateChange({ status: "ERROR", message: messages[event.error] || `Mic Error: ${event.error}` });
+        const fatalMsg = messages[event.error] || `Mic Error: ${event.error}`;
+        this.onStateChange({ status: "ERROR", message: fatalMsg });
+        this.onLog({ type: 'WARNING', message: `[MIC] ${fatalMsg}` });
         return;
       }
 
@@ -195,12 +201,14 @@ export class VoiceEngine {
       if (this._consecutiveErrors >= 5) {
         this.autoRestart = false;
         this.continuousMode = false;
-        this.onStateChange({ status: "ERROR", message: `Microphone kept failing (${event.error}). Click the mic button to retry.` });
+        this.onStateChange({ status: "ERROR", message: `Microphone kept failing (${event.error}). Click the stop (■) button to retry listening.` });
+        this.onLog({ type: 'WARNING', message: `[MIC] Microphone kept failing (${event.error}) — wake-word listening stopped.` });
         return;
       }
 
       if (event.error !== 'no-speech' && event.error !== 'aborted') {
         this.onStateChange({ status: "ERROR", message: `Mic Error: ${event.error}` });
+        this.onLog({ type: 'WARNING', message: `[MIC] Mic Error: ${event.error}` });
       }
     };
 
@@ -256,7 +264,9 @@ export class VoiceEngine {
         this.isListening = false;
         this.autoRestart = false;
         this.continuousMode = false;
-        this.onStateChange({ status: "ERROR", message: message || "Windows Speech Recognition error." });
+        const errMsg = message || "Windows Speech Recognition error.";
+        this.onStateChange({ status: "ERROR", message: errMsg });
+        this.onLog({ type: 'WARNING', message: `[MIC] ${errMsg}` });
       }
     });
   }
@@ -282,7 +292,7 @@ export class VoiceEngine {
     } catch (e) {
       this.autoRestart = false;
       this.continuousMode = false;
-      this.onStateChange({ status: "ERROR", message: `Microphone access denied: ${e.message}. Click the mic button to retry.` });
+      this.onStateChange({ status: "ERROR", message: `Microphone access denied: ${e.message}. Click the stop (■) button to retry listening.` });
       return;
     }
 
@@ -479,19 +489,19 @@ export class VoiceEngine {
   }
 
   speak(text) {
-    if (!this.synthesis) return Promise.resolve();
-    // Muted means fully muted: no new utterances are queued or spoken until
-    // unmuted (main.js's mute button cancels the current line via cancel()
-    // and flips this flag — speak() must honor it for every later reply).
-    if (this.isMuted) return Promise.resolve();
-    
+    // Muted means no audio — but the full speaking lifecycle (SPEAKING
+    // state, realistic timing, mic guard, resolve) still runs so the core
+    // animation, hero text, and conversation flow behave exactly as if ARIA
+    // spoke aloud. Returning instantly here used to strand the UI in the
+    // thinking state forever.
+    if (this.isMuted) return this._speakSilently(text);
     this._ensureAudioContext();
 
     // Immediately stop & suppress speech recognition while speaking
     this.suppressMic = true;
     this.autoRestart = false;
     if (this.engine === 'deepgram') {
-      // Deepgram is metered per audio-minute — don't stream JARVIS's own
+      // Deepgram is metered per audio-minute — don't stream ARIA's own
       // voice to it, unlike the free Windows engine which can just stay
       // running (the suppressMic filter alone is enough there).
       this._stopDeepgram();
@@ -503,6 +513,7 @@ export class VoiceEngine {
 
     this.stopSpeaking();
 
+    if (!this.synthesis) return Promise.resolve();
     return new Promise((resolve) => {
       const utterance = new SpeechSynthesisUtterance(text);
       if (this.voice) utterance.voice = this.voice;
@@ -512,7 +523,7 @@ export class VoiceEngine {
       utterance.onstart = () => {
         this.isSpeaking = true;
         this.playFuturisticChime();
-        this.onStateChange({ status: "SPEAKING", message: "JARVIS speaking..." });
+        this.onStateChange({ status: "SPEAKING", message: "ARIA speaking..." });
       };
 
       // Fires per spoken word (browser-dependent) — the closest thing to a
@@ -551,9 +562,81 @@ export class VoiceEngine {
     });
   }
 
+
+  /**
+   * Muted reply: no audio, but the full speaking lifecycle still runs —
+   * mic suppression, SPEAKING state, realistic timing, meter pulses, mic
+   * guard, resolve — so the core animation, hero text, and conversation
+   * flow behave exactly like a voiced reply.
+   */
+  _speakSilently(text) {
+    this.suppressMic = true;
+    this.autoRestart = false;
+    if (this.engine === 'deepgram') {
+      this._stopDeepgram();
+    } else if (this.recognition) {
+      try {
+        this.recognition.abort();
+      } catch (e) {}
+    }
+    this.stopSpeaking();
+
+    // Mirror real speech timing (~65ms/char, clamped 1.2s–12s) so the
+    // yellow thinking streak hands off to the full speaking glow and back
+    // to idle on the same cadence as a voiced reply.
+    const speechMs = Math.min(12000, Math.max(1200, (text ? text.length : 0) * 65));
+    this.isSpeaking = true;
+    this.onStateChange({ status: "SPEAKING", message: "ARIA speaking..." });
+    // The built-in path gets per-word boundary pulses; silence gets a
+    // gentle metronome so the visualizer keeps breathing throughout.
+    this._silentMeterTimer = setInterval(() => {
+      this.onSpeechMeter({ active: true, intensity: 0.4 + Math.random() * 0.3 });
+    }, 400);
+    if (this._silentMeterTimer && typeof this._silentMeterTimer.unref === 'function') {
+      this._silentMeterTimer.unref();
+    }
+    return new Promise((resolve) => {
+      const finish = () => {
+        this._silentTimer = null;
+        if (this._silentMeterTimer) {
+          clearInterval(this._silentMeterTimer);
+          this._silentMeterTimer = null;
+        }
+        this.isSpeaking = false;
+        this.onSpeechMeter({ active: false, intensity: 0 });
+        this.onStateChange({ status: "IDLE", message: "System online" });
+        setTimeout(() => {
+          this.suppressMic = false;
+          if (this.continuousMode) this.startListening();
+          resolve();
+        }, 1200);
+      };
+      this._silentFinish = finish;
+      this._silentTimer = setTimeout(() => {
+        this._silentFinish = null;
+        finish();
+      }, speechMs);
+    });
+  }
+
   stopSpeaking() {
     if (this.synthesis && this.synthesis.speaking) {
       this.synthesis.cancel();
+    }
+    // Settle a cut-off silent reply through its normal finish path so its
+    // caller (and the serialized input queue) never hangs.
+    if (this._silentFinish) {
+      const finish = this._silentFinish;
+      this._silentFinish = null;
+      if (this._silentTimer) {
+        clearTimeout(this._silentTimer);
+        this._silentTimer = null;
+      }
+      finish();
+    }
+    if (this._silentMeterTimer) {
+      clearInterval(this._silentMeterTimer);
+      this._silentMeterTimer = null;
     }
     this.isSpeaking = false;
   }

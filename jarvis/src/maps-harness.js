@@ -23,7 +23,7 @@ export class MapsHarness {
   }
 
   _notAvailable() {
-    return { success: false, message: 'Live maps are not available outside the JARVIS desktop app, Sir.' };
+    return { success: false, message: 'Live maps are not available outside the ARIA desktop app, Sir.' };
   }
 
   /**

@@ -10,6 +10,7 @@
 const STORAGE_KEY = 'jarvis_settings';
 
 export const DEFAULT_SETTINGS = {
+  userName: 'Avanish',
   openTabOnSearch: true,
   voiceGender: 'male',
   soundMeterEnabled: true,

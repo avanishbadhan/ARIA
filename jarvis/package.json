@@ -2,8 +2,8 @@
   "name": "jarvis-voice-ai",
   "private": true,
   "version": "1.6.4",
-  "description": "JARVIS voice AI desktop assistant",
-  "author": "Jarvis Voice AI",
+  "description": "ARIA voice AI desktop assistant",
+  "author": "Aria Voice AI",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -29,7 +29,7 @@
   },
   "build": {
     "appId": "com.jarvis.voiceai",
-    "productName": "JARVIS",
+    "productName": "ARIA",
     "directories": {
       "output": "release"
     },

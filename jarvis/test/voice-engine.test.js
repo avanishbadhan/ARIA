@@ -228,3 +228,46 @@ test('a Deepgram session that actually produces a transcript resets the failure 
   socket.onclose({ code: 1000, reason: '', wasClean: true });
   assert.equal(engine._consecutiveErrors, 0);
 });
+
+test('a fatal mic error is reported through onLog', () => {
+  global.localStorage.store.clear();
+  global.window = makeWindow();
+
+  const logs = [];
+  const engine = new VoiceEngine({ onLog: (l) => logs.push(l) });
+  engine.recognition.onerror({ error: 'audio-capture' });
+
+  assert.ok(logs.some((l) => l.type === 'WARNING' && /\[MIC\]/.test(l.message)));
+});
+
+test('muted speak() still runs the SPEAKING to IDLE lifecycle with no audio', async () => {
+  global.localStorage.store.clear();
+  global.window = makeWindow();
+
+  const states = [];
+  const engine = new VoiceEngine({ onStateChange: (s) => states.push(s.status) });
+  engine.isMuted = true;
+
+  const pending = engine.speak('Hi');
+  assert.equal(engine.isSpeaking, true, 'speaking flag drives the core animation even while muted');
+
+  await pending; // ~1.2s silent speech + 1.2s mic guard
+  assert.equal(engine.isSpeaking, false);
+  assert.deepEqual(states, ['SPEAKING', 'IDLE']);
+});
+
+test('stopSpeaking() during a muted reply settles it instead of hanging', async () => {
+  global.localStorage.store.clear();
+  global.window = makeWindow();
+
+  const engine = new VoiceEngine({});
+  engine.isMuted = true;
+
+  const pending = engine.speak('A reply that gets cut off');
+  await new Promise((r) => setTimeout(r, 100));
+  assert.equal(engine.isSpeaking, true);
+
+  engine.stopSpeaking();
+  await pending; // must resolve via the mic-guard delay, not hang forever
+  assert.equal(engine.isSpeaking, false);
+});

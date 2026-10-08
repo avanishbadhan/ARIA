@@ -37,7 +37,7 @@ export class GoogleAccountConnector {
    */
   async login(clientId, clientSecret) {
     if (!this._isElectron()) {
-      throw new Error('Connecting your Google account requires the JARVIS desktop app.');
+      throw new Error('Connecting your Google account requires the ARIA desktop app.');
     }
     return window.jarvisElectron.googleAuth.login(clientId, clientSecret);
   }

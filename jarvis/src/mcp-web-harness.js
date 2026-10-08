@@ -18,7 +18,7 @@ export class McpWebHarness {
   }
 
   _notAvailable() {
-    return { success: false, message: 'Web browsing is not available outside the JARVIS desktop app, Sir.' };
+    return { success: false, message: 'Web browsing is not available outside the ARIA desktop app, Sir.' };
   }
 
   /**

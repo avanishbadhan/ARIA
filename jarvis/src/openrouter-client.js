@@ -57,7 +57,7 @@ export class OpenRouterClient {
         'Authorization': `Bearer ${this.apiKey}`,
         'Content-Type': 'application/json',
         ...refererHeader(),
-        'X-Title': 'JARVIS Voice AI System'
+        'X-Title': 'ARIA Voice AI System'
       },
       modelQueue: this.modelQueue,
       messages,
@@ -83,7 +83,7 @@ export class OpenRouterClient {
         'Authorization': `Bearer ${this.apiKey}`,
         'Content-Type': 'application/json',
         ...refererHeader(),
-        'X-Title': 'JARVIS Voice AI System'
+        'X-Title': 'ARIA Voice AI System'
       },
       modelQueue: this.visionModelQueue,
       messages,

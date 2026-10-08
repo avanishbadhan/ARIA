@@ -23,6 +23,15 @@ test('saveSettings persists a partial update and loadSettings reflects it', () =
   assert.equal(settings.voiceGender, DEFAULT_SETTINGS.voiceGender, 'unrelated defaults stay intact');
 });
 
+test('userName defaults to Avanish and round-trips through save/load', () => {
+  global.localStorage.store.clear();
+  assert.equal(loadSettings().userName, 'Avanish');
+  saveSettings({ userName: 'Ada' });
+  assert.equal(loadSettings().userName, 'Ada');
+  saveSettings({ userName: '   ' });
+  assert.equal(loadSettings().userName, '   ', 'stored verbatim; callers trim for display');
+});
+
 test('saveSettings merges over previous saves rather than replacing wholesale', () => {
   global.localStorage.store.clear();
   saveSettings({ voiceGender: 'female' });

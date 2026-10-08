@@ -36,6 +36,12 @@ contextBridge.exposeInMainWorld('jarvisElectron', {
     search: (clientId, clientSecret, query, maxResults) => ipcRenderer.invoke('calendar:search-events', { clientId, clientSecret, query, maxResults }),
     createEvent: (clientId, clientSecret, title, description, startISO, endISO) => ipcRenderer.invoke('calendar:create-event', { clientId, clientSecret, title, description, startISO, endISO })
   },
+  files: {
+    write: (filename, content, overwrite) => ipcRenderer.invoke('files:write', { filename, content, overwrite }),
+    read: (filename) => ipcRenderer.invoke('files:read', { filename }),
+    list: () => ipcRenderer.invoke('files:list'),
+    delete: (filename) => ipcRenderer.invoke('files:delete', { filename })
+  },
   mcp: {
     fetchWebpage: (url) => ipcRenderer.invoke('mcp:fetch-webpage', { url }),
     browseWebpage: (url, linkText) => ipcRenderer.invoke('mcp:browse-webpage', { url, linkText })

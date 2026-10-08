@@ -27,7 +27,7 @@ const NO_WEBPAGE_RESULT = 'Unable to read that webpage.';
 const NO_WEATHER_RESULT = 'Unable to retrieve live weather data.';
 const NO_NEARBY_RESULT = "I couldn't find anything nearby, Sir.";
 const NO_DIRECTIONS_RESULT = "I couldn't find that place, Sir.";
-const NO_NOTE_STORAGE = "File storage isn't available outside the JARVIS desktop app, Sir.";
+const NO_NOTE_STORAGE = "File storage isn't available outside the ARIA desktop app, Sir.";
 const NO_NOTE_WRITE_RESULT = "I wasn't able to save that note, Sir.";
 const NO_NOTE_READ_RESULT = "I wasn't able to read that note, Sir.";
 const NO_NOTE_LIST_RESULT = "I wasn't able to list your notes, Sir.";
@@ -191,7 +191,7 @@ export const GROUNDING_TOOLS = [
     type: 'function',
     function: {
       name: 'write_note',
-      description: "Saves a short note as a .md file in JARVIS's private notes sandbox (persistent memory across conversations). Use this when the user asks you to remember, save, or make a note of something. If the note already exists, a confirmation round trip is required before overwriting — do NOT rewrite it yourself; tell the user it already exists and ask whether to overwrite.",
+      description: "Saves a short note as a .md file in ARIA's private notes sandbox (persistent memory across conversations). Use this when the user asks you to remember, save, or make a note of something. If the note already exists, a confirmation round trip is required before overwriting — do NOT rewrite it yourself; tell the user it already exists and ask whether to overwrite.",
       parameters: {
         type: 'object',
         properties: {
@@ -206,7 +206,7 @@ export const GROUNDING_TOOLS = [
     type: 'function',
     function: {
       name: 'read_note',
-      description: "Reads the content of a saved note from JARVIS's private notes sandbox by filename. Use this when the user asks what they saved about something or wants to recall a note. Call list_notes first if unsure of the exact filename.",
+      description: "Reads the content of a saved note from ARIA's private notes sandbox by filename. Use this when the user asks what they saved about something or wants to recall a note. Call list_notes first if unsure of the exact filename.",
       parameters: {
         type: 'object',
         properties: {
@@ -220,7 +220,7 @@ export const GROUNDING_TOOLS = [
     type: 'function',
     function: {
       name: 'list_notes',
-      description: "Lists all notes saved in JARVIS's private notes sandbox, most recently modified first, each with a short preview and its modified time. Use this when the user asks what notes are saved or what you remember.",
+      description: "Lists all notes saved in ARIA's private notes sandbox, most recently modified first, each with a short preview and its modified time. Use this when the user asks what notes are saved or what you remember.",
       parameters: {
         type: 'object',
         properties: {},
@@ -232,7 +232,7 @@ export const GROUNDING_TOOLS = [
     type: 'function',
     function: {
       name: 'delete_note',
-      description: "Deletes a saved note from JARVIS's private notes sandbox by filename. Deletion requires a spoken confirmation round trip — call this and then ask the user to confirm before it is actually deleted.",
+      description: "Deletes a saved note from ARIA's private notes sandbox by filename. Deletion requires a spoken confirmation round trip — call this and then ask the user to confirm before it is actually deleted.",
       parameters: {
         type: 'object',
         properties: {
