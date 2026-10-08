@@ -307,7 +307,9 @@ export class VoiceEngine {
       smart_format: 'true',
       interim_results: 'true',
       endpointing: '300',
-      alternatives: '3'
+      alternatives: '3',
+      // Boost the wake word — without it Deepgram hears "Aria" as "Area".
+      keywords: 'Aria:5'
     });
     const socket = new WebSocket(`wss://api.deepgram.com/v1/listen?${params.toString()}`, ['token', this.deepgramApiKey]);
     this._deepgramSocket = socket;

@@ -252,3 +252,37 @@ test('an alternative that is only the wake word is dropped instead of kept as ra
 
   assert.deepEqual(result.alternatives, []);
 });
+
+test('common speech-to-text mishearings of "Aria" still wake it', () => {
+  // Deepgram transcribed a spoken "Aria" as "Area" in live testing.
+  for (const heard of ['Area', 'Area.', 'Arya', 'Ariya', 'Ariah']) {
+    const controller = new ConversationController();
+    assert.deepEqual(controller.handleTranscript(heard), { action: 'AWAIT_COMMAND' }, heard);
+  }
+});
+
+test('mishearing + command in one breath dispatches the command', () => {
+  const controller = new ConversationController();
+  const result = controller.handleTranscript('Area, what time is it?');
+  assert.equal(result.action, 'DISPATCH_COMMAND');
+  assert.equal(result.command, 'what time is it?');
+});
+
+test('"Hey." punctuated with a period before the wake word still wakes it', () => {
+  const controller = new ConversationController();
+  const result = controller.handleTranscript('Hey. Aria, play Dota');
+  assert.equal(result.action, 'DISPATCH_COMMAND');
+  assert.equal(result.command, 'play Dota');
+});
+
+test('ordinary speech that merely contains "area" mid-sentence is ignored', () => {
+  const controller = new ConversationController();
+  assert.deepEqual(controller.handleTranscript('the parking area is full'), { action: 'IGNORE' });
+  assert.deepEqual(controller.handleTranscript('Hey. Can you hear me?'), { action: 'IGNORE' });
+});
+
+test('mishearing works in stop phrases too', () => {
+  const controller = new ConversationController();
+  controller.handleTranscript('Hey Aria, play Dota');
+  assert.deepEqual(controller.handleTranscript('Area, stop'), { action: 'END_CONVERSATION' });
+});

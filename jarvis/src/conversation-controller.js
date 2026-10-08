@@ -1,6 +1,12 @@
-const WAKE_WORD_REGEX = /^(?:hey[,]?\s+)?aria\b[,!.\s]*/i;
-const STOP_PHRASE_REGEX =
-  /^(?:(?:hey[,]?\s+)?aria[,!.\s]*)?(?:stop(?: the)? conversation|stop(?: listening)?|end(?: the)? conversation|end|that['’]?s all|goodbye aria|goodbye)[.,!?\s]*$/i;
+// Speech-to-text often spells the name differently — live Deepgram testing
+// transcribed a spoken "Aria" as "Area". Only matched at the very start of an
+// utterance, so "the parking area is full" is still ignored.
+const WAKE_NAME = '(?:aria|area|arya|ariya|ariah)';
+const WAKE_WORD_REGEX = new RegExp(`^(?:hey[,.!]?\\s+)?${WAKE_NAME}\\b[,!.\\s]*`, 'i');
+const STOP_PHRASE_REGEX = new RegExp(
+  `^(?:(?:hey[,.!]?\\s+)?${WAKE_NAME}[,!.\\s]*)?(?:stop(?: the)? conversation|stop(?: listening)?|end(?: the)? conversation|end|that['’]?s all|goodbye ${WAKE_NAME}|goodbye)[.,!?\\s]*$`,
+  'i'
+);
 
 export class ConversationController {
   constructor({ wakeTimeoutMs = 8000, conversationTimeoutMs = 120000 } = {}) {
