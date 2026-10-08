@@ -17,13 +17,18 @@ test('Quick/Medium/High run on Groq; Ultra runs on Gemini', () => {
   assert.equal(MODEL_TIERS.ultra.provider, 'gemini');
 });
 
-test('getModelQueue("quick") tries llama-3.1-8b-instant first, then falls back to openai/gpt-oss-20b', () => {
-  assert.deepEqual(getModelQueue('quick'), ['llama-3.1-8b-instant', 'openai/gpt-oss-20b']);
+test('each Groq tier leads with its own model and falls back to the other two', () => {
+  assert.deepEqual(getModelQueue('quick'), ['openai/gpt-oss-20b', 'qwen/qwen3.8-27b', 'openai/gpt-oss-120b']);
+  assert.deepEqual(getModelQueue('medium'), ['qwen/qwen3.8-27b', 'openai/gpt-oss-20b', 'openai/gpt-oss-120b']);
+  assert.deepEqual(getModelQueue('high'), ['openai/gpt-oss-120b', 'qwen/qwen3.8-27b', 'openai/gpt-oss-20b']);
 });
 
-test('getModelQueue returns just the primary model for tiers with no configured fallback', () => {
-  assert.deepEqual(getModelQueue('medium'), ['llama-3.3-70b-versatile']);
-  assert.deepEqual(getModelQueue('high'), ['openai/gpt-oss-120b']);
+test('no Groq tier references a model Groq has decommissioned', () => {
+  // Groq's API returned "does not exist" for these as of 2026-10.
+  const retired = ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile', 'qwen/qwen3.6-27b'];
+  for (const tier of ['quick', 'medium', 'high']) {
+    for (const model of getModelQueue(tier)) assert.ok(!retired.includes(model), `${tier} uses retired ${model}`);
+  }
 });
 
 test('getModelQueue("ultra") tries the newest Gemini model first, then falls back through older generations', () => {

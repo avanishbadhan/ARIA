@@ -7,12 +7,15 @@
  */
 
 export const MODEL_TIERS = {
-  // llama-3.1-8b-instant is being decommissioned by Groq — openai/gpt-oss-20b
-  // is configured as its fallback (see getModelQueue) so quick-tier requests
-  // keep working once Groq turns it off, with no code change needed here.
-  quick: { provider: 'groq', model: 'llama-3.1-8b-instant', fallbackModels: ['openai/gpt-oss-20b'], label: 'Quick' },
-  medium: { provider: 'groq', model: 'llama-3.3-70b-versatile', label: 'Medium' },
-  high: { provider: 'groq', model: 'openai/gpt-oss-120b', label: 'High' },
+  // Groq decommissioned llama-3.1-8b-instant and llama-3.3-70b-versatile (the
+  // API returns "does not exist"); as of 2026-10 the only Groq chat models
+  // are the three below. Each tier leads with its own model and falls back
+  // to the other two — Groq rate limits (TPM/TPD) are per model, so a
+  // fallback's separate bucket usually still has headroom. Exhausting the
+  // queue falls through to OpenRouter (see JarvisCore._chatWithActiveLLM).
+  quick: { provider: 'groq', model: 'openai/gpt-oss-20b', fallbackModels: ['qwen/qwen3.8-27b', 'openai/gpt-oss-120b'], label: 'Quick' },
+  medium: { provider: 'groq', model: 'qwen/qwen3.8-27b', fallbackModels: ['openai/gpt-oss-20b', 'openai/gpt-oss-120b'], label: 'Medium' },
+  high: { provider: 'groq', model: 'openai/gpt-oss-120b', fallbackModels: ['qwen/qwen3.8-27b', 'openai/gpt-oss-20b'], label: 'High' },
   // Gemini — requires its own API key (Settings). Falls back through a wide
   // range of Gemini model generations rather than to a different provider,
   // so an Ultra request stays on Gemini as long as any key-eligible model

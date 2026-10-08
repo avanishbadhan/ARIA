@@ -23,9 +23,11 @@ export class GroqClient {
     // the tier-based modelQueue above. meta-llama/llama-4-scout-17b-16e-instruct
     // was the original pick here but Groq deprecated it 2026-07-17; this is
     // its documented replacement (console.groq.com/docs/deprecations),
-    // confirmed vision-capable (up to 5 images) as of 2026-08.  Re-verify
-    // against console.groq.com/docs/models if this ever errors again.
-    this.visionModelQueue = ['qwen/qwen3.6-27b'];
+    // confirmed vision-capable (up to 5 images) as of 2026-08. qwen3.6-27b
+    // was itself retired by 2026-10; its successor qwen3.8-27b was verified
+    // to answer image prompts. Re-verify against console.groq.com/docs/models
+    // if this ever errors again.
+    this.visionModelQueue = ['qwen/qwen3.8-27b'];
   }
 
   /**
