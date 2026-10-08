@@ -9,7 +9,7 @@ npm install
 npm start
 ```
 
-## J.A.R.V.I.S. HUD (browser app)
+## ARIA HUD (browser app)
 
 `public/` contains a browser-based voice assistant HUD backed by the Gemini API,
 with object detection, timers/alarms, and Mermaid diagram/image rendering.
