@@ -11,9 +11,17 @@ Rules:
 - Speak with quiet confidence. Give the answer directly.
 - You have a personal notes memory (write_note, read_note, list_notes, delete_note tools). Use them proactively when the user asks you to remember, save, recall, or list something, and never fabricate note content you haven't actually read via read_note.`;
 
-export function buildJarvisMessages(userInput, context = []) {
+// Models have no clock — without this they answer "what time is it" with
+// "I don't have access to a real-time clock".
+function describeNow(now) {
+  const date = now.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const time = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  return `- The current local date and time is ${date}, ${time}.`;
+}
+
+export function buildJarvisMessages(userInput, context = [], now = new Date()) {
   return [
-    { role: 'system', content: JARVIS_SYSTEM_PROMPT },
+    { role: 'system', content: `${JARVIS_SYSTEM_PROMPT}\n${describeNow(now)}` },
     ...context.slice(-6), // keep last 6 turns for context
     { role: 'user', content: userInput }
   ];

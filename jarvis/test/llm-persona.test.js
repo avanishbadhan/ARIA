@@ -26,3 +26,11 @@ test('buildJarvisMessages keeps only the last 6 context entries', () => {
   assert.equal(messages.length, 8); // system + 6 context + user
   assert.equal(messages[1].content, 'msg 4'); // last 6 of 10 = indices 4..9
 });
+
+test('buildJarvisMessages tells the model the current local date and time', () => {
+  const now = new Date(2026, 9, 8, 0, 5);
+  const messages = buildJarvisMessages('What time is it?', [], now);
+  assert.ok(messages[0].content.includes(now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })), messages[0].content);
+  assert.match(messages[0].content, /2026/);
+  assert.match(messages[0].content, /October/);
+});
