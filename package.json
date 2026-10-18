@@ -6,8 +6,8 @@
   "type": "module",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "npm --prefix jarvis run dev",
-    "electron": "npm --prefix jarvis run electron"
+    "dev": "npm --prefix aria run dev",
+    "electron": "npm --prefix aria run electron"
   },
   "license": "MIT"
 }
