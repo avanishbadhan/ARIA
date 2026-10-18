@@ -1,5 +1,5 @@
 {
-  "name": "jarvis-voice-ai",
+  "name": "aria-voice-ai",
   "private": true,
   "version": "1.6.4",
   "description": "ARIA voice AI desktop assistant",
@@ -28,7 +28,7 @@
     "vite": "^5.1.4"
   },
   "build": {
-    "appId": "com.jarvis.voiceai",
+    "appId": "com.aria.voiceai",
     "productName": "ARIA",
     "directories": {
       "output": "release"
