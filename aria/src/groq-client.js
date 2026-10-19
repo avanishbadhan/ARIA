@@ -9,6 +9,21 @@ import { fetchChatCompletion } from './llm-completion.js';
 import { buildJarvisMessages } from './llm-persona.js';
 import { MODEL_TIERS, getModelQueue } from './model-tiers.js';
 
+// Every Groq chat model is now a reasoning model, and reasoning tokens count
+// against max_tokens — at the small budgets JARVIS uses (350 for chat, 30 for
+// the entity resolver) the model can spend it all thinking and never answer.
+// Qwen accepts reasoning_effort:'none' and skips reasoning entirely; gpt-oss
+// can't turn it off ('low' is its minimum), so it also gets extra headroom.
+const GPT_OSS_REASONING_HEADROOM_TOKENS = 256;
+
+export function groqReasoningBody(model, { maxTokens = 350 } = {}) {
+  if (model.startsWith('qwen/')) return { reasoning_effort: 'none' };
+  if (model.startsWith('openai/gpt-oss')) {
+    return { reasoning_effort: 'low', max_tokens: maxTokens + GPT_OSS_REASONING_HEADROOM_TOKENS };
+  }
+  return {};
+}
+
 export class GroqClient {
   constructor(apiKey = '', options = {}) {
     this.apiKey = apiKey;
@@ -68,7 +83,8 @@ export class GroqClient {
       temperature: options.temperature,
       maxTokens: options.maxTokens,
       tools: options.tools,
-      toolExecutor: options.toolExecutor
+      toolExecutor: options.toolExecutor,
+      extraBody: groqReasoningBody
     });
   }
 

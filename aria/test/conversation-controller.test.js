@@ -286,3 +286,35 @@ test('mishearing works in stop phrases too', () => {
   controller.handleTranscript('Hey Aria, play Dota');
   assert.deepEqual(controller.handleTranscript('Area, stop'), { action: 'END_CONVERSATION' });
 });
+
+test('mid-conversation, a command starting with the word "area" is dispatched intact', () => {
+  const controller = new ConversationController();
+  controller.handleTranscript('Aria, hello');
+  const result = controller.handleTranscript('area of a circle with radius 5', ['area of a circle with radius five']);
+  assert.equal(result.action, 'DISPATCH_COMMAND');
+  assert.equal(result.command, 'area of a circle with radius 5');
+  assert.deepEqual(result.alternatives, ['area of a circle with radius five']);
+});
+
+test('while awaiting a command, a command starting with "area" is dispatched intact', () => {
+  const controller = new ConversationController();
+  controller.handleTranscript('Aria');
+  const result = controller.handleTranscript('area of a circle with radius 5');
+  assert.equal(result.action, 'DISPATCH_COMMAND');
+  assert.equal(result.command, 'area of a circle with radius 5');
+});
+
+test('mid-conversation, a bare "Area." is sent as an answer rather than re-arming', () => {
+  const controller = new ConversationController();
+  controller.handleTranscript('Aria, what do you call length times width?');
+  const result = controller.handleTranscript('Area.');
+  assert.equal(result.action, 'DISPATCH_COMMAND');
+  assert.equal(result.command, 'Area.');
+});
+
+test('mid-conversation, an exact "Aria" said out of habit is still stripped', () => {
+  const controller = new ConversationController();
+  controller.handleTranscript('Aria, hello');
+  const result = controller.handleTranscript('Aria, what time is it?');
+  assert.equal(result.command, 'what time is it?');
+});

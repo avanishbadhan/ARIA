@@ -1,8 +1,13 @@
 // Speech-to-text often spells the name differently — live Deepgram testing
 // transcribed a spoken "Aria" as "Area". Only matched at the very start of an
-// utterance, so "the parking area is full" is still ignored.
+// utterance, so "the parking area is full" is still ignored. The mishearings
+// are real words/names, so they only count as a wake word while idle — once a
+// conversation is active or a command is awaited, only an exact "Aria" is
+// stripped, so "area of a circle..." reaches the LLM intact.
 const WAKE_NAME = '(?:aria|area|arya|ariya|ariah)';
-const WAKE_WORD_REGEX = new RegExp(`^(?:hey[,.!]?\\s+)?${WAKE_NAME}\\b[,!.\\s]*`, 'i');
+const wakeWordRegex = (name) => new RegExp(`^(?:hey[,.!]?\\s+)?${name}\\b[,!.\\s]*`, 'i');
+const WAKE_WORD_REGEX = wakeWordRegex(WAKE_NAME);
+const STRICT_WAKE_WORD_REGEX = wakeWordRegex('aria');
 const STOP_PHRASE_REGEX = new RegExp(
   `^(?:(?:hey[,.!]?\\s+)?${WAKE_NAME}[,!.\\s]*)?(?:stop(?: the)? conversation|stop(?: listening)?|end(?: the)? conversation|end|that['’]?s all|goodbye ${WAKE_NAME}|goodbye)[.,!?\\s]*$`,
   'i'
@@ -38,7 +43,9 @@ export class ConversationController {
     // No raw-text fallback: an utterance that is ONLY the wake word strips to
     // empty, which callers use to (re)arm the command window instead of
     // dispatching the literal wake word as chat.
-    const stripWake = (s) => s.replace(WAKE_WORD_REGEX, '').trim();
+    const engaged = this._conversationActive || this._awaitingCommand;
+    const stripRegex = engaged ? STRICT_WAKE_WORD_REGEX : WAKE_WORD_REGEX;
+    const stripWake = (s) => s.replace(stripRegex, '').trim();
     const cleanedAlternatives = alternatives.map(stripWake).filter(Boolean);
     const wakeMatch = text.match(WAKE_WORD_REGEX);
 
@@ -46,14 +53,14 @@ export class ConversationController {
     // just-addressed one ("Hey Aria, stop"). While idle with no wake word,
     // a bare "stop conversation" is ignored (ambient speech, not addressed to
     // ARIA) so passive listening doesn't react to background chatter.
-    if ((this._conversationActive || this._awaitingCommand || wakeMatch) && this.isStopPhrase(text)) {
+    if ((engaged || wakeMatch) && this.isStopPhrase(text)) {
       this._conversationActive = false;
       this._awaitingCommand = false;
       return { action: 'END_CONVERSATION' };
     }
 
     const command = stripWake(text);
-    if (!command && (this._conversationActive || this._awaitingCommand)) {
+    if (!command && engaged) {
       // Bare wake word ("Aria.") mid-conversation or while already awaiting:
       // re-arm the command window instead of dispatching "Aria" as chat.
       this._conversationActive = false;

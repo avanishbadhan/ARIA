@@ -57,14 +57,27 @@ async function postChatCompletion({ baseUrl, headers, model, messages, temperatu
  * grounded follow-up round — these are single-shot lookups (see
  * src/jarvis-tools.js), not a multi-step agent loop. Omitting tools
  * reproduces the exact prior request shape and behavior.
+ *
+ * extraBody may be a plain object or a function (model, { maxTokens }) =>
+ * object, for per-model fields like Groq's reasoning_effort whose accepted
+ * values differ between model families.
+ *
+ * Tool results survive a model failure: if a model runs tools and then its
+ * follow-up round fails or comes back empty, the next model in the queue is
+ * handed the already-executed tool calls and results instead of starting
+ * over — otherwise side-effecting tools (write_note, etc.) would run again.
  */
 export async function fetchChatCompletion({ baseUrl, headers, modelQueue, messages, onLog = () => {}, logPrefix, temperature = 0.7, maxTokens = 350, extraBody = {}, tools = null, toolExecutor = null }) {
   let lastError = null;
+  // Tool-call rounds already executed by an earlier model in the queue.
+  let carriedToolMessages = [];
   for (const model of modelQueue) {
     try {
       onLog({ type: 'HARNESS', message: `[${logPrefix}] Trying model: ${model}` });
 
-      let data = await postChatCompletion({ baseUrl, headers, model, messages, temperature, maxTokens, tools, extraBody });
+      const modelExtraBody = typeof extraBody === 'function' ? extraBody(model, { maxTokens }) : extraBody;
+      const toolMessages = [...carriedToolMessages];
+      let data = await postChatCompletion({ baseUrl, headers, model, messages: [...messages, ...toolMessages], temperature, maxTokens, tools, extraBody: modelExtraBody });
       let message = data.choices?.[0]?.message;
 
       // Multi-round tool-calling loop — the model can chain tools
@@ -73,9 +86,10 @@ export async function fetchChatCompletion({ baseUrl, headers, modelQueue, messag
       // current message, feed results back, and if the next message also
       // contains tool_calls repeat. Capped to prevent infinite loops.
       const MAX_TOOL_ROUNDS = 4;
-      const toolMessages = [];
       for (let round = 0; tools && toolExecutor && message?.tool_calls?.length && round < MAX_TOOL_ROUNDS; round++) {
-        toolMessages.push(message);
+        // Only the standard fields — provider-specific extras (e.g. a
+        // `reasoning` field) may be rejected if replayed to another model.
+        toolMessages.push({ role: 'assistant', content: message.content ?? null, tool_calls: message.tool_calls });
         for (const call of message.tool_calls) {
           try {
             const result = await toolExecutor(call.function?.name, call.function?.arguments);
@@ -85,7 +99,10 @@ export async function fetchChatCompletion({ baseUrl, headers, modelQueue, messag
             toolMessages.push({ role: 'tool', tool_call_id: call.id, content: `Tool call failed: ${err.message}` });
           }
         }
-        data = await postChatCompletion({ baseUrl, headers, model, messages: [...messages, ...toolMessages], temperature, maxTokens, tools, extraBody });
+        // Record before the follow-up POST so a failure there still hands
+        // these results to the next model rather than re-executing them.
+        carriedToolMessages = [...toolMessages];
+        data = await postChatCompletion({ baseUrl, headers, model, messages: [...messages, ...toolMessages], temperature, maxTokens, tools, extraBody: modelExtraBody });
         message = data.choices?.[0]?.message;
       }
 

@@ -332,3 +332,52 @@ test('fetchChatCompletion passes a 30s abort timeout signal on every request so 
   assert.equal(signals.length, 1);
   assert.ok(signals[0] instanceof AbortSignal);
 });
+
+test('fetchChatCompletion accepts a per-model extraBody function', async () => {
+  const bodies = [];
+  global.fetch = async (url, init) => {
+    const body = JSON.parse(init.body);
+    bodies.push(body);
+    if (body.model === 'a') return { ok: true, json: async () => ({ choices: [{ message: { content: '' } }] }) };
+    return { ok: true, json: async () => ({ choices: [{ message: { content: 'done' } }] }) };
+  };
+
+  await fetchChatCompletion({
+    baseUrl: 'https://example.test/chat', headers: {}, modelQueue: ['a', 'b'],
+    messages: [{ role: 'user', content: 'hi' }], logPrefix: 'TEST', maxTokens: 40,
+    extraBody: (model, { maxTokens }) => ({ tag: `${model}:${maxTokens}` })
+  });
+
+  assert.deepEqual(bodies.map((b) => b.tag), ['a:40', 'b:40']);
+});
+
+test('fetchChatCompletion does not re-run tools when a model fails after its tool round', async () => {
+  const bodies = [];
+  global.fetch = async (url, init) => {
+    const body = JSON.parse(init.body);
+    bodies.push(body);
+    const hasToolResult = body.messages.some((m) => m.role === 'tool');
+    if (body.model === 'first' && !hasToolResult) {
+      return { ok: true, json: async () => ({ choices: [{ message: { content: null, reasoning: 'x', tool_calls: [{ id: 'c1', type: 'function', function: { name: 'write_note', arguments: '{"name":"wifi"}' } }] } }] }) };
+    }
+    if (body.model === 'first') {
+      return { ok: false, status: 429, json: async () => ({ error: { message: 'rate limited' } }) };
+    }
+    return { ok: true, json: async () => ({ choices: [{ message: { content: 'Saved your note, Sir.' } }] }) };
+  };
+  const executed = [];
+
+  const result = await fetchChatCompletion({
+    baseUrl: 'https://example.test/chat', headers: {}, modelQueue: ['first', 'second'],
+    messages: [{ role: 'user', content: 'remember my wifi password' }], logPrefix: 'TEST',
+    tools: [{ type: 'function', function: { name: 'write_note' } }],
+    toolExecutor: async (name) => { executed.push(name); return 'saved'; }
+  });
+
+  assert.equal(result, 'Saved your note, Sir.');
+  assert.deepEqual(executed, ['write_note']);
+  const secondBody = bodies.find((b) => b.model === 'second');
+  assert.equal(secondBody.messages.at(-1).role, 'tool');
+  assert.equal(secondBody.messages.at(-1).content, 'saved');
+  assert.equal('reasoning' in secondBody.messages.at(-2), false);
+});

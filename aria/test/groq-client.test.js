@@ -115,3 +115,25 @@ test('vision queue uses a live vision-capable model, not decommissioned qwen3.6-
   const client = new GroqClient('fake-key');
   assert.deepEqual(client.visionModelQueue, ['qwen/qwen3.8-27b']);
 });
+
+test('generateCompletion disables reasoning for qwen and caps it low with extra headroom for gpt-oss', async () => {
+  const bodies = [];
+  global.fetch = async (url, init) => {
+    const body = JSON.parse(init.body);
+    bodies.push(body);
+    if (body.model === 'openai/gpt-oss-20b') {
+      return { ok: false, status: 429, json: async () => ({ error: { message: 'rate limited' } }) };
+    }
+    return { ok: true, json: async () => ({ choices: [{ message: { content: 'ok' } }] }) };
+  };
+  const client = new GroqClient('fake-key');
+
+  await client.generateCompletion([{ role: 'user', content: 'hi' }], { maxTokens: 30 });
+
+  assert.equal(bodies[0].model, 'openai/gpt-oss-20b');
+  assert.equal(bodies[0].reasoning_effort, 'low');
+  assert.equal(bodies[0].max_tokens, 30 + 256);
+  assert.equal(bodies[1].model, 'qwen/qwen3.8-27b');
+  assert.equal(bodies[1].reasoning_effort, 'none');
+  assert.equal(bodies[1].max_tokens, 30);
+});
