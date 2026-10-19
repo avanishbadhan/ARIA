@@ -1760,7 +1760,7 @@ function registerUpdateIpc() {
   ipcMain.handle('update:get-changelog', () => {
     const options = {
       hostname: 'api.github.com',
-      path: '/repos/avanishbadhan/personalassistant/releases?per_page=10',
+      path: '/repos/avanishbadhan/ARIA/releases?per_page=10',
       headers: { 'User-Agent': 'jarvis-voice-ai' }
     };
     return new Promise((resolve) => {
