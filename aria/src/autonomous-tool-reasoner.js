@@ -270,6 +270,17 @@ export class AutonomousToolReasoner {
       };
     }
 
+    // 8g. Check for screen overlay toggle commands
+    if (text.match(/^(?:show|hide|toggle)\s+(?:the\s+)?overlay[.!]?\s*$/i)) {
+      return {
+        shouldCallTool: true,
+        toolName: 'SCREEN_TOGGLE_OVERLAY',
+        confidence: 0.93,
+        params: {},
+        reasoning: "Autonomous reasoner detected intent to toggle the screen overlay."
+      };
+    }
+
     // 1g. Check for camera vision commands — same thin fallback-net role as
     // the screen monitoring checks above.
     if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
