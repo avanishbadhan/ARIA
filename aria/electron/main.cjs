@@ -296,8 +296,8 @@ function startMic() {
   if (micProcess) return; // already running
 
   micProcess = spawn('powershell.exe', [
-    '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', SPEECH_SCRIPT_PATH
-  ], { windowsHide: true });
+    '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', SPEECH_SCRIPT_PATH
+  ], { windowsHide: false });
 
   let buffer = '';
   micProcess.stdout.setEncoding('utf8');
