@@ -873,6 +873,23 @@ export class JarvisCore {
       return;
     }
 
+    // 8e. Handle Screen Overlay Toggle
+    if (decision.toolName === 'SCREEN_TOGGLE_OVERLAY') {
+      this._updateAgentState("agent-3", "EXECUTING", "Toggling screen overlay");
+
+      const result = await this.screenVisionHarness.startOverlay();
+
+      this.onResponse({
+        text: result.message,
+        actionType: 'SCREEN_TOGGLE_OVERLAY',
+        data: result
+      });
+
+      this._updateAgentState("agent-3", "ACTIVE", result.success ? "Screen overlay active" : "Screen overlay unavailable");
+      await this.voiceEngine.speak(result.message);
+      return;
+    }
+
     // 8d. Handle Screen Vision Questions
     if (decision.toolName === 'SCREEN_QUERY') {
       this._updateAgentState("agent-3", "EXECUTING", `Reading screen: "${decision.params.question}"`);

@@ -1,0 +1,1230 @@
+✔ returns null when no classifyIntent function is provided (1.0642ms)
+✔ returns null when classifyIntent throws (0.2817ms)
+✔ returns null when classifyIntent returns null (no provider configured) (0.1408ms)
+✔ returns null when the response is not valid JSON (0.2456ms)
+✔ strips a markdown code fence before parsing JSON (0.2222ms)
+✔ returns null for an unrecognized toolName (0.1627ms)
+✔ returns null when a required param is missing (0.2102ms)
+✔ accepts a valid decision and clamps confidence into [0,1] (0.6758ms)
+✔ defaults confidence and reasoning when the model omits them (0.1504ms)
+✔ a CONVERSATIONAL decision has shouldCallTool false (0.1741ms)
+✔ a tool decision has shouldCallTool true regardless of what the model sent (0.1353ms)
+✔ allows a params object with extra unexpected keys through unchanged (0.2043ms)
+✔ accepts a GMAIL_CHECK_INBOX decision (0.0973ms)
+✔ accepts a GMAIL_SEARCH decision with its required query param (0.1097ms)
+✔ rejects a GMAIL_SEARCH decision missing the required query param (0.0721ms)
+✔ accepts a GMAIL_READ_MESSAGE decision with its required query param (0.0721ms)
+✔ accepts a CAMERA_START decision (0.0601ms)
+✔ accepts a CAMERA_STOP decision (0.0563ms)
+✔ accepts a CAMERA_QUERY decision with its required question param (0.0715ms)
+✔ rejects a CAMERA_QUERY decision missing the required question param (0.0608ms)
+✔ accepts a CALENDAR_LIST_UPCOMING decision (0.0555ms)
+✔ accepts a CALENDAR_SEARCH decision with its required query param (0.0704ms)
+✔ rejects a CALENDAR_SEARCH decision missing the required query param (0.0588ms)
+✔ accepts a CALENDAR_CREATE_EVENT decision with title and when params (0.084ms)
+✔ rejects a CALENDAR_CREATE_EVENT decision missing the when param (0.0762ms)
+✔ rejects a CALENDAR_CREATE_EVENT decision missing the title param (0.0632ms)
+✔ returns null when a required param is null instead of trusting it (0.114ms)
+✔ returns null when a required param is an empty or whitespace-only string (0.1695ms)
+✔ returns null when a required param is not a string (0.1254ms)
+✔ accepts a SET_MODEL_TIER decision with a real tier value (0.1053ms)
+file:///C:/Users/avani/OneDrive/Documents/personalassistant/aria/src/autonomous-tool-reasoner.js:287
+    if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
+            ^
+
+SyntaxError: Unexpected token '.'
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.19.0
+✖ test\autonomous-tool-reasoner.browser-detection.test.js (110.1711ms)
+file:///C:/Users/avani/OneDrive/Documents/personalassistant/aria/src/autonomous-tool-reasoner.js:287
+    if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
+            ^
+
+SyntaxError: Unexpected token '.'
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.19.0
+✖ test\autonomous-tool-reasoner.calendar-detection.test.js (110.9164ms)
+file:///C:/Users/avani/OneDrive/Documents/personalassistant/aria/src/autonomous-tool-reasoner.js:287
+    if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
+            ^
+
+SyntaxError: Unexpected token '.'
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.19.0
+✖ test\autonomous-tool-reasoner.camera-detection.test.js (112.2974ms)
+file:///C:/Users/avani/OneDrive/Documents/personalassistant/aria/src/autonomous-tool-reasoner.js:287
+    if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
+            ^
+
+SyntaxError: Unexpected token '.'
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.19.0
+✖ test\autonomous-tool-reasoner.epic-xbox-detection.test.js (113.5862ms)
+file:///C:/Users/avani/OneDrive/Documents/personalassistant/aria/src/autonomous-tool-reasoner.js:287
+    if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
+            ^
+
+SyntaxError: Unexpected token '.'
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.19.0
+✖ test\autonomous-tool-reasoner.game-launch-detection.test.js (114.8052ms)
+file:///C:/Users/avani/OneDrive/Documents/personalassistant/aria/src/autonomous-tool-reasoner.js:287
+    if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
+            ^
+
+SyntaxError: Unexpected token '.'
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.19.0
+✖ test\autonomous-tool-reasoner.gmail-detection.test.js (116.3297ms)
+file:///C:/Users/avani/OneDrive/Documents/personalassistant/aria/src/autonomous-tool-reasoner.js:287
+    if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
+            ^
+
+SyntaxError: Unexpected token '.'
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.19.0
+✖ test\autonomous-tool-reasoner.math-detection.test.js (117.1244ms)
+file:///C:/Users/avani/OneDrive/Documents/personalassistant/aria/src/autonomous-tool-reasoner.js:287
+    if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
+            ^
+
+SyntaxError: Unexpected token '.'
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.19.0
+✖ test\autonomous-tool-reasoner.open-site-detection.test.js (118.2097ms)
+file:///C:/Users/avani/OneDrive/Documents/personalassistant/aria/src/autonomous-tool-reasoner.js:287
+    if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
+            ^
+
+SyntaxError: Unexpected token '.'
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.19.0
+✖ test\autonomous-tool-reasoner.screen-detection.test.js (118.8332ms)
+file:///C:/Users/avani/OneDrive/Documents/personalassistant/aria/src/autonomous-tool-reasoner.js:287
+    if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
+            ^
+
+SyntaxError: Unexpected token '.'
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.19.0
+✖ test\autonomous-tool-reasoner.spotify-detection.test.js (119.1707ms)
+file:///C:/Users/avani/OneDrive/Documents/personalassistant/aria/src/autonomous-tool-reasoner.js:287
+    if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
+            ^
+
+SyntaxError: Unexpected token '.'
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.19.0
+✖ test\autonomous-tool-reasoner.tier-detection.test.js (119.3589ms)
+file:///C:/Users/avani/OneDrive/Documents/personalassistant/aria/src/autonomous-tool-reasoner.js:287
+    if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
+            ^
+
+SyntaxError: Unexpected token '.'
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.19.0
+✖ test\autonomous-tool-reasoner.xbox-epic-launch-detection.test.js (120.3621ms)
+✔ open() acquires the camera stream, attaches it to the video element, and flips isOpen on (1.2396ms)
+✔ open() is a no-op success when already open (0.6157ms)
+✔ open() reports failure gracefully when getUserMedia is unavailable (0.1907ms)
+✔ open() reports failure gracefully when getUserMedia rejects (permission denied) (0.1315ms)
+✔ close() stops all stream tracks, detaches the video element, and flips isOpen off (0.2864ms)
+✔ toggle() opens when closed and closes when open (0.1302ms)
+✔ open() loads the detection model once and starts the detection loop (0.1308ms)
+✔ open() tolerates the detection model failing to load — camera still opens (0.1144ms)
+✔ close() cancels the pending animation frame and stops the detection loop (0.1408ms)
+✔ askAboutCamera opens the camera, captures a frame, asks the vision LLM, and returns its answer (0.5207ms)
+✔ askAboutCamera closes the camera again afterward if it had to open it for this call (0.2055ms)
+✔ askAboutCamera leaves the camera open afterward if it was already open before the call (0.789ms)
+✔ askAboutCamera reports failure gracefully when no vision-capable LLM is configured (0.244ms)
+✔ askAboutCamera reports failure gracefully when the camera itself fails to open (0.1548ms)
+✔ askAboutCamera reports failure gracefully when the video never produces a frame (0.15ms)
+✔ two rapid open() calls share a single acquisition instead of double-acquiring streams (0.1381ms)
+✔ open() stops freshly acquired tracks instead of leaking them when a post-acquisition step fails (0.1524ms)
+✔ a third open() after the in-flight one settles acquires again normally (0.1152ms)
+✔ wake word + command in one breath dispatches immediately and starts a conversation (1.3914ms)
+✔ wake word alone awaits a command, then the next utterance dispatches it (0.2414ms)
+✔ onWakeTimeout clears awaitingCommand without starting a conversation (0.0998ms)
+✔ while a conversation is active, a plain command needs no wake word (0.1134ms)
+✔ while a conversation is active, saying the wake word out of habit still works (0.0909ms)
+✔ stop phrases end an active conversation (0.1472ms)
+✔ a stop phrase embedded mid-sentence does not end the conversation (0.0881ms)
+✔ a stop phrase with a curly (typographic) apostrophe still ends the conversation (0.1837ms)
+✔ stop phrases are ignored while no conversation is active (0.0812ms)
+✔ bare "stop" and trailing-comma variants end an active conversation (0.2908ms)
+✔ a just-addressed "Hey Aria, stop" ends even without an active conversation (0.1631ms)
+✔ isStopPhrase recognizes end-conversation phrases for the typed-input path (0.0744ms)
+✔ ambient speech with no wake word is ignored while idle (0.1469ms)
+✔ onConversationTimeout ends an active conversation (0.0872ms)
+✔ onConversationTimeout is a no-op when no conversation is active (0.0452ms)
+✔ reset clears an active conversation (0.0731ms)
+✔ reset clears an in-progress await-command window (0.0538ms)
+✔ alternatives are threaded through and wake-word-stripped on a wake+command DISPATCH_COMMAND (0.0653ms)
+✔ alternatives default to an empty array when not provided (0.0436ms)
+✔ a bare wake word mid-conversation re-arms the command window instead of dispatching "Aria" as chat (0.0659ms)
+✔ a repeated bare wake word while already awaiting keeps the window armed (0.0475ms)
+✔ after a bare wake word (awaiting command), "stop"/"end conversation"/"goodbye" end the session instead of dispatching as chat (0.0942ms)
+✔ an alternative that is only the wake word is dropped instead of kept as raw text (0.051ms)
+✔ common speech-to-text mishearings of "Aria" still wake it (0.0589ms)
+✔ mishearing + command in one breath dispatches the command (0.0462ms)
+✔ "Hey." punctuated with a period before the wake word still wakes it (0.0399ms)
+✔ ordinary speech that merely contains "area" mid-sentence is ignored (0.0552ms)
+✔ mishearing works in stop phrases too (0.0584ms)
+✔ mid-conversation, a command starting with the word "area" is dispatched intact (0.0606ms)
+✔ while awaiting a command, a command starting with "area" is dispatched intact (0.0415ms)
+✔ mid-conversation, a bare "Area." is sent as an answer rather than re-arming (0.0467ms)
+✔ mid-conversation, an exact "Aria" said out of habit is still stripped (0.0381ms)
+✔ openApp navigates to the com.epicgames.launcher://start URI and reports success (0.6769ms)
+✔ launchGame resolves via the injected EpicGamesLibrary and navigates to the com.epicgames.launcher:// URI (0.852ms)
+✔ launchGame reports failure without navigating anywhere when no match is found (0.1746ms)
+✔ launchGame asks the LLM fallback when the library fuzzy-match misses, and launches its pick (0.2457ms)
+✔ launchGame reports failure without navigating anywhere when the LLM fallback also finds nothing (0.1684ms)
+✔ launchGame does not consult resolveEntity when the library is empty (0.1492ms)
+✔ fetchLibrary returns an empty array when not running in Electron (1.7289ms)
+✔ fetchLibrary maps Electron IPC results into { name, nameLower, appName, catalogNamespace, catalogItemId } (0.2473ms)
+✔ fetchLibrary returns an empty array and does not throw when the IPC call rejects (0.1366ms)
+✔ fetchLibrary reuses the cached result on a second call without re-invoking the IPC bridge (0.1179ms)
+✔ findGame fuzzy-matches against the fetched library (0.235ms)
+✔ writeNote delegates to the Electron bridge when present (2.0814ms)
+✔ readNote/listNotes/deleteNote delegate to the Electron bridge when present (0.3418ms)
+✔ localStorage fallback round-trips a write/read/list/delete outside Electron (0.6893ms)
+✔ fallback refuses a second write without overwrite, then honors overwrite (0.1913ms)
+✔ fallback sanitizes names and re-saving a listed name is idempotent (0.2986ms)
+✔ fallback read/delete of a missing note report it cleanly (0.1696ms)
+✔ fallback lists most-recently-modified first with first-line previews (0.3446ms)
+✔ fallback survives corrupt storage without throwing (0.1647ms)
+✔ a Steam match stops the chain immediately — Xbox and Epic are never consulted (2.1572ms)
+✔ a Steam miss + Xbox match launches via Xbox — Epic is never consulted (0.2095ms)
+✔ a Steam + Xbox miss + Epic match launches via Epic (0.1583ms)
+✔ a miss everywhere falls through to steamHarness.launchGame (its own Store-search fallback) (0.2187ms)
+✔ an empty (non-null) Xbox library skips straight to fetching Epic without calling xbox.findGame (0.1728ms)
+✔ the initial Steam existence-check skips SteamHarness's own LLM fallback, so a plausible-but-wrong Steam guess never short-circuits the chain before Xbox/Epic are considered (0.3956ms)
+✔ the terminal Steam Store-search fallback also skips SteamHarness's own LLM fallback, since the combined cross-platform call already had its shot (0.2629ms)
+✔ all-three-miss + combined LLM hit on Xbox dispatches to XboxHarness.launchGame with the resolved name (0.2995ms)
+✔ all-three-miss + LLM returns NONE still falls through to steamHarness.launchGame (0.2031ms)
+✔ no resolveEntity injected: falls straight through to steamHarness.launchGame without error (0.3617ms)
+✔ returns null for an empty item list (0.541ms)
+✔ exact match wins immediately (0.1782ms)
+✔ matches when the item name contains the query (0.6905ms)
+✔ matches when the query contains the full item name (spoken subtitle) (0.1245ms)
+✔ token overlap matches reordered multi-word titles (neither substring check catches word-order swaps) (0.3623ms)
+✔ returns null when nothing scores above the 0.5 threshold (0.0999ms)
+✔ normalizes smart quotes and strips punctuation before matching (0.1254ms)
+✔ a fresh client defaults to the ultra tier modelQueue (0.9547ms)
+✔ generateCompletion throws when no API key is configured (0.5004ms)
+✔ generateCompletion converts OpenAI-style messages into Gemini system_instruction + contents (1.1195ms)
+✔ generateCompletion sends the API key via the x-goog-api-key header, not the query string (0.3627ms)
+✔ every outbound Gemini fetch carries an abort timeout signal so a hung request cannot stall a turn (0.2361ms)
+✔ generateCompletion retries the next model on a 404, and returns its answer (0.3443ms)
+✔ generateCompletion surfaces the real error message from a failed model instead of a bare status code (0.599ms)
+✔ generateCompletion throws once every model in the queue has failed (1.1676ms)
+✔ chatWithJarvis returns null instead of throwing when every model fails (11.8262ms)
+✔ chatWithJarvis returns the model answer on success (0.3714ms)
+✔ generateVisionCompletion converts an OpenAI-style vision message into a text part plus an inlineData image part (0.238ms)
+✔ generateVisionCompletion returns the model answer on success (0.1348ms)
+✔ generateCompletion executes a function call, feeds the result back, then returns the final answer (0.2551ms)
+✔ generateCompletion echoes the thought_signature back on the functionCall so Google accepts the tool round (0.1699ms)
+✔ a failed model attempt never poisons the conversation sent to the fallback model (0.2254ms)
+✔ generateCompletion feeds "Tool call failed: ..." back as the functionResponse when the executor throws (0.2151ms)
+✔ listRecent returns a not-connected message outside Electron (0.7021ms)
+✔ listRecent returns a spoken summary naming the most recent message (0.2518ms)
+✔ listRecent reports an empty inbox without erroring (0.144ms)
+✔ listRecent returns a graceful failure message when the IPC call throws (0.1632ms)
+✔ search returns a spoken summary of the top match and forwards maxResults (0.699ms)
+✔ search reports no matches without erroring (0.1629ms)
+✔ getMessage returns the formatted message body (0.2719ms)
+✔ readMessage searches first, then reads the top match (0.2584ms)
+✔ readMessage reports no match without calling getMessage (0.1826ms)
+✔ authStatus returns not-authenticated when not running inside Electron (0.5583ms)
+✔ authStatus delegates to window.jarvisElectron.googleAuth.status() (0.1285ms)
+✔ authStatus returns not-authenticated when the bridge call throws (0.7202ms)
+✔ login throws outside Electron instead of silently doing nothing (0.3977ms)
+✔ login delegates to window.jarvisElectron.googleAuth.login() with the credentials (0.6088ms)
+✔ logout resolves to success outside Electron without calling anything (0.1258ms)
+✔ logout delegates to window.jarvisElectron.googleAuth.logout() (0.125ms)
+✔ listUpcoming returns a not-connected message outside Electron (1.0533ms)
+✔ listUpcoming returns a spoken summary naming the next event (13.6565ms)
+✔ listUpcoming reports no upcoming events without erroring (0.3409ms)
+✔ listUpcoming announces an all-day (date-only) event as a local date without a bogus clock time (0.8236ms)
+✔ listUpcoming returns a graceful failure message when the IPC call throws (0.288ms)
+✔ search returns a spoken summary of the top match and forwards maxResults (0.9077ms)
+✔ search reports no matches without erroring (0.1938ms)
+✔ createEvent parses a natural-language whenText and calls the bridge with ISO start/end (16.6415ms)
+✔ createEvent respects a custom durationMinutes (16.5795ms)
+✔ createEvent returns a fallback message for an unparseable whenText without calling the bridge (0.2536ms)
+✔ createEvent returns a graceful failure message when the IPC call throws (0.2516ms)
+✔ createEvent returns a not-connected message outside Electron (0.0872ms)
+✔ createEvent resolves a bare time ("at 9pm") to the next future occurrence, not the one that already passed (0.3304ms)
+✔ invalid_grant is flagged as revoked with a reconnect message (0.6918ms)
+✔ other errors keep both the code and description (0.1392ms)
+✔ falls back to the HTTP status when the body has no error fields (0.0918ms)
+✔ a fresh client defaults to the quick tier modelQueue, including its fallbacks (1.2256ms)
+✔ setTier rebuilds modelQueue with that tier's fallback chain (0.1619ms)
+✔ generateCompletion retries with the next model when gpt-oss-20b errors out (0.9676ms)
+✔ generateVisionCompletion uses the dedicated vision model queue, not the text modelQueue (0.3028ms)
+✔ generateVisionCompletion disables chain-of-thought reasoning via reasoning_effort:"none" (0.1943ms)
+✔ generateVisionCompletion throws when no API key is configured (0.4326ms)
+✔ generateCompletion forwards options.tools/toolExecutor to the request (0.2005ms)
+✔ generateVisionCompletion forwards options.tools/toolExecutor to the request (0.1397ms)
+✔ chatWithJarvis forwards options.tools/toolExecutor through to generateCompletion (12.0877ms)
+✔ generateCompletion passes a 30s abort timeout signal so a hung fetch cannot stall a turn (0.3887ms)
+✔ vision queue uses a live vision-capable model, not decommissioned qwen3.6-27b (0.1113ms)
+✔ generateCompletion disables reasoning for qwen and caps it low with extra headroom for gpt-oss (0.3174ms)
+file:///C:/Users/avani/OneDrive/Documents/personalassistant/aria/src/autonomous-tool-reasoner.js:287
+    if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
+            ^
+
+SyntaxError: Unexpected token '.'
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.19.0
+✖ test\helpers\jarvis-test-utils.js (60.5106ms)
+file:///C:/Users/avani/OneDrive/Documents/personalassistant/aria/src/autonomous-tool-reasoner.js:287
+    if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
+            ^
+
+SyntaxError: Unexpected token '.'
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.19.0
+✖ test\jarvis-core.action-history.test.js (139.8374ms)
+file:///C:/Users/avani/OneDrive/Documents/personalassistant/aria/src/autonomous-tool-reasoner.js:287
+    if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
+            ^
+
+SyntaxError: Unexpected token '.'
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.19.0
+✖ test\jarvis-core.active-provider-label.test.js (119.844ms)
+file:///C:/Users/avani/OneDrive/Documents/personalassistant/aria/src/autonomous-tool-reasoner.js:287
+    if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
+            ^
+
+SyntaxError: Unexpected token '.'
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.19.0
+✖ test\jarvis-core.ai-classify-provider.test.js (119.693ms)
+file:///C:/Users/avani/OneDrive/Documents/personalassistant/aria/src/autonomous-tool-reasoner.js:287
+    if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
+            ^
+
+SyntaxError: Unexpected token '.'
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.19.0
+✖ test\jarvis-core.ai-intent-classifier.test.js (119.6665ms)
+file:///C:/Users/avani/OneDrive/Documents/personalassistant/aria/src/autonomous-tool-reasoner.js:287
+    if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
+            ^
+
+SyntaxError: Unexpected token '.'
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.19.0
+✖ test\jarvis-core.ask-vision-provider.test.js (123.9925ms)
+file:///C:/Users/avani/OneDrive/Documents/personalassistant/aria/src/autonomous-tool-reasoner.js:287
+    if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
+            ^
+
+SyntaxError: Unexpected token '.'
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.19.0
+✖ test\jarvis-core.calendar-routing.test.js (124.4485ms)
+file:///C:/Users/avani/OneDrive/Documents/personalassistant/aria/src/autonomous-tool-reasoner.js:287
+    if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
+            ^
+
+SyntaxError: Unexpected token '.'
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.19.0
+✖ test\jarvis-core.camera-vision-routing.test.js (124.65ms)
+file:///C:/Users/avani/OneDrive/Documents/personalassistant/aria/src/autonomous-tool-reasoner.js:287
+    if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
+            ^
+
+SyntaxError: Unexpected token '.'
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.19.0
+✖ test\jarvis-core.conversation-memory.test.js (126.2264ms)
+file:///C:/Users/avani/OneDrive/Documents/personalassistant/aria/src/autonomous-tool-reasoner.js:287
+    if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
+            ^
+
+SyntaxError: Unexpected token '.'
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.19.0
+✖ test\jarvis-core.entity-resolver.test.js (124.0569ms)
+file:///C:/Users/avani/OneDrive/Documents/personalassistant/aria/src/autonomous-tool-reasoner.js:287
+    if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
+            ^
+
+SyntaxError: Unexpected token '.'
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.19.0
+✖ test\jarvis-core.epic-xbox-routing.test.js (120.0835ms)
+file:///C:/Users/avani/OneDrive/Documents/personalassistant/aria/src/autonomous-tool-reasoner.js:287
+    if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
+            ^
+
+SyntaxError: Unexpected token '.'
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.19.0
+✖ test\jarvis-core.game-launcher-routing.test.js (120.016ms)
+file:///C:/Users/avani/OneDrive/Documents/personalassistant/aria/src/autonomous-tool-reasoner.js:287
+    if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
+            ^
+
+SyntaxError: Unexpected token '.'
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.19.0
+✖ test\jarvis-core.gmail-routing.test.js (126.3343ms)
+file:///C:/Users/avani/OneDrive/Documents/personalassistant/aria/src/autonomous-tool-reasoner.js:287
+    if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
+            ^
+
+SyntaxError: Unexpected token '.'
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.19.0
+✖ test\jarvis-core.grounding-tools.test.js (128.5124ms)
+file:///C:/Users/avani/OneDrive/Documents/personalassistant/aria/src/autonomous-tool-reasoner.js:287
+    if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
+            ^
+
+SyntaxError: Unexpected token '.'
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.19.0
+✖ test\jarvis-core.hermes-provider.test.js (127.8884ms)
+file:///C:/Users/avani/OneDrive/Documents/personalassistant/aria/src/autonomous-tool-reasoner.js:287
+    if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
+            ^
+
+SyntaxError: Unexpected token '.'
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.19.0
+✖ test\jarvis-core.llm-provider.test.js (127.6838ms)
+file:///C:/Users/avani/OneDrive/Documents/personalassistant/aria/src/autonomous-tool-reasoner.js:287
+    if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
+            ^
+
+SyntaxError: Unexpected token '.'
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.19.0
+✖ test\jarvis-core.maps-routing.test.js (126.7329ms)
+file:///C:/Users/avani/OneDrive/Documents/personalassistant/aria/src/autonomous-tool-reasoner.js:287
+    if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
+            ^
+
+SyntaxError: Unexpected token '.'
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.19.0
+✖ test\jarvis-core.math-routing.test.js (126.6039ms)
+file:///C:/Users/avani/OneDrive/Documents/personalassistant/aria/src/autonomous-tool-reasoner.js:287
+    if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
+            ^
+
+SyntaxError: Unexpected token '.'
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.19.0
+✖ test\jarvis-core.mcp-web.test.js (126.8492ms)
+file:///C:/Users/avani/OneDrive/Documents/personalassistant/aria/src/autonomous-tool-reasoner.js:287
+    if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
+            ^
+
+SyntaxError: Unexpected token '.'
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.19.0
+✖ test\jarvis-core.notes-routing.test.js (126.9133ms)
+file:///C:/Users/avani/OneDrive/Documents/personalassistant/aria/src/autonomous-tool-reasoner.js:287
+    if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
+            ^
+
+SyntaxError: Unexpected token '.'
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.19.0
+✖ test\jarvis-core.processing-guard.test.js (127.1306ms)
+file:///C:/Users/avani/OneDrive/Documents/personalassistant/aria/src/autonomous-tool-reasoner.js:287
+    if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
+            ^
+
+SyntaxError: Unexpected token '.'
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.19.0
+✖ test\jarvis-core.screen-vision-routing.test.js (128.4964ms)
+file:///C:/Users/avani/OneDrive/Documents/personalassistant/aria/src/autonomous-tool-reasoner.js:287
+    if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
+            ^
+
+SyntaxError: Unexpected token '.'
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.19.0
+✖ test\jarvis-core.search-grounding.test.js (127.1999ms)
+file:///C:/Users/avani/OneDrive/Documents/personalassistant/aria/src/autonomous-tool-reasoner.js:287
+    if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
+            ^
+
+SyntaxError: Unexpected token '.'
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.19.0
+✖ test\jarvis-core.settings.test.js (128.8703ms)
+file:///C:/Users/avani/OneDrive/Documents/personalassistant/aria/src/autonomous-tool-reasoner.js:287
+    if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
+            ^
+
+SyntaxError: Unexpected token '.'
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.19.0
+✖ test\jarvis-core.spotify-routing.test.js (130.4534ms)
+file:///C:/Users/avani/OneDrive/Documents/personalassistant/aria/src/autonomous-tool-reasoner.js:287
+    if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {
+            ^
+
+SyntaxError: Unexpected token '.'
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.19.0
+✖ test\jarvis-core.tier-routing.test.js (133.6404ms)
+✔ GROUNDING_TOOLS lists read-only tools plus the sandboxed notes exception, no other action tools (1.4156ms)
+✔ GROUNDING_TOOLS still excludes real action tools (send/create/play) (0.2362ms)
+✔ solve_math delegates to wolfram.solve with the parsed query (0.6243ms)
+✔ solve_math returns a graceful fallback string when wolfram has no answer (0.2586ms)
+✔ solve_math returns a graceful fallback string when wolfram.solve throws (0.2971ms)
+✔ web_search builds a Google search URL and delegates to mcpWeb.fetchWebpage (0.1676ms)
+✔ web_search returns a graceful fallback string when mcpWeb reports failure (0.1268ms)
+✔ web_search returns a graceful fallback string when mcpWeb.fetchWebpage throws (0.1192ms)
+✔ web_search returns a graceful fallback string when mcpWeb is not wired up (0.1038ms)
+✔ unknown tool names resolve to a descriptive string instead of throwing (0.181ms)
+✔ unparseable arguments resolve to a descriptive string instead of throwing (0.1725ms)
+✔ get_weather delegates to weather.getCurrentWeather with the parsed lat/lon (0.2055ms)
+✔ get_weather returns a graceful fallback when the weather harness reports failure (0.1046ms)
+✔ get_weather returns a fallback when no weather harness is available (0.0762ms)
+✔ list_recent_emails delegates to gmail.listRecent using the stored Google credentials (0.1192ms)
+✔ list_recent_emails returns a graceful fallback string when Gmail reports failure (0.1078ms)
+✔ search_emails delegates to gmail.search with the parsed query (0.1055ms)
+✔ search_emails returns a graceful fallback string when gmail.search throws (0.1193ms)
+✔ list_recent_emails and search_emails fall back gracefully when gmail/getGoogleCredentials are not wired up (0.0576ms)
+✔ list_upcoming_events delegates to calendar.listUpcoming using the stored Google credentials (0.1086ms)
+✔ list_upcoming_events returns a graceful fallback string when the calendar reports failure (0.0781ms)
+✔ search_calendar_events delegates to calendar.search with the parsed query (0.098ms)
+✔ search_calendar_events returns a graceful fallback string when calendar.search throws (0.0991ms)
+✔ list_upcoming_events and search_calendar_events fall back gracefully when calendar/getGoogleCredentials are not wired up (0.0568ms)
+✔ get_location returns the coordinates when location resolves successfully (0.0971ms)
+✔ get_location returns a graceful message when location permission is denied (0.0855ms)
+✔ get_location returns a graceful fallback when location.getCurrentPosition throws (0.098ms)
+✔ get_location falls back gracefully when location is not wired up (0.0726ms)
+✔ browse_webpage delegates to mcpWeb.browseWebpage with the parsed url and linkText (0.1269ms)
+✔ browse_webpage works without linkText (url only) (0.1297ms)
+✔ browse_webpage returns a graceful fallback string when mcpWeb reports failure (0.0884ms)
+✔ browse_webpage returns a graceful fallback string when mcpWeb.browseWebpage throws (0.0872ms)
+✔ browse_webpage returns a graceful fallback string when mcpWeb is not wired up (0.049ms)
+✔ find_nearby_places delegates to maps.findNearbyPlaces, opening a nearby tab on success (0.2313ms)
+✔ find_nearby_places uses provided lat/lon args instead of resolving location (0.1308ms)
+✔ find_nearby_places returns a graceful fallback when maps reports failure, and opens no tab (0.1215ms)
+✔ find_nearby_places returns a graceful fallback when no maps harness is wired up (0.09ms)
+✔ find_nearby_places returns a fallback when location cannot be resolved (0.0923ms)
+✔ get_directions delegates to maps.getDirections, opening a directions tab on success (0.2205ms)
+✔ get_directions returns a graceful fallback when maps reports failure, and opens no tab (0.2536ms)
+✔ get_directions returns a graceful fallback when no maps harness is wired up (0.1592ms)
+✔ fetchChatCompletion sends the default temperature and max_tokens when not specified (1.8673ms)
+✔ fetchChatCompletion forwards a custom temperature and maxTokens through to the request body (0.2597ms)
+✔ fetchChatCompletion merges extraBody fields into the request body (0.1787ms)
+✔ fetchChatCompletion strips a closed <think>...</think> block and returns only the final answer (0.1226ms)
+✔ fetchChatCompletion treats an unclosed <think> block (ran out of tokens mid-thought) as empty and tries the next model (0.2454ms)
+✔ fetchChatCompletion omits the tools field entirely when no tools are passed (0.1278ms)
+✔ fetchChatCompletion executes a tool_calls response and re-queries the same model with the result (0.8985ms)
+✔ fetchChatCompletion does not attempt tool execution when tools are passed but no toolExecutor is given (0.183ms)
+✔ multi-round tool calling chains get_location then get_weather across 3 API calls (0.3933ms)
+✔ multi-round tool calling stops after MAX_TOOL_ROUNDS and falls through to the next model when the final message is still a tool call (0.6379ms)
+✔ fetchChatCompletion passes a 30s abort timeout signal on every request so a hung fetch cannot stall a turn (0.3162ms)
+✔ fetchChatCompletion accepts a per-model extraBody function (0.2371ms)
+✔ fetchChatCompletion does not re-run tools when a model fails after its tool round (0.2974ms)
+✔ returns null immediately when no resolveEntity is injected, without touching candidates (0.788ms)
+✔ returns null immediately when the candidate list is empty, without calling resolveEntity (0.7647ms)
+✔ returns the matching candidate object when the LLM picks an exact name (0.6088ms)
+✔ matches case-insensitively and trims whitespace (0.1654ms)
+✔ returns null when the LLM responds with NONE (0.1209ms)
+✔ logs that it is consulting the LLM before calling resolveEntity, and logs when the model finds no match (0.1959ms)
+✔ logs when no LLM provider was available at all (resolveEntity returned a falsy, non-NONE value) (0.1442ms)
+✔ returns null and logs a discard when the LLM invents a title not in the candidate list (0.1539ms)
+✔ passes query, alternatives, and candidate names through to resolveEntity (0.3207ms)
+✔ returns null when resolveEntity throws (network/API error) (0.3117ms)
+✔ buildJarvisMessages puts a system prompt first and the user message last (13.9494ms)
+✔ buildJarvisMessages includes prior context between the system and user messages (0.3482ms)
+✔ buildJarvisMessages keeps only the last 6 context entries (0.2783ms)
+✔ buildJarvisMessages tells the model the current local date and time (0.9693ms)
+✔ getCurrentPosition returns success with lat/lon when granted (0.8497ms)
+✔ getCurrentPosition returns a graceful message on permission denied (0.2626ms)
+✔ getCurrentPosition returns a distinct message on timeout (0.8127ms)
+✔ getCurrentPosition returns a distinct message on position unavailable (0.1732ms)
+✔ getCurrentPosition returns a graceful message when geolocation is unsupported (0.1433ms)
+✔ getCurrentPosition passes a finite timeout and maximumAge so the TIMEOUT branch is reachable (0.1368ms)
+✔ findNearbyPlaces returns a not-available message outside Electron (0.6684ms)
+✔ getDirections returns a not-available message outside Electron (0.7312ms)
+✔ findNearbyPlaces delegates to window.jarvisElectron.maps.findNearby and maps the response (0.2147ms)
+✔ findNearbyPlaces resolves a failure result to a failure message (0.1564ms)
+✔ findNearbyPlaces resolves a thrown IPC call to a failure message (0.2112ms)
+✔ getDirections delegates to window.jarvisElectron.maps.getDirections and maps the response (0.1323ms)
+✔ getDirections resolves a no-match geocode to a failure message (0.1648ms)
+✔ getDirections resolves a thrown IPC call to a failure message (0.1773ms)
+✔ fetchWebpage returns a not-available message outside Electron (0.6302ms)
+✔ fetchWebpage delegates to window.jarvisElectron.mcp.fetchWebpage and returns the extracted text (0.1639ms)
+✔ fetchWebpage returns a graceful failure message when the IPC call throws (0.8585ms)
+✔ fetchWebpage returns a graceful message when the page has no extractable text (0.1475ms)
+✔ browseWebpage returns a not-available message outside Electron (0.163ms)
+✔ browseWebpage delegates to window.jarvisElectron.mcp.browseWebpage with the url and linkText (0.6614ms)
+✔ browseWebpage returns a graceful failure message when the IPC call throws (0.2161ms)
+✔ MODEL_TIERS has all four tiers with a model id, provider, and label (0.8618ms)
+✔ Quick/Medium/High run on Groq; Ultra runs on Gemini (0.113ms)
+✔ each Groq tier leads with its own model and falls back to the other two (0.522ms)
+✔ no Groq tier references a model Groq has decommissioned (0.1109ms)
+✔ getModelQueue("ultra") tries the newest Gemini model first, then falls back through older generations (0.12ms)
+✔ getModelQueue returns an empty array for an unknown tier (0.0922ms)
+✔ TIER_ORDER lists all four tiers in ascending order (0.0886ms)
+✔ normalizeTierAlias("quick") -> "quick" (0.0789ms)
+✔ normalizeTierAlias("low") -> "quick" (0.0698ms)
+✔ normalizeTierAlias("fast") -> "quick" (0.1245ms)
+✔ normalizeTierAlias("medium") -> "medium" (0.0904ms)
+✔ normalizeTierAlias("mid") -> "medium" (0.0596ms)
+✔ normalizeTierAlias("high") -> "high" (0.065ms)
+✔ normalizeTierAlias("ultra") -> "ultra" (0.0449ms)
+✔ normalizeTierAlias("max") -> "ultra" (0.1114ms)
+✔ normalizeTierAlias("maximum") -> "ultra" (0.1344ms)
+✔ normalizeTierAlias("QUICK") -> "quick" (0.0774ms)
+✔ normalizeTierAlias("High") -> "high" (0.0571ms)
+✔ normalizeTierAlias returns null for unrecognized words (0.105ms)
+✔ generateVisionCompletion uses the dedicated vision model queue, not the text modelQueue (1.5769ms)
+✔ generateVisionCompletion throws when no API key is configured (0.4194ms)
+✔ generateCompletion forwards options.tools/toolExecutor to the request (0.3225ms)
+✔ generateVisionCompletion forwards options.tools/toolExecutor to the request (0.1877ms)
+✔ chatWithJarvis forwards options.tools/toolExecutor through to generateCompletion (13.403ms)
+✔ constructor accepts an explicit modelQueue override, used instead of the default free pool (0.9365ms)
+✔ constructor falls back to the default free-model queue when no modelQueue option is given (0.1255ms)
+✔ generateCompletion sends the HTTP-Referer header when the renderer origin is an http(s) URL (0.1932ms)
+✔ generateCompletion omits the HTTP-Referer header for a packaged file:// origin instead of sending garbage (0.2206ms)
+✔ generateCompletion passes a 30s abort timeout signal so a hung fetch cannot stall a turn (0.3419ms)
+✔ quote list is non-empty and every entry has real text and author (0.5493ms)
+✔ quote texts are unique (no accidental duplicates) (0.0954ms)
+✔ nextQuoteIndex advances and wraps around the full cycle (0.0834ms)
+✔ startMonitoring shows the indicator and flips isMonitoring on (1.954ms)
+✔ stopMonitoring hides the indicator and flips isMonitoring off (0.1663ms)
+✔ askAboutScreen captures a screenshot, asks the vision LLM, and returns its answer (0.2119ms)
+✔ askAboutScreen flashes the indicator on/off when monitoring was not already active (0.1443ms)
+✔ two rapid askAboutScreen calls share one show/hide cycle and one capture instead of restoring early (3.7699ms)
+✔ a later askAboutScreen after the in-flight one settles runs a fresh show/hide cycle (0.2723ms)
+✔ askAboutScreen does not toggle the indicator when monitoring is already active (0.1188ms)
+✔ askAboutScreen returns a spoken fallback when capture fails, without calling the vision LLM (0.1589ms)
+✔ askAboutScreen returns a spoken fallback when no vision LLM is available (0.1181ms)
+✔ askAboutScreen returns a spoken fallback when the vision LLM returns null (0.1706ms)
+✔ askAboutScreen catches a thrown error from the vision LLM and returns a spoken fallback (0.1796ms)
+✔ startMonitoring returns a graceful message outside Electron (no jarvisElectron bridge) (0.0729ms)
+✔ loadSettings returns defaults when nothing stored (1.2019ms)
+✔ saveSettings persists a partial update and loadSettings reflects it (0.2249ms)
+✔ userName defaults to Avanish and round-trips through save/load (0.1158ms)
+✔ saveSettings merges over previous saves rather than replacing wholesale (0.7105ms)
+✔ loadSettings falls back to defaults if the stored value is corrupt JSON (0.1138ms)
+✔ openApp navigates to the spotify: URI and reports success (1.3347ms)
+✔ playSong falls back to spotify:search when no credentials are configured (0.2662ms)
+✔ playSong falls back to spotify:search when not running inside Electron, even with credentials (0.1464ms)
+✔ playSong navigates to the resolved track URI and speaks the real name/artist when a match is found (0.2222ms)
+✔ playSong falls back to spotify:search when the resolver finds no match (0.1293ms)
+✔ playSong falls back to spotify:search when the resolver throws (network/auth error) (0.1506ms)
+✔ playFromLibrary asks the LLM fallback when the playlist fuzzy-match misses, and plays its pick (1.1435ms)
+✔ playFromLibrary falls back to search when the LLM fallback also finds nothing (0.2632ms)
+✔ playFromLibrary works for albums too, with the "Spotify album" kind label (0.2373ms)
+✔ resolveGame returns a steam_library match when the configured library has it (1.4694ms)
+✔ resolveGame falls back to the hardcoded dictionary when the library has no match (0.1733ms)
+✔ resolveGame returns null when nothing matches anywhere (0.1365ms)
+✔ launchGame uses resolveGame and navigates to steam://run/<appId> on a dict match (0.2471ms)
+✔ launchGame uses resolveGame and navigates to steam://run/<appId> on a steam_library match, with the library-specific message and log text (0.2328ms)
+✔ launchGame falls back to the Steam Store search when resolveGame finds nothing (0.1877ms)
+✔ resolveGame asks the LLM fallback when the library fuzzy-match misses, and uses its pick (0.329ms)
+✔ resolveGame falls through to the dict when the LLM fallback returns NONE (0.1554ms)
+✔ resolveGame returns null when the LLM answer is not one of the real candidates (0.1766ms)
+✔ resolveGame never calls resolveEntity when the fast fuzzy-match already hit (0.28ms)
+✔ resolveGame never calls resolveEntity when skipLlmFallback is passed, even on a fast-match miss (0.2004ms)
+✔ launchGame forwards its options argument (e.g. skipLlmFallback) through to resolveGame (0.8226ms)
+✔ findGame returns null when the library is empty (0.5878ms)
+✔ findGame delegates to the shared fuzzy matcher and returns the matched library entry (0.2466ms)
+✔ findGame returns null for an unrelated query (0.0932ms)
+✔ findGame now correctly normalizes a curly apostrophe (bug fix bundled with this delegation — see plan Amendment 2) (0.1006ms)
+✔ loadTasks returns an empty array when nothing is stored (0.8395ms)
+✔ addTask appends a trimmed, incomplete task and persists it (0.2754ms)
+✔ addTask ignores blank input (0.6228ms)
+✔ toggleTask flips done without touching other tasks (0.1664ms)
+✔ removeTask drops only the matching task (0.1413ms)
+✔ clearCompleted keeps only incomplete tasks (0.1284ms)
+✔ loadTasks falls back to empty on corrupt JSON and drops blank entries (0.1189ms)
+✔ classifies a major version bump as major (0.5376ms)
+✔ classifies a minor version bump as minor (0.0827ms)
+✔ classifies a patch version bump as minor (0.623ms)
+✔ classifies an equal version as none (0.0965ms)
+✔ classifies an older version as none (0.093ms)
+✔ classifies a multi-major jump as major (0.0677ms)
+✔ isUpdateSupported is false when window.jarvisElectron is absent (browser dev mode) (0.4807ms)
+✔ all actions no-op safely when unsupported, instead of throwing (0.5052ms)
+✔ isUpdateSupported is true and calls are delegated when running inside Electron (0.2244ms)
+Speech recognition error: audio-capture
+✔ browser engine requests 3 alternatives from the recognizer (0.7486ms)
+✔ browser engine passes runner-up transcripts through onTranscript.alternatives on a final result (0.5027ms)
+✔ browser engine reports an empty alternatives array when the recognizer returns only one guess (0.109ms)
+✔ interim (non-final) results report no alternatives (0.0946ms)
+✔ a Deepgram session that reports zero decoded duration does not reset the failure counter (0.5756ms)
+✔ repeated zero-duration Deepgram sessions fall back to the Electron mic engine when it is available (0.2504ms)
+✔ repeated zero-duration Deepgram sessions surface a clear error when no fallback engine exists (0.2063ms)
+✔ a Deepgram session that actually produces a transcript resets the failure counter (0.1501ms)
+✔ a fatal mic error is reported through onLog (0.4888ms)
+✔ muted speak() still runs the SPEAKING to IDLE lifecycle with no audio (2421.2012ms)
+✔ stopSpeaking() during a muted reply settles it instead of hanging (1318.7345ms)
+✔ getCurrentWeather returns a not-available message outside Electron (0.6273ms)
+✔ getCurrentWeather delegates to window.jarvisElectron.weather.current and maps the response (0.1454ms)
+✔ a missing current block resolves to a failure result, not a crash (0.0987ms)
+✔ a thrown IPC call resolves to a failure result (0.854ms)
+✔ openApp navigates to the xbox: URI and reports success (0.9408ms)
+✔ launchGame resolves via the injected XboxLibrary and calls the Electron launch bridge (0.1987ms)
+✔ launchGame reports failure without calling the launch bridge when no match is found (0.0956ms)
+✔ launchGame reports failure when not running inside Electron, even with a match (0.0924ms)
+✔ launchGame reports failure when the Electron launch bridge itself reports failure, instead of silently claiming success (0.1204ms)
+✔ launchGame asks the LLM fallback when the library fuzzy-match misses, and launches its pick (0.6101ms)
+✔ launchGame reports failure when the LLM fallback also finds nothing (0.1206ms)
+✔ launchGame does not consult resolveEntity when the library is empty (0.1122ms)
+✔ fetchLibrary returns an empty array when not running in Electron (1.4352ms)
+✔ fetchLibrary maps Electron IPC results into { name, nameLower, appId } (0.2059ms)
+✔ fetchLibrary returns an empty array and does not throw when the IPC call rejects (0.136ms)
+✔ fetchLibrary reuses the cached result on a second call without re-invoking the IPC bridge (0.1192ms)
+✔ findGame fuzzy-matches against the fetched library (0.3012ms)
+ℹ tests 421
+ℹ suites 0
+ℹ pass 383
+ℹ fail 38
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4218.3973
+
+✖ failing tests:
+
+test at test\autonomous-tool-reasoner.browser-detection.test.js:1:1
+✖ test\autonomous-tool-reasoner.browser-detection.test.js (110.1711ms)
+  'test failed'
+
+test at test\autonomous-tool-reasoner.calendar-detection.test.js:1:1
+✖ test\autonomous-tool-reasoner.calendar-detection.test.js (110.9164ms)
+  'test failed'
+
+test at test\autonomous-tool-reasoner.camera-detection.test.js:1:1
+✖ test\autonomous-tool-reasoner.camera-detection.test.js (112.2974ms)
+  'test failed'
+
+test at test\autonomous-tool-reasoner.epic-xbox-detection.test.js:1:1
+✖ test\autonomous-tool-reasoner.epic-xbox-detection.test.js (113.5862ms)
+  'test failed'
+
+test at test\autonomous-tool-reasoner.game-launch-detection.test.js:1:1
+✖ test\autonomous-tool-reasoner.game-launch-detection.test.js (114.8052ms)
+  'test failed'
+
+test at test\autonomous-tool-reasoner.gmail-detection.test.js:1:1
+✖ test\autonomous-tool-reasoner.gmail-detection.test.js (116.3297ms)
+  'test failed'
+
+test at test\autonomous-tool-reasoner.math-detection.test.js:1:1
+✖ test\autonomous-tool-reasoner.math-detection.test.js (117.1244ms)
+  'test failed'
+
+test at test\autonomous-tool-reasoner.open-site-detection.test.js:1:1
+✖ test\autonomous-tool-reasoner.open-site-detection.test.js (118.2097ms)
+  'test failed'
+
+test at test\autonomous-tool-reasoner.screen-detection.test.js:1:1
+✖ test\autonomous-tool-reasoner.screen-detection.test.js (118.8332ms)
+  'test failed'
+
+test at test\autonomous-tool-reasoner.spotify-detection.test.js:1:1
+✖ test\autonomous-tool-reasoner.spotify-detection.test.js (119.1707ms)
+  'test failed'
+
+test at test\autonomous-tool-reasoner.tier-detection.test.js:1:1
+✖ test\autonomous-tool-reasoner.tier-detection.test.js (119.3589ms)
+  'test failed'
+
+test at test\autonomous-tool-reasoner.xbox-epic-launch-detection.test.js:1:1
+✖ test\autonomous-tool-reasoner.xbox-epic-launch-detection.test.js (120.3621ms)
+  'test failed'
+
+test at test\helpers\jarvis-test-utils.js:1:1
+✖ test\helpers\jarvis-test-utils.js (60.5106ms)
+  'test failed'
+
+test at test\jarvis-core.action-history.test.js:1:1
+✖ test\jarvis-core.action-history.test.js (139.8374ms)
+  'test failed'
+
+test at test\jarvis-core.active-provider-label.test.js:1:1
+✖ test\jarvis-core.active-provider-label.test.js (119.844ms)
+  'test failed'
+
+test at test\jarvis-core.ai-classify-provider.test.js:1:1
+✖ test\jarvis-core.ai-classify-provider.test.js (119.693ms)
+  'test failed'
+
+test at test\jarvis-core.ai-intent-classifier.test.js:1:1
+✖ test\jarvis-core.ai-intent-classifier.test.js (119.6665ms)
+  'test failed'
+
+test at test\jarvis-core.ask-vision-provider.test.js:1:1
+✖ test\jarvis-core.ask-vision-provider.test.js (123.9925ms)
+  'test failed'
+
+test at test\jarvis-core.calendar-routing.test.js:1:1
+✖ test\jarvis-core.calendar-routing.test.js (124.4485ms)
+  'test failed'
+
+test at test\jarvis-core.camera-vision-routing.test.js:1:1
+✖ test\jarvis-core.camera-vision-routing.test.js (124.65ms)
+  'test failed'
+
+test at test\jarvis-core.conversation-memory.test.js:1:1
+✖ test\jarvis-core.conversation-memory.test.js (126.2264ms)
+  'test failed'
+
+test at test\jarvis-core.entity-resolver.test.js:1:1
+✖ test\jarvis-core.entity-resolver.test.js (124.0569ms)
+  'test failed'
+
+test at test\jarvis-core.epic-xbox-routing.test.js:1:1
+✖ test\jarvis-core.epic-xbox-routing.test.js (120.0835ms)
+  'test failed'
+
+test at test\jarvis-core.game-launcher-routing.test.js:1:1
+✖ test\jarvis-core.game-launcher-routing.test.js (120.016ms)
+  'test failed'
+
+test at test\jarvis-core.gmail-routing.test.js:1:1
+✖ test\jarvis-core.gmail-routing.test.js (126.3343ms)
+  'test failed'
+
+test at test\jarvis-core.grounding-tools.test.js:1:1
+✖ test\jarvis-core.grounding-tools.test.js (128.5124ms)
+  'test failed'
+
+test at test\jarvis-core.hermes-provider.test.js:1:1
+✖ test\jarvis-core.hermes-provider.test.js (127.8884ms)
+  'test failed'
+
+test at test\jarvis-core.llm-provider.test.js:1:1
+✖ test\jarvis-core.llm-provider.test.js (127.6838ms)
+  'test failed'
+
+test at test\jarvis-core.maps-routing.test.js:1:1
+✖ test\jarvis-core.maps-routing.test.js (126.7329ms)
+  'test failed'
+
+test at test\jarvis-core.math-routing.test.js:1:1
+✖ test\jarvis-core.math-routing.test.js (126.6039ms)
+  'test failed'
+
+test at test\jarvis-core.mcp-web.test.js:1:1
+✖ test\jarvis-core.mcp-web.test.js (126.8492ms)
+  'test failed'
+
+test at test\jarvis-core.notes-routing.test.js:1:1
+✖ test\jarvis-core.notes-routing.test.js (126.9133ms)
+  'test failed'
+
+test at test\jarvis-core.processing-guard.test.js:1:1
+✖ test\jarvis-core.processing-guard.test.js (127.1306ms)
+  'test failed'
+
+test at test\jarvis-core.screen-vision-routing.test.js:1:1
+✖ test\jarvis-core.screen-vision-routing.test.js (128.4964ms)
+  'test failed'
+
+test at test\jarvis-core.search-grounding.test.js:1:1
+✖ test\jarvis-core.search-grounding.test.js (127.1999ms)
+  'test failed'
+
+test at test\jarvis-core.settings.test.js:1:1
+✖ test\jarvis-core.settings.test.js (128.8703ms)
+  'test failed'
+
+test at test\jarvis-core.spotify-routing.test.js:1:1
+✖ test\jarvis-core.spotify-routing.test.js (130.4534ms)
+  'test failed'
+
+test at test\jarvis-core.tier-routing.test.js:1:1
+✖ test\jarvis-core.tier-routing.test.js (133.6404ms)
+  'test failed'
