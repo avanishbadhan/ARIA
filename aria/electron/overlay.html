@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    html,body {
+      margin:0;padding:0;width:100%;height:100%;background:rgba(0,0,0,0.8);color:#fff;font-family:sans-serif;pointer-events:none;z-index:2147483647
+    }
+    .overlay-container{
+      position:fixed;top:20px;left:20px;width:400px;max-width:90vw;max-height:60vh;background:#1a1a2e;border:1px solid #3b82f6;border-radius:8px;padding:15px;overflow:auto;box-shadow:0 10px 30px rgba(0,0,0,0.7);z-index:2147483647;line-height:1.5
+    }
+    .overlay-header{
+      display:flex;justify-content:space-between;align-items:center;margin:-15px -15px -10px;padding-bottom:10px;border-bottom:1px solid #3b82f6
+    }
+    .overlay-title{font-size:14px;font-weight:bold}
+    .overlay-close{cursor:pointer;font-size:18px;color:#888}
+    .overlay-title span{cursor:pointer;color:#64b5f6}
+    .overlay-title span:hover{color:#90caf9}
+    .capture-status{margin-top:10px;font-size:12px;color:#aaa}
+    .status-listening{color:#4caf50}
+    .status-capturing{color:#ffc107}
+    .status-idle{color:#666}
+  </style>
+</head>
+<body>
+  <div class="overlay-container" id="overlayContainer">
+    <div class="overlay-header">
+      <span class="overlay-title">Screen Overlay</span>
+      <span class="overlay-close" id="closeOverlay">x</span>
+    </div>
+    <div class="capture-status" id="captureStatus">Monitoring screen...</div>
+    <div id="screenshotArea" style="margin-top:10px;min-height:200px;"></div>
+  </div>
+
+  <script>
+    const ipc=window.require('electron').ipcRenderer
+    const overlay=document.getElementById('overlayContainer')
+    const closeBtn=document.getElementById('closeOverlay')
+    const captureStatus=document.getElementById('captureStatus')
+    const screenshotArea=document.getElementById('screenshotArea')
+    let isVisible=true
+    function toggleVisibility(){
+      isVisible=!isVisible;
+      overlay.style.display=isVisible?'block':'none';
+      ipc.send('screen:toggle-overlay',isVisible)
+    }
+    closeBtn.addEventListener('click',toggleVisibility)
+    ipc.send('screen:toggle-overlay',true)
+    ipc.on('screen:overlay-state',(event,state)=>{
+      captureStatus.textContent=state;
+      if(state.includes('Capturing'))captureStatus.className='status-capturing';
+      else if(state.includes('Monitoring'))captureStatus.className='status-listening';
+      else captureStatus.className='status-idle'
+    })
+  </script>
+</body>
+</html>
