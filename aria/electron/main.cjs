@@ -246,6 +246,27 @@ function registerScreenMonitorIpc() {
   ipcMain.handle('screen:monitor-hide', () => { hideIndicator(); });
 }
 
+function showOverlay() {
+  if (!overlayWindow) createOverlayWindow();
+  overlayWindow.showInactive();
+}
+
+function hideOverlay() {
+  if (overlayWindow) overlayWindow.hide();
+}
+
+ipcMain.handle('screen:toggle-overlay', (event, visible) => {
+  if (visible) showOverlay();
+  else hideOverlay();
+  return { success: true };
+});
+
+ipcMain.handle('screen:overlay-state', () => {
+  if (overlayWindow && overlayWindow.isVisible()) return 'Overlay is visible and capturing';
+  else if (overlayWindow) return 'Overlay is hidden';
+  else return 'No overlay window';
+});
+
 function configureAutoLaunch() {
   // Only meaningful for an installed build — dev runs point at the Electron
   // binary itself, which isn't something useful to auto-launch at login.

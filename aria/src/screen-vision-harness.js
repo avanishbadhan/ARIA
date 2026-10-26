@@ -11,6 +11,7 @@ export class ScreenVisionHarness {
     this.onLog = options.onLog || (() => {});
     this.askVisionLLM = options.askVisionLLM;
     this.isMonitoring = false;
+    this.overlayWindow = null;
   }
 
   async startMonitoring() {
