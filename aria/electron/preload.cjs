@@ -63,7 +63,23 @@ contextBridge.exposeInMainWorld('jarvisElectron', {
   screen: {
     capturePrimary: () => ipcRenderer.invoke('screen:capture-primary'),
     monitorShow: () => ipcRenderer.invoke('screen:monitor-show'),
-    monitorHide: () => ipcRenderer.invoke('screen:monitor-hide')
+    monitorHide: () => ipcRenderer.invoke('screen:monitor-hide'),
+    overlayToggle: (visible) => ipcRenderer.invoke('screen:toggle-overlay', visible),
+    overlayState: () => ipcRenderer.invoke('screen:overlay-state')
+  },
+  overlay: {
+    sendMessage: (text) => ipcRenderer.invoke('overlay:send-message', { text }),
+    sendResponse: (text) => ipcRenderer.send('overlay:response', { text }),
+    onResponse: (callback) => {
+      const listener = (event, data) => callback(data);
+      ipcRenderer.on('overlay:response', listener);
+      return () => ipcRenderer.removeListener('overlay:response', listener);
+    },
+    onMessage: (callback) => {
+      const listener = (event, data) => callback(data);
+      ipcRenderer.on('overlay:message', listener);
+      return () => ipcRenderer.removeListener('overlay:message', listener);
+    }
   },
   update: {
     getVersion: () => ipcRenderer.invoke('update:get-version'),

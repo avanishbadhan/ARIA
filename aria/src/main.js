@@ -313,7 +313,27 @@ function initApp() {
     });
   }
 
-  // 8. Steam Library Credential Setup Panel
+  // 8. Overlay message handler — when the overlay sends a message, process it through ARIA
+  if (window.jarvisElectron?.overlay) {
+    window.jarvisElectron.overlay.onMessage(async (data) => {
+      if (!jarvis || !data || !data.text) return;
+      try {
+        // Capture the response text from ARIA's onResponse callback
+        let responseText = 'Processed.';
+        const originalOnResponse = jarvis.onResponse;
+        jarvis.onResponse = (resp) => {
+          if (resp && resp.text) responseText = resp.text;
+          if (originalOnResponse) originalOnResponse(resp);
+        };
+        await jarvis.processUserInput(data.text);
+        // Restore original onResponse
+        jarvis.onResponse = originalOnResponse;
+        window.jarvisElectron.overlay.sendResponse(responseText);
+      } catch (e) {
+        window.jarvisElectron.overlay.sendResponse('I encountered an error processing your request.');
+      }
+    });
+  }
   const steamApiKeyInput = document.getElementById('steamApiKeyInput');
   const steamIdInput = document.getElementById('steamIdInput');
   const steamSaveBtn = document.getElementById('steamSaveBtn');

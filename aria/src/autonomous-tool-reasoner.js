@@ -271,7 +271,7 @@ export class AutonomousToolReasoner {
     }
 
     // 8g. Check for screen overlay toggle commands
-    if (text.match(/^(?:show|hide|toggle)\s+(?:the\s+)?overlay[.!]?\s*$/i)) {
+    if (text.match(/^(?:show|hide|toggle)\s+(?:(?:the|screen)\s+)?overlay[.!]?\s*$/i)) {
       return {
         shouldCallTool: true,
         toolName: 'SCREEN_TOGGLE_OVERLAY',

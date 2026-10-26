@@ -40,6 +40,7 @@ let mainWindow = null;
 let tray = null;
 let micProcess = null;
 let indicatorWindow = null;
+let overlayWindow = null;
 app.isQuitting = false;
 
 // Auto-download only kicks in for major bumps (see update-classify.cjs) —
@@ -247,12 +248,55 @@ function registerScreenMonitorIpc() {
 }
 
 function showOverlay() {
+console.log('[OVERLAY] showOverlay called');
   if (!overlayWindow) createOverlayWindow();
-  overlayWindow.showInactive();
+  overlayWindow.show();
+  console.log('[OVERLAY] Window shown');
+}
+
+function createOverlayWindow() {
+  const workArea = screen.getPrimaryDisplay().workArea;
+
+  overlayWindow = new BrowserWindow({
+    width: 420,
+    height: 520,
+    x: workArea.x + 20,
+    y: workArea.y + 20,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    resizable: false,
+    focusable: true,
+    show: false,
+    webPreferences: {
+      contextIsolation: false,
+      nodeIntegration: true
+    }
+  });
+
+  overlayWindow.setIgnoreMouseEvents(false);
+  overlayWindow.loadFile(path.join(__dirname, 'overlay.html')).catch(err => {
+    console.error('[OVERLAY] Failed to load overlay.html:', err);
+  });
+  console.log('[OVERLAY] Window created, loading overlay.html...');
+
+  overlayWindow.webContents.on('did-finish-load', () => {
+    console.log('[OVERLAY] overlay.html loaded successfully');
+  });
+
+  overlayWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+    console.error('[OVERLAY] Failed to load:', errorCode, errorDescription);
+  });
+
+  overlayWindow.on('closed', () => { overlayWindow = null; });
 }
 
 function hideOverlay() {
-  if (overlayWindow) overlayWindow.hide();
+  if (overlayWindow) {
+    overlayWindow.hide();
+    console.log('[OVERLAY] Window hidden');
+  }
 }
 
 ipcMain.handle('screen:toggle-overlay', (event, visible) => {
@@ -265,6 +309,20 @@ ipcMain.handle('screen:overlay-state', () => {
   if (overlayWindow && overlayWindow.isVisible()) return 'Overlay is visible and capturing';
   else if (overlayWindow) return 'Overlay is hidden';
   else return 'No overlay window';
+});
+
+// Overlay <-> ARIA communication relay
+ipcMain.handle('overlay:send-message', (event, { text }) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('overlay:message', { text });
+  }
+  return { success: true };
+});
+
+ipcMain.on('overlay:response', (event, { text }) => {
+  if (overlayWindow && !overlayWindow.isDestroyed()) {
+    overlayWindow.webContents.send('overlay:response', { text });
+  }
 });
 
 function configureAutoLaunch() {

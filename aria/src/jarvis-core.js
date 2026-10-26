@@ -877,7 +877,12 @@ export class JarvisCore {
     if (decision.toolName === 'SCREEN_TOGGLE_OVERLAY') {
       this._updateAgentState("agent-3", "EXECUTING", "Toggling screen overlay");
 
-      const result = await this.screenVisionHarness.startOverlay();
+      // Determine whether to show or hide based on the user's input
+      const inputLower = input.toLowerCase();
+      const hideIntent = inputLower.includes('hide') || inputLower.includes('close') || inputLower.includes('remove');
+      const result = hideIntent
+        ? await this.screenVisionHarness.stopOverlay()
+        : await this.screenVisionHarness.startOverlay();
 
       this.onResponse({
         text: result.message,

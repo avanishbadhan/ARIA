@@ -34,44 +34,20 @@ export class ScreenVisionHarness {
   }
 
   async startOverlay() {
-    if (!window.jarvisElectron?.screen?.capturePrimary) {
-      return { success: false, message: 'Screen capture is only available in the desktop app, Sir.' };
+    if (!window.jarvisElectron?.screen?.overlayToggle) {
+      return { success: false, message: 'Screen overlay is only available in the desktop app, Sir.' };
     }
-    if (!this.overlayWindow) {
-      const { BrowserWindow } = window.jarvisElectron;
-      const workArea = screen.getPrimaryDisplay().workArea;
-      this.overlayWindow = new BrowserWindow({
-        width: 420,
-        height: 340,
-        x: workArea.x + 20,
-        y: workArea.y + 20,
-        frame: false,
-        transparent: true,
-        alwaysOnTop: true,
-        skipTaskbar: true,
-        resizable: false,
-        focusable: false,
-        show: false,
-        webPreferences: {
-          contextIsolation: true,
-          nodeIntegration: false
-        }
-      });
-      this.overlayWindow.loadFile(path.join(__dirname, '..', '..', 'electron', 'overlay.html'));
-      this.overlayWindow.setIgnoreMouseEvents(true, { forward: true });
-      this.overlayWindow.on('closed', () => { this.overlayWindow = null; });
-    }
-    this.overlayWindow.showInactive();
+    const result = await window.jarvisElectron.screen.overlayToggle(true);
     this.onLog({ type: 'SUCCESS', message: '[SCREEN VISION] Overlay window shown.' });
     return { success: true, message: 'Overlay window shown, Sir.' };
   }
 
   async stopOverlay() {
-    if (this.overlayWindow) {
-      this.overlayWindow.hide();
-      this.overlayWindow = null;
-      this.onLog({ type: 'HARNESS', message: '[SCREEN VISION] Overlay window hidden.' });
+    if (!window.jarvisElectron?.screen?.overlayToggle) {
+      return { success: false, message: 'Screen overlay is only available in the desktop app, Sir.' };
     }
+    const result = await window.jarvisElectron.screen.overlayToggle(false);
+    this.onLog({ type: 'HARNESS', message: '[SCREEN VISION] Overlay window hidden.' });
     return { success: true, message: 'Overlay window hidden, Sir.' };
   }
 

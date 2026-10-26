@@ -24,6 +24,7 @@ const TOOL_PARAM_REQUIREMENTS = {
   SET_MODEL_TIER: ['tier'],
   SCREEN_MONITOR_START: [],
   SCREEN_MONITOR_STOP: [],
+  SCREEN_TOGGLE_OVERLAY: [],
   SCREEN_QUERY: ['question'],
   CAMERA_START: [],
   CAMERA_STOP: [],
@@ -60,6 +61,7 @@ Available tools and their exact params shape:
 - SET_MODEL_TIER: { tier: "quick"|"medium"|"high"|"ultra" }
 - SCREEN_MONITOR_START: {}
 - SCREEN_MONITOR_STOP: {}
+- SCREEN_TOGGLE_OVERLAY: {} — user wants to show, hide, or toggle the screen overlay panel (e.g. "show screen overlay", "hide overlay", "toggle overlay")
 - SCREEN_QUERY: { question: string }
 - CAMERA_START: {} — user wants to open/activate/turn on the webcam or camera vision feed (e.g. "open camera", "turn on the camera")
 - CAMERA_STOP: {} — user wants to close/deactivate/turn off the webcam or camera vision feed
