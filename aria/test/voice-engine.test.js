@@ -229,6 +229,101 @@ test('a Deepgram session that actually produces a transcript resets the failure 
   assert.equal(engine._consecutiveErrors, 0);
 });
 
+// --- Deepgram: overlapping sessions (the "says LISTENING but isn't" bug) ---
+
+function setupDeepgram() {
+  global.window = makeDeepgramWindow(false);
+  global.navigator.mediaDevices = global.window.navigator.mediaDevices;
+  global.MediaRecorder = FakeMediaRecorder;
+  global.WebSocket = FakeWebSocket;
+  FakeWebSocket.instances = [];
+  const states = [];
+  const engine = new VoiceEngine({ onStateChange: (s) => states.push(s.status), deepgramApiKey: 'test-key-race' });
+  engine.autoRestart = true;
+  engine.continuousMode = true;
+  return { engine, states };
+}
+
+test('two overlapping Deepgram starts open only one session', async () => {
+  const { engine } = setupDeepgram();
+
+  await Promise.all([engine._startDeepgram(), engine._startDeepgram()]);
+
+  assert.equal(FakeWebSocket.instances.length, 1);
+});
+
+test('a superseded Deepgram session closing late does not tear down the live one', async () => {
+  const { engine, states } = setupDeepgram();
+
+  await engine._startDeepgram();
+  const stale = FakeWebSocket.instances[0];
+  stale.onopen();
+  engine._stopDeepgram(); // e.g. speak() — its close event arrives later
+
+  await engine._startDeepgram();
+  const live = FakeWebSocket.instances[1];
+  live.onopen();
+
+  stale.onclose({ code: 1000, reason: '', wasClean: true });
+
+  assert.equal(engine._deepgramSocket, live);
+  assert.equal(engine._mediaRecorder.state, 'recording');
+  assert.equal(engine.isListening, true);
+  assert.equal(states[states.length - 1], 'LISTENING');
+});
+
+test('stopListening() while getUserMedia is pending cancels the session', async () => {
+  const { engine } = setupDeepgram();
+
+  const starting = engine._startDeepgram();
+  engine.stopListening();
+  await starting;
+
+  assert.equal(FakeWebSocket.instances.length, 0);
+  assert.equal(engine._deepgramSocket, null);
+});
+
+test('an unexpected Deepgram drop stops showing LISTENING while it reconnects', async () => {
+  const { engine, states } = setupDeepgram();
+
+  await engine._startDeepgram();
+  const socket = FakeWebSocket.instances[0];
+  socket.onopen();
+  socket.onmessage({ data: JSON.stringify({ type: 'Metadata', duration: 3 }) });
+  socket.onclose({ code: 1011, reason: '', wasClean: false });
+
+  assert.notEqual(states[states.length - 1], 'LISTENING');
+  assert.equal(engine.isListening, false);
+});
+
+test('a superseded reply does not reopen the mic and cut off the next reply', async () => {
+  global.localStorage.store.clear();
+  global.window = makeWindow();
+  let cancels = 0;
+  const pending = [];
+  global.window.speechSynthesis = {
+    speaking: false,
+    getVoices: () => [],
+    speak(u) { this.speaking = true; pending.push(u); },
+    cancel() { cancels++; this.speaking = false; }
+  };
+  global.SpeechSynthesisUtterance = class { constructor(text) { this.text = text; } };
+
+  const engine = new VoiceEngine({});
+  engine.continuousMode = true;
+  let startCalls = 0;
+  engine.startListening = () => { startCalls++; return true; };
+
+  const first = engine.speak('reply A');
+  pending[0].onend(); // A finishes; its 1200ms mic guard is now armed
+  window.speechSynthesis.speaking = false;
+  engine.speak('reply B'); // B starts inside A's guard window
+  await first; // A's guard fires while B is still speaking
+
+  assert.equal(startCalls, 0, "A's stale guard must not restart the mic over B");
+  assert.equal(cancels, 0);
+});
+
 test('a fatal mic error is reported through onLog', () => {
   global.localStorage.store.clear();
   global.window = makeWindow();

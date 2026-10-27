@@ -43,6 +43,8 @@ export class VoiceEngine {
     this._deepgramSocket = null;
     this._mediaRecorder = null;
     this._micStream = null;
+    this._dgSession = null; // token for the live Deepgram session (see _startDeepgram)
+    this._speechGen = 0; // bumped per reply so superseded replies can't reopen the mic
 
     this._initAudioContext();
     this._initSpeechRecognition();
@@ -276,7 +278,18 @@ export class VoiceEngine {
   // entirely from standard Web APIs (getUserMedia + MediaRecorder + WebSocket)
   // — no platform-specific bridge needed, unlike the browser/Electron engines.
   async _startDeepgram() {
-    if (this._deepgramSocket) return; // already connecting/connected
+    // Already connecting/connected. _dgSession is claimed synchronously,
+    // before the getUserMedia await — checking only _deepgramSocket (set after
+    // the await) let two overlapping starts both pass and open two sessions.
+    if (this._dgSession || this._deepgramSocket) return;
+
+    // Every async step and handler below checks it still owns the engine
+    // before touching shared state. Without this, a superseded session's late
+    // onclose tore down the live session's recorder and mic stream while the
+    // UI kept showing LISTENING — the "says listening but isn't" bug.
+    const session = {};
+    this._dgSession = session;
+    const isCurrent = () => this._dgSession === session;
 
     // Per-session flag: did Deepgram ever confirm it decoded real audio out of
     // what we sent it? Some environments produce a MediaRecorder stream that
@@ -287,14 +300,25 @@ export class VoiceEngine {
     // "listening" while never hearing anything.
     this._dgSessionDecoded = false;
 
+    let micStream;
     try {
-      this._micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (e) {
+      if (!isCurrent()) return;
+      this._dgSession = null;
       this.autoRestart = false;
       this.continuousMode = false;
       this.onStateChange({ status: "ERROR", message: `Microphone access denied: ${e.message}. Click the stop (■) button to retry listening.` });
       return;
     }
+    // stopListening()/speak() ran while getUserMedia was pending — drop this
+    // start instead of opening a session nobody asked for anymore.
+    if (!isCurrent()) {
+      micStream.getTracks().forEach(t => t.stop());
+      return;
+    }
+    session.micStream = micStream;
+    this._micStream = micStream;
 
     const params = new URLSearchParams({
       // nova-2 is plan-gated: Deepgram silently accepts the connection and
@@ -312,16 +336,19 @@ export class VoiceEngine {
       keywords: 'Aria:5'
     });
     const socket = new WebSocket(`wss://api.deepgram.com/v1/listen?${params.toString()}`, ['token', this.deepgramApiKey]);
+    session.socket = socket;
     this._deepgramSocket = socket;
 
     socket.onopen = () => {
+      if (!isCurrent()) return;
       this.isListening = true;
       if (!this._silentRestart) this.playBeep(880, 0.1, 'sine');
       this._silentRestart = false;
       this.onStateChange({ status: "LISTENING", message: "Listening for voice input..." });
 
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm';
-      const recorder = new MediaRecorder(this._micStream, { mimeType });
+      const recorder = new MediaRecorder(micStream, { mimeType });
+      session.recorder = recorder;
       this._mediaRecorder = recorder;
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0 && socket.readyState === WebSocket.OPEN) {
@@ -332,6 +359,7 @@ export class VoiceEngine {
     };
 
     socket.onmessage = (event) => {
+      if (!isCurrent()) return;
       let data;
       try {
         data = JSON.parse(event.data);
@@ -362,22 +390,26 @@ export class VoiceEngine {
     };
 
     socket.onerror = () => {
+      if (!isCurrent()) return;
       this._consecutiveErrors = (this._consecutiveErrors || 0) + 1;
     };
 
     socket.onclose = (event) => {
-      const wasIntentional = !this._deepgramSocket; // already cleared by _stopDeepgram()
-      this._deepgramSocket = null;
-      if (this._mediaRecorder && this._mediaRecorder.state !== 'inactive') {
-        try { this._mediaRecorder.stop(); } catch (e) {}
+      // Always release this session's own resources...
+      if (session.recorder && session.recorder.state !== 'inactive') {
+        try { session.recorder.stop(); } catch (e) {}
       }
-      if (this._micStream) {
-        this._micStream.getTracks().forEach(t => t.stop());
-        this._micStream = null;
-      }
-      this.isListening = false;
+      micStream.getTracks().forEach(t => t.stop());
 
-      if (wasIntentional) return; // we closed this ourselves (stopListening/speak)
+      // ...but only touch engine state if this is still the live session. A
+      // stale session (we closed it ourselves via stopListening/speak, or it
+      // was superseded) must not clobber whatever session is running now.
+      if (!isCurrent()) return;
+      this._dgSession = null;
+      this._deepgramSocket = null;
+      this._mediaRecorder = null;
+      this._micStream = null;
+      this.isListening = false;
 
       // A session that closes (cleanly or not) without Deepgram ever having
       // decoded audio is a real failure, not a quiet timeout — count it.
@@ -410,6 +442,9 @@ export class VoiceEngine {
 
       // Deepgram sessions can time out after a period of silence — quietly reconnect.
       if (this.autoRestart && this.continuousMode && !this.isSpeaking && !this.suppressMic) {
+        // Don't leave LISTENING on screen while nothing is connected — the
+        // next session's onopen flips it back once audio is flowing again.
+        this.onStateChange({ status: "IDLE", message: "Microphone reconnecting..." });
         this._silentRestart = true;
         setTimeout(() => {
           if (this.continuousMode && !this.isSpeaking && !this.suppressMic) this._startDeepgram();
@@ -422,7 +457,10 @@ export class VoiceEngine {
 
   _stopDeepgram() {
     const socket = this._deepgramSocket;
-    this._deepgramSocket = null; // marks the close as intentional for the onclose handler
+    // Releasing the session token marks the close as intentional for its
+    // onclose handler, and cancels a start still awaiting getUserMedia.
+    this._dgSession = null;
+    this._deepgramSocket = null;
     if (socket) {
       try { socket.close(); } catch (e) {}
     }
@@ -499,6 +537,14 @@ export class VoiceEngine {
     if (this.isMuted) return this._speakSilently(text);
     this._ensureAudioContext();
 
+    // Each reply gets a generation number, bumped before stopSpeaking()
+    // cancels the previous one. A superseded reply's onend/onerror (and its
+    // 1200ms mic-guard timer) must still resolve its caller, but must not
+    // reopen the mic — that used to call startListening() -> stopSpeaking()
+    // and cut off the newer reply mid-sentence.
+    const gen = ++this._speechGen;
+    const isCurrentSpeech = () => this._speechGen === gen;
+
     // Immediately stop & suppress speech recognition while speaking
     this.suppressMic = true;
     this.autoRestart = false;
@@ -538,19 +584,23 @@ export class VoiceEngine {
       };
 
       utterance.onend = () => {
+        if (!isCurrentSpeech()) return resolve();
         this.isSpeaking = false;
         this.onSpeechMeter({ active: false, intensity: 0 });
         this.onStateChange({ status: "IDLE", message: "System online" });
 
         // Enforce guard delay so echo from speakers dies down before mic reactivates
         setTimeout(() => {
-          this.suppressMic = false;
-          if (this.continuousMode) this.startListening();
+          if (isCurrentSpeech()) {
+            this.suppressMic = false;
+            if (this.continuousMode) this.startListening();
+          }
           resolve();
         }, 1200);
       };
 
       utterance.onerror = (err) => {
+        if (!isCurrentSpeech()) return resolve();
         console.warn("TTS Error:", err);
         this.isSpeaking = false;
         this.onSpeechMeter({ active: false, intensity: 0 });
@@ -572,6 +622,9 @@ export class VoiceEngine {
    * flow behave exactly like a voiced reply.
    */
   _speakSilently(text) {
+    // Same superseded-reply guard as speak() — bumped before stopSpeaking()
+    // settles any previous muted reply.
+    const gen = ++this._speechGen;
     this.suppressMic = true;
     this.autoRestart = false;
     if (this.engine === 'deepgram') {
@@ -608,8 +661,10 @@ export class VoiceEngine {
         this.onSpeechMeter({ active: false, intensity: 0 });
         this.onStateChange({ status: "IDLE", message: "System online" });
         setTimeout(() => {
-          this.suppressMic = false;
-          if (this.continuousMode) this.startListening();
+          if (this._speechGen === gen) {
+            this.suppressMic = false;
+            if (this.continuousMode) this.startListening();
+          }
           resolve();
         }, 1200);
       };
