@@ -248,8 +248,9 @@ function registerScreenMonitorIpc() {
 }
 
 function showOverlay() {
-console.log('[OVERLAY] showOverlay called');
+  console.log('[OVERLAY] showOverlay called');
   if (!overlayWindow) createOverlayWindow();
+  overlayWindow.setSize(56, 56);
   overlayWindow.show();
   console.log('[OVERLAY] Window shown');
 }
@@ -258,20 +259,28 @@ function createOverlayWindow() {
   const workArea = screen.getPrimaryDisplay().workArea;
 
   overlayWindow = new BrowserWindow({
-    width: 420,
-    height: 520,
+    width: 56,
+    height: 56,
     x: workArea.x + 20,
     y: workArea.y + 20,
     frame: false,
-    transparent: true,
+    transparent: false,
+    backgroundColor: '#0d1629',
     alwaysOnTop: true,
     skipTaskbar: true,
     resizable: false,
     focusable: true,
-    show: false,
+    show: true,
     webPreferences: {
       contextIsolation: false,
       nodeIntegration: true
+    }
+  });
+
+  // IPC handler to resize overlay window
+  ipcMain.on('overlay:resize', (event, { width, height }) => {
+    if (overlayWindow && !overlayWindow.isDestroyed()) {
+      overlayWindow.setSize(width, height);
     }
   });
 
@@ -289,6 +298,9 @@ function createOverlayWindow() {
     console.error('[OVERLAY] Failed to load:', errorCode, errorDescription);
   });
 
+  overlayWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    console.log(`[OVERLAY RENDERER] ${message}`);
+  });
   overlayWindow.on('closed', () => { overlayWindow = null; });
 }
 
@@ -323,6 +335,18 @@ ipcMain.on('overlay:response', (event, { text }) => {
   if (overlayWindow && !overlayWindow.isDestroyed()) {
     overlayWindow.webContents.send('overlay:response', { text });
   }
+});
+
+ipcMain.handle('overlay:toggle-ready', () => {
+  // Just acknowledge overlay window is ready
+  return { success: true };
+});
+
+ipcMain.handle('overlay:resize', (event, { width, height }) => {
+  if (overlayWindow && !overlayWindow.isDestroyed()) {
+    overlayWindow.setSize(width, height);
+  }
+  return { success: true };
 });
 
 function configureAutoLaunch() {
