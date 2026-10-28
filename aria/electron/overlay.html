@@ -19,6 +19,7 @@
       --font-main: 'Segoe UI', 'Inter', 'Roboto', sans-serif;
       --radius: 14px;
       --green-ok: #34d399;
+      --gold-glow: #ffaa00;
       --red-alert: #ff3366;
     }
 
@@ -35,12 +36,12 @@
       background: transparent;
       font-family: var(--font-main);
       color: var(--text-main);
-      pointer-events: auto;
+      pointer-events: none;
       user-select: none;
       -webkit-user-select: none;
     }
 
-    /* ===== Closed State: Tiny ARIA Box ===== */
+    /* ===== Closed State: Tiny Overlay Box ===== */
     .overlay-panel {
       position: fixed;
       top: 24px;
@@ -59,13 +60,21 @@
       z-index: 2147483647;
       line-height: 1.4;
       pointer-events: auto;
-      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      opacity: 1;
+      transform: scale(1);
+      animation: panel-enter 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
       cursor: move;
       -webkit-app-region: drag;
-      cursor: pointer;
+      transition: width 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+                  height 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+                  border-radius 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
 
-    /* Hover over closed state: expand */
+    /* Hover state - expand to chat panel */
     .overlay-panel:hover {
       width: 380px;
       height: 520px;
@@ -73,42 +82,26 @@
       padding: 16px;
       overflow-y: auto;
       cursor: default;
-      z-index: 2147483648;
     }
 
-    /* ===== Closed State: ARIA Logo Only ===== */
-    .logo-only {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: transparent;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      z-index: 2;
-      pointer-events: none;
-    }
-
+    /* ===== ARIA Logo (Closed State Only) ===== */
     .aria-logo-large {
       font-family: var(--font-mono);
-      font-size: 10px;
+      font-size: 9px;
       font-weight: 700;
       letter-spacing: 1px;
       color: var(--primary);
-      text-shadow: 0 0 14px rgba(0, 240, 255, 0.5);
+      text-shadow: 0 0 12px rgba(0, 240, 255, 0.5);
       line-height: 1;
+      margin-bottom: 4px;
     }
 
-    .overlay-panel:hover .logo-only {
+    .overlay-panel:hover .aria-logo-large {
       opacity: 0;
       pointer-events: none;
-      transition: opacity 0.2s ease;
     }
 
-    /* ===== Title Bar (Hidden When Closed, Visible on Hover) ===== */
+    /* ===== Title Bar (Visible on Hover) ===== */
     .title-bar {
       position: relative;
       z-index: 2;
@@ -361,7 +354,7 @@
       padding: 6px 12px 10px;
       border-top: 1px solid rgba(148, 184, 255, 0.08);
       flex-shrink: 0;
-      background: rgba(5, 9, 20, 0.25);
+      background: rgba(5, 9, 20, 0.3);
     }
 
     .input-wrapper {
@@ -435,7 +428,7 @@
       color: var(--text-dim);
       letter-spacing: 0.8px;
       text-transform: uppercase;
-      opacity: 0.45;
+      opacity: 0.5;
       flex-shrink: 0;
     }
 
@@ -445,7 +438,7 @@
       height: 3px;
       border-radius: 50%;
       background: var(--primary);
-      margin-right: 2px;
+      margin-right: 3px;
       vertical-align: middle;
       box-shadow: 0 0 3px var(--primary-glow);
       animation: pulse-dot 2s ease-in-out infinite;
@@ -612,8 +605,8 @@
         await ipc.invoke('screen:toggle-overlay', false);
       });
 
-            // Notify main process that overlay is ready
-      await ipc.invoke('screen:toggle-overlay-ready');
+      // Notify main process that overlay is ready
+      await ipc.invoke('overlay:toggle-ready');
 
       // Focus input on load
       setTimeout(() => inputField.focus(), 300);
