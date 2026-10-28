@@ -1906,6 +1906,7 @@ app.whenReady().then(() => {
   registerWolframIpc();
   registerWeatherIpc();
   registerMapsIpc();
+  registerFilesIpc();
   registerSpotifyIpc();
   registerSpotifyAuthIpc();
   registerGoogleAuthIpc();
