@@ -36,7 +36,7 @@
       background: transparent;
       font-family: var(--font-main);
       color: var(--text-main);
-      pointer-events: none;
+      pointer-events: auto;
       user-select: none;
       -webkit-user-select: none;
     }
@@ -84,7 +84,7 @@
       cursor: default;
     }
 
-    /* ===== ARIA Logo (Closed State Only) ===== */
+    /* ===== ARIA Logo (Closed State) ===== */
     .aria-logo-large {
       font-family: var(--font-mono);
       font-size: 9px;
@@ -101,7 +101,7 @@
       pointer-events: none;
     }
 
-    /* ===== Title Bar (Visible on Hover) ===== */
+    /* ===== Title Bar (Hidden When Closed) ===== */
     .title-bar {
       position: relative;
       z-index: 2;
@@ -188,7 +188,7 @@
       color: var(--red-alert);
     }
 
-    /* ===== Hidden UI Elements (Visible Only When Hovered) ===== */
+    /* ===== Hidden UI Elements (Hidden When Closed) ===== */
     .hidden-when-closed {
       opacity: 0;
       pointer-events: none;
@@ -365,7 +365,7 @@
 
     .input-field {
       flex: 1;
-      background: rgba(13, 22, 41, 0.5);
+      background: rgba(13, 22, 41, 0.6);
       border: 1px solid rgba(148, 184, 255, 0.1);
       border-radius: 8px;
       padding: 7px 12px;
@@ -525,7 +525,7 @@
 
   <script>
     (async () => {
-      const ipc = window.require('electron').ipcRenderer;
+      const ipc = window.jarvisElectron?.ipcRenderer;
       const overlayPanel = document.getElementById('overlayPanel');
       const closeBtn = document.getElementById('closeBtn');
       const chatMessages = document.getElementById('chatMessages');
