@@ -250,17 +250,22 @@ function registerScreenMonitorIpc() {
 function showOverlay() {
   console.log('[OVERLAY] showOverlay called');
   if (!overlayWindow) createOverlayWindow();
-  overlayWindow.setSize(56, 56);
+  overlayWindow.setSize(OVERLAY_BAR_W, OVERLAY_BAR_H);
   overlayWindow.show();
   console.log('[OVERLAY] Window shown');
 }
+
+// Horizontal bar dimensions — must match the CSS vars in overlay.html
+const OVERLAY_BAR_W = 460;
+const OVERLAY_BAR_H = 64;
+const OVERLAY_EXPANDED_H = 380;
 
 function createOverlayWindow() {
   const workArea = screen.getPrimaryDisplay().workArea;
 
   overlayWindow = new BrowserWindow({
-    width: 56,
-    height: 56,
+    width: OVERLAY_BAR_W,
+    height: OVERLAY_BAR_H,
     x: workArea.x + 20,
     y: workArea.y + 20,
     frame: false,
@@ -272,15 +277,9 @@ function createOverlayWindow() {
     focusable: true,
     show: true,
     webPreferences: {
-      contextIsolation: false,
-      nodeIntegration: true
-    }
-  });
-
-  // IPC handler to resize overlay window
-  ipcMain.on('overlay:resize', (event, { width, height }) => {
-    if (overlayWindow && !overlayWindow.isDestroyed()) {
-      overlayWindow.setSize(width, height);
+      contextIsolation: true,
+      nodeIntegration: false,
+      preload: path.join(__dirname, 'preload.cjs')
     }
   });
 

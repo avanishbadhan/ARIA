@@ -69,6 +69,8 @@ contextBridge.exposeInMainWorld('jarvisElectron', {
   },
   overlay: {
     sendMessage: (text) => ipcRenderer.invoke('overlay:send-message', { text }),
+    setSize: (width, height) => ipcRenderer.invoke('overlay:resize', { width, height }),
+    toggleReady: () => ipcRenderer.invoke('overlay:toggle-ready'),
     sendResponse: (text) => ipcRenderer.send('overlay:response', { text }),
     onResponse: (callback) => {
       const listener = (event, data) => callback(data);
