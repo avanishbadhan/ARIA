@@ -50,6 +50,20 @@ export const GROUNDING_TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'view_screen',
+      description: "Captures a screenshot of the user's computer screen and answers a question about what is currently visible on it. Use this whenever the question depends on what the user is looking at right now — an app, a game board (e.g. tic-tac-toe state), a code editor, an error message, or anything on their display that you cannot know otherwise.",
+      parameters: {
+        type: 'object',
+        properties: {
+          question: { type: 'string', description: 'What to look for or answer about the screen, phrased as a question (e.g. "Where should X play next in the tic-tac-toe game shown on screen?").' }
+        },
+        required: ['question']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'web_search',
       description: 'Looks up a live, current fact on the web. Use this for anything that could have changed since your training data or that you are not confident about.',
       parameters: {
@@ -250,7 +264,7 @@ export const GROUNDING_TOOLS = [
  * model can still answer from its own knowledge instead of the whole
  * completion failing.
  */
-export function createToolExecutor({ wolfram, harness, gmail, calendar, location, weather, maps, mcpWeb, getGoogleCredentials, files, setPendingFileAction, onLog = () => {} }) {
+export function createToolExecutor({ wolfram, harness, gmail, calendar, location, weather, maps, mcpWeb, getGoogleCredentials, files, setPendingFileAction, getScreenVision, onLog = () => {} }) {
   return async function executeTool(name, argsJson) {
     let args;
     try {
@@ -269,6 +283,22 @@ export function createToolExecutor({ wolfram, harness, gmail, calendar, location
       } catch (e) {
         onLog({ type: 'WARNING', message: `[TOOL CALL] solve_math failed: ${e.message}` });
         return 'WolframAlpha unavailable or found no result for this query.';
+      }
+    }
+
+    if (name === 'view_screen') {
+      const question = args.question || 'Describe what is on the screen right now.';
+      try {
+        const screenVision = typeof getScreenVision === 'function' ? getScreenVision() : null;
+        if (!screenVision || typeof screenVision.askAboutScreen !== 'function') {
+          return 'Screen viewing is unavailable right now.';
+        }
+        const result = await screenVision.askAboutScreen(question);
+        onLog({ type: 'TOOL', message: `[TOOL CALL] view_screen("${question}") -> ${result.success ? 'answered from screenshot' : 'unavailable'}` });
+        return result.message;
+      } catch (e) {
+        onLog({ type: 'WARNING', message: `[TOOL CALL] view_screen failed: ${e.message}` });
+        return 'Unable to view the screen right now.';
       }
     }
 

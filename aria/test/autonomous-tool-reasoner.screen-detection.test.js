@@ -26,7 +26,13 @@ const screenQueryCases = [
   'what does this say',
   'read this',
   'what am i looking at',
-  'describe my screen'
+  'describe my screen',
+  'what am i viewing on my computer',
+  'can you read this',
+  'what is this error',
+  'explain this code',
+  "what's on the computer screen",
+  'can you see my tic tac toe on my screen, i am X. where should i play next'
 ];
 for (const query of screenQueryCases) {
   test(`classifies "${query}" as SCREEN_QUERY with the full input as the question`, () => {

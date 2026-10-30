@@ -300,6 +300,10 @@
 
       const BAR_W = 460, BAR_H = 64, EXP_H = 380;
       let expanded = false;
+      // In-flight response bookkeeping — if ARIA never answers (e.g. the main
+      // window was reloaded/restarting mid-request), the "Processing..." row
+      // must not hang forever.
+      let pendingTimer = null;
 
       function setExpanded(next) {
         expanded = next;
@@ -323,32 +327,17 @@
         return msg;
       }
 
-      async function sendMessage() {
-        const text = inputField.value.trim();
-        if (!text) return;
-        inputField.value = '';
-        if (!expanded) setExpanded(true);
-        addMessage(text, 'user');
-        const thinkingMsg = addMessage('', 'thinking');
-        try {
-          await ipc.overlay.sendMessage(text);
-        } catch (e) {
-          thinkingMsg.remove();
-          addMessage('Error: ' + (e && e.message ? e.message : 'send failed'), 'aria');
-        }
-      }
+      // ---- Control wiring FIRST. Every interactive element gets its handler
+      // before any await, so a failure later in boot can never leave the
+      // widget dead (the close button must always work). ----
 
-      // Response from ARIA (routed through main.cjs from the main pipeline)
-      ipc.overlay.onResponse((data) => {
-        const thinkingMsg = chatMessages.querySelector('.chat-msg.thinking');
-        if (thinkingMsg) thinkingMsg.remove();
-        if (data && data.text) {
-          addMessage(data.text, 'aria');
-          if (!expanded) setExpanded(true); // surface the answer even if collapsed
-        }
+      closeBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        try { await ipc.screen.overlayToggle(false); } catch (err) { /* noop */ }
       });
 
-      sendBtn.addEventListener('click', sendMessage);
+      logoBtn.addEventListener('click', () => setExpanded(!expanded));
+
       inputField.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
@@ -356,11 +345,56 @@
         }
       });
 
-      // Logo click toggles the response panel; × hides the whole widget
-      logoBtn.addEventListener('click', () => setExpanded(!expanded));
-      closeBtn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        try { await ipc.screen.overlayToggle(false); } catch (err) { /* noop */ }
+      // Escape: collapse the conversation panel, or hide the widget entirely
+      // when already collapsed.
+      document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        if (expanded) {
+          setExpanded(false);
+        } else {
+          ipc.screen.overlayToggle(false).catch(() => {});
+        }
+      });
+
+      async function sendMessage() {
+        const text = inputField.value.trim();
+        if (!text) return;
+        inputField.value = '';
+        if (!expanded) setExpanded(true);
+        addMessage(text, 'user');
+        addMessage('', 'thinking');
+        clearTimeout(pendingTimer);
+        pendingTimer = setTimeout(() => {
+          const t = chatMessages.querySelector('.chat-msg.thinking');
+          if (t) {
+            t.remove();
+            addMessage('No response from ARIA — the main window may still be loading. Try sending that again.', 'aria');
+          }
+        }, 60000);
+        try {
+          await ipc.overlay.sendMessage(text);
+        } catch (e) {
+          clearTimeout(pendingTimer);
+          const t = chatMessages.querySelector('.chat-msg.thinking');
+          if (t) t.remove();
+          addMessage('Error: ' + (e && e.message ? e.message : 'send failed'), 'aria');
+        }
+      }
+
+      sendBtn.addEventListener('click', sendMessage);
+
+      // ---- Response channel + boot acks (safe to fail without killing UI) ----
+
+      // Response from ARIA (routed through main.cjs from the main pipeline)
+      ipc.overlay.onResponse((data) => {
+        clearTimeout(pendingTimer);
+        pendingTimer = null;
+        const thinkingMsg = chatMessages.querySelector('.chat-msg.thinking');
+        if (thinkingMsg) thinkingMsg.remove();
+        if (data && data.text) {
+          addMessage(data.text, 'aria');
+          if (!expanded) setExpanded(true); // surface the answer even if collapsed
+        }
       });
 
       // Acknowledge readiness (breaks the old auto-show loop)

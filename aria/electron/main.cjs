@@ -249,8 +249,14 @@ function registerScreenMonitorIpc() {
 
 function showOverlay() {
   console.log('[OVERLAY] showOverlay called');
-  if (!overlayWindow) createOverlayWindow();
-  overlayWindow.setSize(OVERLAY_BAR_W, OVERLAY_BAR_H);
+  // Recreate from scratch on every show so a wedged overlay (stale IPC, dead
+  // renderer state left over from previous hot reloads / long sessions) can
+  // never persist — showing the overlay is always a fresh boot of it.
+  if (overlayWindow && !overlayWindow.isDestroyed()) {
+    overlayWindow.destroy();
+    overlayWindow = null;
+  }
+  createOverlayWindow();
   overlayWindow.show();
   console.log('[OVERLAY] Window shown');
 }
@@ -373,8 +379,15 @@ function stopMic(notifyRenderer = false) {
   }
 }
 
-function startMic() {
-  if (micProcess) return; // already running
+function startMic(force = false) {
+  if (micProcess) {
+    if (!force) return; // already running
+    // Force restart: a long-lived recognizer can go deaf (SAPI engine stall,
+    // stuck suppress state, or a stale process from before a renderer reload
+    // re-armed listening). A forced start gets a guaranteed-fresh engine.
+    try { micProcess.kill(); } catch (e) {}
+    micProcess = null;
+  }
 
   micProcess = spawn('powershell.exe', [
     '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', SPEECH_SCRIPT_PATH
@@ -435,7 +448,7 @@ function startMic() {
 }
 
 function registerMicIpc() {
-  ipcMain.handle('mic:start', () => { startMic(); });
+  ipcMain.handle('mic:start', (event, { force } = {}) => { startMic(force); });
   ipcMain.handle('mic:stop', () => { stopMic(true); });
 }
 

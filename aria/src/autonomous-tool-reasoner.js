@@ -259,7 +259,7 @@ export class AutonomousToolReasoner {
       };
     }
 
-    const screenQueryPattern = /what'?s on my screen|what is on my screen|what does (?:this|that) say|read (?:this|that)|what am i looking at|describe my screen|look at my screen|can you see my screen/i;
+    const screenQueryPattern = /what'?s on my screen|what is on my screen|what does (?:this|that) say|read (?:this|that)|what am i (?:looking at|viewing|seeing)|what (?:do|can) you see (?:on|from) (?:my|the) (?:screen|computer|desktop|monitor)|(?:can|could|do) you see\b[^.?!]{0,40}\bscreen\b|can you (?:see|read) (?:this|that|it)|what(?:'s| is) (?:this|that) (?:error|code|graph|chart|website|app|application|document|picture|image)|explain (?:this|that) (?:code|error|graph|chart|page)|on (?:my|the) (?:computer|pc|laptop) screen|describe my screen|look at my screen|can you see my screen/i;
     if (screenQueryPattern.test(text)) {
       return {
         shouldCallTool: true,
@@ -521,16 +521,33 @@ export class AutonomousToolReasoner {
         }
       }
 
-      // Generic play request
-      const playMatch = text.match(/(?:play|wanna play|want to play|fire up|load up)\s+([a-z0-9\s]+)/i);
-      if (playMatch && playMatch[1]) {
-        return {
-          shouldCallTool: true,
-          toolName: 'STEAM_LAUNCH_GAME',
-          confidence: 0.85,
-          params: { gameQuery: playMatch[1].trim() },
-          reasoning: `Autonomous reasoner inferred game launch request for "${playMatch[1].trim()}".`
-        };
+      // Generic play request — anchored to a command position (start of input,
+      // optionally after polite prefixes like "can you"/"please") so that
+      // conversational mentions of "play" mid-sentence ("where should i play
+      // next", "i like how you play it") no longer get inferred as a bare
+      // game launch. Capture also stops at sentence connectors/punctuation so
+      // the query doesn't swallow the rest of the sentence.
+      const playCommandMatch = text.match(
+        /^(?:(?:hey\s+)?aria[,.!']*\s+)?(?:(?:can|could|will|would)\s+(?:you|u|we)\s+|please\s+|let'?s\s+)?(?:wanna\s+play|want\s+to\s+play|play|fire\s+up|load\s+up)\s+([a-z0-9][a-z0-9\s']*)(?=\s*(?:[.?!]|$|\s+(?:on|in|via|from|with|and|while|before|after)))/i
+      );
+      if (playCommandMatch && playCommandMatch[1]) {
+        const rawQuery = playCommandMatch[1].trim().replace(/\s+/g, ' ');
+        // Positional/filler captures ("play next", "play it again") are
+        // conversational, not game titles — fall through instead.
+        const fillerQueries = new Set([
+          'next', 'again', 'now', 'it', 'that', 'this', 'one', 'them', 'these', 'those',
+          'something', 'anything', 'nothing', 'later', 'first', 'there', 'here',
+          'yes', 'no', 'ok', 'okay', 'x', 'o', 'a game', 'the game', 'games'
+        ]);
+        if (!fillerQueries.has(rawQuery.toLowerCase())) {
+          return {
+            shouldCallTool: true,
+            toolName: 'STEAM_LAUNCH_GAME',
+            confidence: 0.85,
+            params: { gameQuery: rawQuery },
+            reasoning: `Autonomous reasoner inferred game launch request for "${rawQuery}".`
+          };
+        }
       }
     }
 

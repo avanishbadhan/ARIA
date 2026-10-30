@@ -51,8 +51,26 @@ $readyJson = (@{ type = 'ready' } | ConvertTo-Json -Compress)
 
 $recognizer.RecognizeAsync([System.Speech.Recognition.RecognizeMode]::Multiple)
 
+# Orphan watchdog: remember our parent PID (the Electron main process that
+# spawned us). If the parent ever dies — force-killed dev restart, crash,
+# Task Manager kill — exit within a second instead of lingering and holding
+# the SAPI recognition engine / default microphone hostage.
+$parentPid = $null
+try {
+  $parentPid = (Get-CimInstance Win32_Process -Filter "ProcessId=$PID").ParentProcessId
+} catch {
+  $parentPid = $null
+}
+
 # Keep the process (and its registered event subscriptions) alive until
-# the parent Electron process kills it.
+# the parent Electron process kills it — or until the watchdog notices the
+# parent is gone and self-terminates.
 while ($true) {
   Start-Sleep -Seconds 1
+  if ($parentPid) {
+    $alive = Get-Process -Id $parentPid -ErrorAction SilentlyContinue
+    if (-not $alive) {
+      exit 0
+    }
+  }
 }

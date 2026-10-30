@@ -38,3 +38,35 @@ for (const [query, expectedGame] of launchCases) {
     assert.equal(decision.params.gameQuery, expectedGame);
   });
 }
+
+// Conversational back-and-forth that merely contains "play" mid-sentence must
+// never be inferred as a bare game launch — this hijacked replies like
+// "can you see my tic tac toe on my screen, i am X. where should i play next"
+// into a Steam launch for "next".
+const conversationalPlayCases = [
+  'where should i play next',
+  'i am X. where should i play next',
+  'let me think about where i should play',
+  'i was about to play, wait'
+];
+for (const query of conversationalPlayCases) {
+  test(`does NOT classify conversational "${query}" as a Steam game launch`, () => {
+    const decision = reasoner.evaluateIntent(query);
+    assert.notEqual(decision.toolName, 'STEAM_LAUNCH_GAME');
+  });
+}
+
+// Polite-prefix play commands must still launch: the anchor allows common
+// speech-to-text prefixes in front of the verb.
+const politeLaunchCases = [
+  ['can you play rust', 'Rust'],
+  ['please play csgo', 'Counter-Strike 2'],
+  ["let's play elden ring", 'Elden Ring']
+];
+for (const [query, expectedGame] of politeLaunchCases) {
+  test(`classifies "${query}" as STEAM_LAUNCH_GAME -> "${expectedGame}" despite the prefix`, () => {
+    const decision = reasoner.evaluateIntent(query);
+    assert.equal(decision.toolName, 'STEAM_LAUNCH_GAME');
+    assert.equal(decision.params.gameQuery, expectedGame);
+  });
+}

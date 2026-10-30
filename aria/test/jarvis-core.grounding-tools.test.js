@@ -25,7 +25,11 @@ test('_askVisionLLM passes the grounding tools and executor to the vision LLM', 
   await jarvis._askVisionLLM({ question: 'what is this?', imageDataUrl: 'data:image/jpeg;base64,FAKE' });
 
   assert.equal(groqCalls.length, 1);
-  assert.equal(groqCalls[0].tools, jarvis.groundingTools);
+  // view_screen is filtered out of the vision model's toolset: it is already
+  // looking at a fresh screenshot, and a recursive capture would be pointless.
+  const visionToolNames = groqCalls[0].tools.map(t => t.function.name);
+  assert.ok(!visionToolNames.includes('view_screen'));
+  assert.ok(visionToolNames.includes('solve_math'));
   assert.equal(groqCalls[0].toolExecutor, jarvis.toolExecutor);
 });
 

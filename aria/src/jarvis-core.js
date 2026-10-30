@@ -33,7 +33,7 @@ import { McpWebHarness } from './mcp-web-harness.js';
 // Only questions that reference the actual screen/display are treated as
 // screen-vision (SCREEN_QUERY) questions. Anything else tagged SCREEN_QUERY
 // by the AI classifier is re-routed to web search — see processUserInput.
-const SCREEN_QUERY_PATTERN = /screen|display|monitor|screenshot|desktop|window|browser|page|tab|what am i looking at|what do(?:es)? (?:this|that) say|what'?s on (?:my|the) screen|describe (?:my|the) screen/i;
+const SCREEN_QUERY_PATTERN = /screen|display|monitor|screenshot|desktop|window|browser|page|tab|viewing|what am i (?:looking at|seeing)|what (?:do|can) you see (?:on|from) (?:my|the) (?:screen|computer|desktop|monitor)|see\b[^.?!]{0,40}\bscreen\b|can you (?:see|read) (?:this|that|it)|what do(?:es)? (?:this|that) say|what'?s on (?:my|the) screen|describe (?:my|the) screen|on (?:my|the) (?:computer|pc|laptop)|what(?:'s| is) (?:this|that) (?:error|code|graph|chart|website|app|application|document|picture|image)|explain (?:this|that) (?:code|error|graph|chart|page)/i;
 
 // Matches requests for a nearby place or driving directions ("find pizza near
 // me", "closest coffee shop from here", "nearest gas station to my location",
@@ -197,6 +197,7 @@ export class JarvisCore {
       mcpWeb: this.mcpWebHarness,
       files: this.filesHarness,
       setPendingFileAction: (action) => { this.pendingFileAction = action; },
+      getScreenVision: () => this.screenVisionHarness || null,
       getGoogleCredentials: () => ({ clientId: this.googleClientId, clientSecret: this.googleClientSecret }),
       onLog: (logData) => this.onLog(logData)
     });
@@ -1344,7 +1345,11 @@ export class JarvisCore {
     // Grounding tools let the vision model call WolframAlpha instead of
     // eyeballing arithmetic off the screenshot — see
     // docs/superpowers/specs/2026-08-14-grounding-tool-calling-design.md.
-    const options = { temperature: 0.3, maxTokens: 600, tools: this.groundingTools, toolExecutor: this.toolExecutor };
+    // view_screen is excluded here: the model is ALREADY looking at a fresh
+    // screenshot, and a recursive view_screen call would capture again and
+    // ask itself the same question.
+    const visionTools = this.groundingTools.filter(t => t.function?.name !== 'view_screen');
+    const options = { temperature: 0.3, maxTokens: 600, tools: visionTools, toolExecutor: this.toolExecutor };
 
     // Ultra tier routes vision questions to Gemini first, same as
     // _chatWithActiveLLM does for text — Gemini takes images inline in the

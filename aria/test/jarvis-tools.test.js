@@ -8,7 +8,7 @@ test('GROUNDING_TOOLS lists read-only tools plus the sandboxed notes exception, 
   // userData/jarvis-notes/, confirmation-gated for overwrites/deletes — see
   // docs/superpowers/specs/2026-08-19-jarvis-notes-filesystem-design.md).
   assert.deepEqual(names, [
-    'solve_math', 'web_search', 'list_recent_emails', 'search_emails',
+    'solve_math', 'view_screen', 'web_search', 'list_recent_emails', 'search_emails',
     'list_upcoming_events', 'search_calendar_events', 'get_location',
     'get_weather', 'browse_webpage', 'find_nearby_places', 'get_directions',
     'write_note', 'read_note', 'list_notes', 'delete_note'
@@ -136,6 +136,38 @@ test('get_weather returns a fallback when no weather harness is available', asyn
   const result = await executor('get_weather', '{"lat":1,"lon":2}');
 
   assert.match(result, /unable to retrieve/i);
+});
+
+// view_screen: lets the conversational brain look at the user's screen via
+// the ScreenVisionHarness (same askAboutScreen pipeline as SCREEN_QUERY).
+test('view_screen delegates to screenVision.askAboutScreen with the parsed question', async () => {
+  const calls = [];
+  const screenVision = {
+    askAboutScreen: async (question) => { calls.push(question); return { success: true, message: 'An X at the top-left corner.' }; }
+  };
+  const executor = createToolExecutor({ wolfram: null, harness: null, getScreenVision: () => screenVision });
+
+  const result = await executor('view_screen', '{"question":"where should X play next?"}');
+
+  assert.deepEqual(calls, ['where should X play next?']);
+  assert.equal(result, 'An X at the top-left corner.');
+});
+
+test('view_screen falls back gracefully when no screen-vision harness is wired', async () => {
+  const executor = createToolExecutor({ wolfram: null, harness: null });
+
+  const result = await executor('view_screen', '{"question":"what is on screen?"}');
+
+  assert.equal(result, 'Screen viewing is unavailable right now.');
+});
+
+test('view_screen relays a harness failure answer as-is', async () => {
+  const screenVision = { askAboutScreen: async () => ({ success: false, message: "I couldn't read your screen right now, Sir." }) };
+  const executor = createToolExecutor({ wolfram: null, harness: null, getScreenVision: () => screenVision });
+
+  const result = await executor('view_screen', '{"question":"what is on screen?"}');
+
+  assert.equal(result, "I couldn't read your screen right now, Sir.");
 });
 
 test('list_recent_emails delegates to gmail.listRecent using the stored Google credentials', async () => {

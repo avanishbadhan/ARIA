@@ -498,7 +498,10 @@ export class VoiceEngine {
     }
 
     if (this.engine === 'electron') {
-      window.jarvisElectron.mic.start();
+      // Force: a fresh page load / re-arm must get a guaranteed-fresh
+      // recognizer — a long-lived start can be deaf or stale (e.g. the
+      // recognizer outlived a hot reload that re-armed listening).
+      window.jarvisElectron.mic.start({ force: true });
       return true;
     }
 

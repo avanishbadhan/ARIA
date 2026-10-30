@@ -62,7 +62,7 @@ Available tools and their exact params shape:
 - SCREEN_MONITOR_START: {}
 - SCREEN_MONITOR_STOP: {}
 - SCREEN_TOGGLE_OVERLAY: {} — user wants to show, hide, or toggle the screen overlay panel (e.g. "show screen overlay", "hide overlay", "toggle overlay")
-- SCREEN_QUERY: { question: string }
+- SCREEN_QUERY: { question: string } — the user is asking about what is currently shown or being viewed on their computer screen/display or desktop (e.g. "what's on my screen", "what am I looking at", "what am I viewing on my computer", "what does this say", "can you read this error", "what is this code doing", "describe the chart on my screen", "what is this error"). A screenshot is captured and analyzed with a vision model. Do NOT use for general-knowledge or web questions with no reference to what the user is viewing (those are GOOGLE_SEARCH or CONVERSATIONAL).
 - CAMERA_START: {} — user wants to open/activate/turn on the webcam or camera vision feed (e.g. "open camera", "turn on the camera")
 - CAMERA_STOP: {} — user wants to close/deactivate/turn off the webcam or camera vision feed
 - CAMERA_QUERY: { question: string } — user is asking a question about what the webcam currently sees (e.g. "what am I holding", "how many fingers am I holding up", "can you see me")

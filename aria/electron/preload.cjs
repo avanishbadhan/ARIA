@@ -47,7 +47,7 @@ contextBridge.exposeInMainWorld('jarvisElectron', {
     browseWebpage: (url, linkText) => ipcRenderer.invoke('mcp:browse-webpage', { url, linkText })
   },
   mic: {
-    start: () => ipcRenderer.invoke('mic:start'),
+    start: (opts) => ipcRenderer.invoke('mic:start', { force: Boolean(opts && opts.force) }),
     stop: () => ipcRenderer.invoke('mic:stop'),
     onTranscript: (callback) => {
       const listener = (event, data) => callback(data);
