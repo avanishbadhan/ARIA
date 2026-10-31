@@ -398,6 +398,10 @@ function startMic(force = false) {
     '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', SPEECH_SCRIPT_PATH
   ], { windowsHide: false });
 
+  // Fresh engine = as-yet-unknown transcript history.
+  lastFinalText = '';
+  lastFinalAt = 0;
+
   let buffer = '';
   micProcess.stdout.setEncoding('utf8');
   micProcess.stdout.on('data', (chunk) => {
