@@ -287,6 +287,42 @@ test('mishearing works in stop phrases too', () => {
   assert.deepEqual(controller.handleTranscript('Area, stop'), { action: 'END_CONVERSATION' });
 });
 
+test('SAPI garbled wake words followed by a command still dispatch (observed dictation maunderings)', () => {
+  const r1 = new ConversationController().handleTranscript('All are yet to five 2nd timer');
+  assert.equal(r1.action, 'DISPATCH_COMMAND');
+  assert.equal(r1.command, 'yet to five 2nd timer');
+
+  const r2 = new ConversationController().handleTranscript('Rei 1 to 5 second timer');
+  assert.equal(r2.action, 'DISPATCH_COMMAND');
+  assert.equal(r2.command, '1 to 5 second timer');
+
+  const r3 = new ConversationController().handleTranscript('already a set the timer for 5 seconds');
+  assert.equal(r3.action, 'DISPATCH_COMMAND');
+  assert.equal(r3.command, 'set the timer for 5 seconds');
+});
+
+test('a fuzzy wake garble with no trailing command is ambient speech, not an attempted wake', () => {
+  const controller = new ConversationController();
+  assert.deepEqual(controller.handleTranscript('already'), { action: 'IGNORE' });
+  assert.deepEqual(controller.handleTranscript('Are you'), { action: 'IGNORE' });
+  assert.deepEqual(controller.handleTranscript('All are'), { action: 'IGNORE' });
+  assert.deepEqual(controller.handleTranscript('Res'), { action: 'IGNORE' });
+});
+
+test('more observed SAPI wake garbles still wake with a command', () => {
+  const r1 = new ConversationController().handleTranscript('are yet set the timer for 5 seconds');
+  assert.equal(r1.action, 'DISPATCH_COMMAND');
+  assert.equal(r1.command, 'set the timer for 5 seconds');
+
+  const r2 = new ConversationController().handleTranscript('res set the timer for 5 seconds');
+  assert.equal(r2.action, 'DISPATCH_COMMAND');
+  assert.equal(r2.command, 'set the timer for 5 seconds');
+
+  const r3 = new ConversationController().handleTranscript('Arias said a timer for 5 seconds');
+  assert.equal(r3.action, 'DISPATCH_COMMAND');
+  assert.match(r3.command, /timer for 5 seconds/);
+});
+
 test('mid-conversation, a command starting with the word "area" is dispatched intact', () => {
   const controller = new ConversationController();
   controller.handleTranscript('Aria, hello');

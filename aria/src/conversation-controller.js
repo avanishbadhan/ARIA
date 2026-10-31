@@ -1,10 +1,17 @@
 // Speech-to-text often spells the name differently — live Deepgram testing
-// transcribed a spoken "Aria" as "Area". Only matched at the very start of an
+// transcribed a spoken "Aria" as "Area", and Windows SAPI dictation garbles it
+// even worse in practice ("All are yet to five second timer", "Rei 1 to ...",
+// "already a set the timer..."). Only matched at the very start of an
 // utterance, so "the parking area is full" is still ignored. The mishearings
 // are real words/names, so they only count as a wake word while idle — once a
 // conversation is active or a command is awaited, only an exact "Aria" is
-// stripped, so "area of a circle..." reaches the LLM intact.
-const WAKE_NAME = '(?:aria|area|arya|ariya|ariah)';
+// stripped, so "area of a circle..." reaches the LLM intact. Additionally,
+// the fuzzy garbles below only wake ARIA when an actual command follows them
+// (see handleTranscript): a bare "already?" or "are you?" is ambient speech,
+// not an attempted wake.
+const WAKE_NAME = '(?:aria|area|arya|ariya|ariah|arii|arah|arra|raya|raia|aleah|all\\s+are|already\\s+a|already|are\\s+you|are\\s+yet|arias|all\\s?right|re\\s?i|res)';
+// The recognized-spelling family that qualifies as an unambiguous wake.
+const STRICT_FAMILY_REGEX = /^(?:hey[,.! ]?\s+)?(?:aria|area|arya|ariya|ariah)\b[,!. ]*/i;
 const wakeWordRegex = (name) => new RegExp(`^(?:hey[,.!]?\\s+)?${name}\\b[,!.\\s]*`, 'i');
 const WAKE_WORD_REGEX = wakeWordRegex(WAKE_NAME);
 const STRICT_WAKE_WORD_REGEX = wakeWordRegex('aria');
@@ -88,6 +95,12 @@ export class ConversationController {
       return { action: 'DISPATCH_COMMAND', command: trailingCommand, alternatives: cleanedAlternatives, conversationStarting: true, chime: true };
     }
 
+    // Idle + wake word alone: exact "Aria"/"Area"/"Arya" etc. re-arm the
+    // command window; a fuzzy SAPI garble with nothing after it ("already?",
+    // "are you?") is ambient speech, not an attempted wake.
+    if (!STRICT_FAMILY_REGEX.test(text)) {
+      return { action: 'IGNORE' };
+    }
     this._awaitingCommand = true;
     return { action: 'AWAIT_COMMAND' };
   }

@@ -24,6 +24,7 @@ import { GROUNDING_TOOLS, createToolExecutor } from './jarvis-tools.js';
 import { GoogleAccountConnector } from './google-account-connector.js';
 import { GmailHarness } from './gmail-harness.js';
 import { GoogleCalendarHarness } from './google-calendar-harness.js';
+import { TimerStore, parseDurationMs, formatDurationMs } from './timer-store.js';
 import { LocationHarness } from './location-harness.js';
 import { WeatherHarness } from './weather-harness.js';
 import { MapsHarness } from './maps-harness.js';
@@ -102,6 +103,13 @@ export class JarvisCore {
 
     this.wolfram = new WolframClient(wolframAppId, {
       onLog: (logData) => this.onLog(logData)
+    });
+
+    // Real local timers (SET_TIMER / TIMER_CANCEL intents). State-changing,
+    // so deliberately not a grounding tool; expiry announcements are spoken
+    // and surfaced like any other action response.
+    this.timerStore = new TimerStore({
+      onFired: ({ id, label, durationMs }) => this._onTimerFired({ id, label, durationMs })
     });
 
     // Google account credentials are optional — without them connected,
@@ -962,6 +970,56 @@ export class JarvisCore {
       return;
     }
 
+    // 8i. Handle Timer Set ("set a timer for five seconds") — a REAL local
+    // timer, not an LLM hallucination. Duration is parsed from the natural
+    // language phrase; the expiry announcement speaks through the usual
+    // voiceEngine path.
+    if (decision.toolName === 'SET_TIMER') {
+      this._updateAgentState("agent-3", "EXECUTING", "Setting a timer");
+
+      const durationText = decision.params?.duration || input;
+      const durationMs = parseDurationMs(durationText);
+
+      if (!durationMs) {
+        const message = "I couldn't work out a duration, Sir — how long should the timer be?";
+        this.onResponse({ text: message, actionType: 'SET_TIMER', data: {} });
+        this._pushHistory(input, message);
+        this._updateAgentState("agent-3", "ACTIVE", "Timer duration missing");
+        await this.voiceEngine.speak(message);
+        return;
+      }
+
+      // Keep a short human label of the request for the expiry announcement.
+      const label = input.replace(/^\s*(?:set|start|make)\s+(?:me\s+)?(?:an?\s+|the\s+)?/i, '')
+        .replace(/\s*\b(?:timer|countdown)\b/gi, '')
+        .replace(/\s*\bfor\b/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      const timer = this.timerStore.schedule({ durationMs, label });
+
+      const message = `Timer set for ${formatDurationMs(durationMs)}, Sir.`;
+      this.onResponse({ text: message, actionType: 'SET_TIMER', data: { id: timer.id, durationMs, label } });
+      this._pushHistory(input, message);
+      this._updateAgentState("agent-8", "ACTIVE", `Timer ${timer.id} running — ${formatDurationMs(durationMs)}`);
+      await this.voiceEngine.speak(message);
+      return;
+    }
+
+    // 8j. Handle Timer Cancel ("cancel the timer").
+    if (decision.toolName === 'TIMER_CANCEL') {
+      this._updateAgentState("agent-3", "EXECUTING", "Cancelling timers");
+      const cancelled = this.timerStore.cancelAll();
+
+      const message = cancelled > 0
+        ? `Cancelled ${cancelled} timer${cancelled === 1 ? '' : 's'}, Sir.`
+        : 'No timers running, Sir.';
+      this.onResponse({ text: message, actionType: 'TIMER_CANCEL', data: { cancelled } });
+      this._pushHistory(input, message);
+      this._updateAgentState("agent-3", "ACTIVE", cancelled > 0 ? "Timers cancelled" : "No timers running");
+      await this.voiceEngine.speak(message);
+      return;
+    }
+
     // 8h. Handle Gmail Inbox Check ("check my email")
     if (decision.toolName === 'GMAIL_CHECK_INBOX') {
       this._updateAgentState("agent-3", "EXECUTING", "Checking Gmail inbox");
@@ -1453,6 +1511,32 @@ export class JarvisCore {
       agent.calls++;
       this.onSwarmUpdate(this.swarmAgents);
     }
+  }
+
+  /**
+   * Timer expiry announcement — spoken and surfaced exactly like any other
+   * action response. Fire-and-forget: called from a setTimeout, so it never
+   * blocks anything and never rejects into the timer loop.
+   */
+  _onTimerFired({ id, label, durationMs }) {
+    const subject = label ? `${label} ` : '';
+    const message = `Sir, your ${subject}timer for ${formatDurationMs(durationMs)} has gone off.`;
+    this.onLog({ type: 'SUCCESS', message: `⏰ [TIMER ${id} EXPIRED] ${message}` });
+    // Cyberpunk synthwave ringtone first, then the spoken announcement after
+    // the riff so the voice doesn't talk over its own music. Graceful
+    // fallback to the plain beep when the engine predates the ringtone (e.g.
+    // test mocks).
+    if (typeof this.voiceEngine.playTimerRingtone === 'function') {
+      this.voiceEngine.playTimerRingtone();
+      setTimeout(() => {
+        Promise.resolve(this.voiceEngine.speak(message)).catch(() => {});
+      }, 1400);
+    } else {
+      this.voiceEngine.playBeep(880, 0.35, 'sine');
+      Promise.resolve(this.voiceEngine.speak(message)).catch(() => {});
+    }
+    this.onResponse({ text: message, actionType: 'TIMER_FIRED', data: { id, label, durationMs } });
+    this._pushHistory('timer went off', message);
   }
 
   getSwarmStatus() {

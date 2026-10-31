@@ -12,7 +12,7 @@ const { describeGoogleTokenError } = require('./google-token-error.cjs');
 const mcpManager = require('./mcp-manager.cjs');
 
 const DEV_URL = 'http://localhost:3000';
-const ICON_PATH = path.join(__dirname, 'icon.png');
+const ICON_PATH = path.join(__dirname, 'assets', 'aria-icon.png');
 const SPEECH_SCRIPT_PATH = path.join(__dirname, 'speech-recognizer.ps1');
 
 // Local loopback redirect for Spotify's Authorization Code OAuth flow — this
@@ -415,8 +415,10 @@ function startMic(force = false) {
       if (msg.type === 'ready') {
         mainWindow.webContents.send('mic:status', { status: 'listening', message: 'Listening for voice input (Windows Speech)...' });
       } else if (msg.type === 'final' || msg.type === 'interim') {
+        console.log(`[MIC] ${msg.type}: ${JSON.stringify(msg.text)}`);
         mainWindow.webContents.send('mic:transcript', { text: msg.text, isFinal: msg.type === 'final', alternatives: msg.alternatives || [] });
       } else if (msg.type === 'error') {
+        console.warn('[MIC] recognizer error:', msg.message);
         mainWindow.webContents.send('mic:status', { status: 'error', message: `Windows Speech Recognition error: ${msg.message}` });
         stopMic();
       }

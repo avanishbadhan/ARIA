@@ -46,7 +46,7 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "electron/icon.png"
+      "icon": "electron/assets/aria-icon.png"
     },
     "nsis": {
       "oneClick": false,

@@ -35,6 +35,8 @@ const TOOL_PARAM_REQUIREMENTS = {
   CALENDAR_LIST_UPCOMING: [],
   CALENDAR_SEARCH: ['query'],
   CALENDAR_CREATE_EVENT: ['title', 'when'],
+  SET_TIMER: ['duration'],
+  TIMER_CANCEL: [],
   CONVERSATIONAL: []
 };
 
@@ -72,6 +74,8 @@ Available tools and their exact params shape:
 - CALENDAR_LIST_UPCOMING: {} — user wants to know what's on their calendar / upcoming meetings generally
 - CALENDAR_SEARCH: { query: string } — user wants to search their calendar for an event matching something specific
 - CALENDAR_CREATE_EVENT: { title: string, when: string } — user wants to schedule a new event; title is the event name, when is a natural-language time phrase like "tomorrow at 3pm" that the harness resolves into a real timestamp
+- SET_TIMER: { duration: string } — user wants to set a countdown timer or alarm that rings after a short delay (e.g. "set a timer for five seconds", "start a 30 second timer", "set a countdown for 2 minutes"). duration is the duration phrase verbatim ("five seconds", "30 seconds", "2 minutes and 30 seconds"). Do NOT use for day-long scheduling requests — those are CALENDAR_CREATE_EVENT.
+- TIMER_CANCEL: {} — user wants to cancel or stop a running timer/countdown (e.g. "cancel the timer", "stop my timer")
 - CONVERSATIONAL: {} (default — no tool needed, just answer normally)
 
 If the utterance may be a mis-transcribed version of one of the above

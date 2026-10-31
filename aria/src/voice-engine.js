@@ -755,4 +755,85 @@ export class VoiceEngine {
       osc.stop(now + 0.3);
     } catch (e) {}
   }
+
+  // Timer expiry ringtone — a synthwave stab (detuned saw arpeggio in A
+  // minor over sub-bass pulses, closed by a filtered noise sweep) in the
+  // app's cyberpunk register. Pure WebAudio, same discipline as the FX
+  // above: no audio assets, everything from oscillators + a noise buffer.
+  playTimerRingtone() {
+    if (!this.audioCtx) return;
+    try {
+      const ctx = this.audioCtx;
+      const now = ctx.currentTime;
+
+      // --- Detuned saw arpeggio lead (A3 → C5 zig-zag, 8 steps) ---
+      const arp = [220, 261.63, 329.63, 440, 523.25, 440, 329.63, 303.37];
+      const step = 0.085;
+      arp.forEach((freq, i) => {
+        const start = now + i * step;
+        // Two oscillators per note, detuned ±9 cents, sawtooth stacked for
+        // the classic synthwave width.
+        [-9, 9].forEach((cents) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(freq, start);
+          osc.detune.setValueAtTime(cents, start);
+          gain.gain.setValueAtTime(0.0001, start);
+          gain.gain.exponentialRampToValueAtTime(0.055, start + 0.012);
+          gain.gain.exponentialRampToValueAtTime(0.001, start + 0.16);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(start);
+          osc.stop(start + 0.18);
+        });
+      });
+
+      // --- Sub-bass pulse train every two arp steps (E1/A1 alternation) ---
+      const bassNotes = [41.2, 55, 41.2, 55];
+      bassNotes.forEach((freq, i) => {
+        const start = now + i * 0.34;
+        const osc = ctx.createOscillator();
+        const lp = ctx.createBiquadFilter();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq * 2, start);
+        lp.type = 'lowpass';
+        lp.frequency.setValueAtTime(320, start);
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(0.16, start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.3);
+        osc.connect(lp);
+        lp.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(start);
+        osc.stop(start + 0.32);
+      });
+
+      // --- Closing noise sweep ("data burst") x2, band-passed rising ---
+      const noiseBuf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.22), ctx.sampleRate);
+      const data = noiseBuf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) {
+        data[i] = Math.random() * 2 - 1;
+      }
+      [0.02, 0.68].forEach((offset, i) => {
+        const src = ctx.createBufferSource();
+        const bp = ctx.createBiquadFilter();
+        const gain = ctx.createGain();
+        const start = now + offset;
+        src.buffer = noiseBuf;
+        bp.type = 'bandpass';
+        bp.Q.setValueAtTime(1.8, start);
+        const from = i === 0 ? 1400 : 2400;
+        bp.frequency.setValueAtTime(from, start);
+        bp.frequency.exponentialRampToValueAtTime(from * 2.4, start + 0.2);
+        gain.gain.setValueAtTime(0.04, start);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.22);
+        src.connect(bp);
+        bp.connect(gain);
+        gain.connect(ctx.destination);
+        src.start(start);
+      });
+    } catch (e) {}
+  }
 }

@@ -281,6 +281,44 @@ export class AutonomousToolReasoner {
       };
     }
 
+    // 8h-1. Timer commands. Matches both the direct verb form ("set a timer
+    // for five seconds", "set a 5 second timer", "start a countdown for 3
+    // min") and the polite/garbled forms observed from SAPI ("can you set a
+    // timer...", "and use a timer for five seconds"). Anchored at the start,
+    // so chatter that merely mentions timers ("how to set a timer in python")
+    // stays conversational. The duration itself is resolved by
+    // timer-store.js's parseDurationMs at dispatch time (handles spelled and
+    // digit numbers, multi-unit phrases), so capturing the raw input here is
+    // enough.
+    const timerSetPatterns = [
+      // Verb-first: "set a timer ...", "start a countdown for 3 min",
+      // "set a 5 second timer" (optional duration between verb and noun).
+      /^(?:hey[,.! ]+)?(?:(?:aria|area|arya|ariya)[,.! ]+)?(?:(?:can|could|would|will|and)\s+(?:you|use)\s+|please\s+)?(?:set|start|make|create|begin|use)\b\s*(?:me\s+|us\s+)?(?:an?\s+|the\s+|for\s+)?(?:(?:\d+(?:\.\d+)?|one|two|three|four|five|six|seven|eight|nine|ten|fifteen|twenty|thirty)\s*(?:seconds?|secs?|minutes?|mins?|hours?|hrs?)\s+|for\s+[a-z\d. ]+?\s+)?(?:timers?|countdowns?)\b/i,
+      // Polite/garbled prefix with the verb swallowed by SAPI ("and use a
+      // timer for five seconds", "can you a timer for..."): determiner or
+      // noun carries the match instead of the verb.
+      /^(?:(?:can|could|would|will)\s+you\s+|(?:can|could)\s+u\s+|and\s+(?:you|use)\s+|please\s+)(?:set|start|make|create|begin|use)?\s*(?:me\s+|us\s+)?(?:an?\s+|the\s+|for\s+)?(?:(?:\d+(?:\.\d+)?|one|two|three|four|five|six|seven|eight|nine|ten|fifteen|twenty|thirty)\s*(?:seconds?|secs?|minutes?|mins?|hours?|hrs?)\s+|for\s+[a-z\d. ]+?\s+)?(?:timers?|countdowns?)\b/i
+    ];
+    if (timerSetPatterns.some((re) => re.test(text))) {
+      return {
+        shouldCallTool: true,
+        toolName: 'SET_TIMER',
+        confidence: 0.9,
+        params: { duration: input.trim() },
+        reasoning: "Autonomous reasoner detected intent to set a countdown timer."
+      };
+    }
+
+    if (text.match(/^(?:cancel|stop|clear)\s+(?:the\s+|my\s+|all\s+)?(?:timers?|countdowns?)\b/i)) {
+      return {
+        shouldCallTool: true,
+        toolName: 'TIMER_CANCEL',
+        confidence: 0.9,
+        params: {},
+        reasoning: "Autonomous reasoner detected intent to cancel a running timer."
+      };
+    }
+
     // 1g. Check for camera vision commands — same thin fallback-net role as
     // the screen monitoring checks above.
     if (text.match(/^(?:open|start|turn\s+on)\s+(?:the\s+|my\s+)?camera[.!]?\s*$/i)) {

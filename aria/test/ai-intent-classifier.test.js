@@ -127,6 +127,31 @@ test('rejects a GMAIL_SEARCH decision missing the required query param', async (
   assert.equal(result, null);
 });
 
+test('accepts a SET_TIMER decision with its required duration param', async () => {
+  const result = await classifyIntentWithAI({
+    input: 'set a timer for five seconds',
+    classifyIntent: async () => JSON.stringify({ toolName: 'SET_TIMER', params: { duration: 'five seconds' } })
+  });
+  assert.equal(result.toolName, 'SET_TIMER');
+  assert.deepEqual(result.params, { duration: 'five seconds' });
+});
+
+test('rejects a SET_TIMER decision missing the required duration param', async () => {
+  const result = await classifyIntentWithAI({
+    input: 'set a timer',
+    classifyIntent: async () => JSON.stringify({ toolName: 'SET_TIMER', params: {} })
+  });
+  assert.equal(result, null);
+});
+
+test('accepts a TIMER_CANCEL decision', async () => {
+  const result = await classifyIntentWithAI({
+    input: 'cancel the timer',
+    classifyIntent: async () => JSON.stringify({ toolName: 'TIMER_CANCEL', params: {} })
+  });
+  assert.equal(result.toolName, 'TIMER_CANCEL');
+});
+
 test('accepts a GMAIL_READ_MESSAGE decision with its required query param', async () => {
   const result = await classifyIntentWithAI({
     input: 'read me the email from sarah',
