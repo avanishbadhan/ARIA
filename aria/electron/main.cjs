@@ -39,6 +39,11 @@ const GOOGLE_AUTH_SCOPES = 'https://www.googleapis.com/auth/gmail.readonly https
 let mainWindow = null;
 let tray = null;
 let micProcess = null;
+// Duplicate-final suppression state — reset whenever a fresh recognizer
+// spawns so a new engine's legit re-recognition isn't wrongly swallowed.
+let lastFinalText = '';
+let lastFinalAt = 0;
+const FINAL_DUP_WINDOW_MS = 12000;
 let indicatorWindow = null;
 let overlayWindow = null;
 app.isQuitting = false;
@@ -416,6 +421,19 @@ function startMic(force = false) {
         mainWindow.webContents.send('mic:status', { status: 'listening', message: 'Listening for voice input (Windows Speech)...' });
       } else if (msg.type === 'final' || msg.type === 'interim') {
         console.log(`[MIC] ${msg.type}: ${JSON.stringify(msg.text)}`);
+        if (msg.type === 'final') {
+          // SAPI re-emits the same final transcript several times (reco
+          // restarts re-tag the last utterance); without this guard every
+          // re-emit re-dispatches the same command (8x screenshots, 8x TTS).
+          const key = String(msg.text || '').trim().toLowerCase();
+          const now = Date.now();
+          if (key && key === lastFinalText && now - lastFinalAt < FINAL_DUP_WINDOW_MS) {
+            console.log('[MIC] suppressed duplicate final (SAPI re-emit)');
+            continue;
+          }
+          lastFinalText = key;
+          lastFinalAt = now;
+        }
         mainWindow.webContents.send('mic:transcript', { text: msg.text, isFinal: msg.type === 'final', alternatives: msg.alternatives || [] });
       } else if (msg.type === 'error') {
         console.warn('[MIC] recognizer error:', msg.message);
