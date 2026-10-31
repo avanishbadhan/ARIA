@@ -61,9 +61,9 @@ Available tools and their exact params shape:
 - OPEN_SITE: { siteName: string } — ONLY when the user names a specific real site (e.g. "open YouTube", "go to github.com") or gives a full URL. Do NOT use OPEN_SITE for "open my browser", "open a new tab", "click on the first link", or vague browsing — those are GOOGLE_SEARCH or CONVERSATIONAL, not OPEN_SITE.
 - MATH_QUERY: { query: string }
 - SET_MODEL_TIER: { tier: "quick"|"medium"|"high"|"ultra" }
-- SCREEN_MONITOR_START: {}
-- SCREEN_MONITOR_STOP: {}
-- SCREEN_TOGGLE_OVERLAY: {} — user wants to show, hide, or toggle the screen overlay panel (e.g. "show screen overlay", "hide overlay", "toggle overlay")
+- SCREEN_MONITOR_START: {} — periodic background screen monitoring/stream analysis (e.g. "start monitoring my screen", "start watching my screen"). Do NOT use this when the user wants the floating overlay widget — that is SCREEN_TOGGLE_OVERLAY.
+- SCREEN_MONITOR_STOP: {} — background screen monitoring is no longer needed (e.g. "stop monitoring my screen", "stop watching my screen").
+- SCREEN_TOGGLE_OVERLAY: {} — user wants to show, hide, or toggle the floating screen overlay widget/panel/HUD (the small horizontal "ARIA" bar on screen, e.g. "show screen overlay", "screen overlay", "show the overlay", "hide overlay", "toggle overlay"). "Show"/"toggle"/"screen overlay" phrasing is ALWAYS this intent, never SCREEN_MONITOR_START/STOP.
 - SCREEN_QUERY: { question: string } — the user is asking about what is currently shown or being viewed on their computer screen/display or desktop (e.g. "what's on my screen", "what am I looking at", "what am I viewing on my computer", "what does this say", "can you read this error", "what is this code doing", "describe the chart on my screen", "what is this error"). A screenshot is captured and analyzed with a vision model. Do NOT use for general-knowledge or web questions with no reference to what the user is viewing (those are GOOGLE_SEARCH or CONVERSATIONAL).
 - CAMERA_START: {} — user wants to open/activate/turn on the webcam or camera vision feed (e.g. "open camera", "turn on the camera")
 - CAMERA_STOP: {} — user wants to close/deactivate/turn off the webcam or camera vision feed

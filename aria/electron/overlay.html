@@ -178,6 +178,9 @@
       flex-direction: column;
       gap: 6px;
       scrollbar-width: thin;
+      /* Keep wheel scrolling inside the panel — never let it chain out to
+         the window/page (which is overflow:hidden and feels "locked"). */
+      overscroll-behavior: contain;
     }
 
     .chat-messages::-webkit-scrollbar { width: 3px; }

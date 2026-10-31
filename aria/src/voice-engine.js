@@ -604,7 +604,10 @@ export class VoiceEngine {
 
       utterance.onerror = (err) => {
         if (!isCurrentSpeech()) return resolve();
-        console.warn("TTS Error:", err);
+        // Log the actionable detail (err.error: 'canceled' | 'interrupted' |
+        // 'synthesis-failed' | ...) instead of "[object SpeechSynthesisErrorEvent]".
+        const reason = (err && typeof err === 'object' && 'error' in err) ? err.error : (err ? String(err) : 'unknown');
+        console.warn(`TTS Error (${reason})`);
         this.isSpeaking = false;
         this.onSpeechMeter({ active: false, intensity: 0 });
         this.suppressMic = false;

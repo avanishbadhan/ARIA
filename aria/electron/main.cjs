@@ -354,7 +354,18 @@ ipcMain.handle('overlay:toggle-ready', () => {
 
 ipcMain.handle('overlay:resize', (event, { width, height }) => {
   if (overlayWindow && !overlayWindow.isDestroyed()) {
-    overlayWindow.setSize(width, height);
+    // The window is created with resizable:false (no user drag-resize).
+    // On Windows, setSize() against a non-resizable window is unreliable —
+    // it grows but refuses to shrink, which is exactly why the overlay
+    // expanded but never retracted. Temporarily enable resizing around the
+    // programmatic resize instead.
+    const wasResizable = overlayWindow.isResizable();
+    if (!wasResizable) overlayWindow.setResizable(true);
+    try {
+      overlayWindow.setSize(width, height);
+    } finally {
+      if (!wasResizable) overlayWindow.setResizable(false);
+    }
   }
   return { success: true };
 });

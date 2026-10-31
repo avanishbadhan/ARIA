@@ -432,6 +432,23 @@ export class JarvisCore {
       decision = this.toolReasoner.evaluateIntent(input);
     }
 
+    // Guard: the AI classifier frequently maps "show screen overlay" /
+    // "toggle screen overlay" onto SCREEN_MONITOR_START/STOP (both tools
+    // exist; the model conflates them). When the input clearly names the
+    // floating overlay widget, steer to SCREEN_TOGGLE_OVERLAY — its own
+    // dispatch already decides show vs hide from the wording.
+    if (decision.toolName === 'SCREEN_MONITOR_START' || decision.toolName === 'SCREEN_MONITOR_STOP') {
+      const inputLower = String(input || '').toLowerCase();
+      if (/\b(?:overlay|hud|mini[- ]?widget)\b/.test(inputLower)) {
+        this.onLog({ type: 'HARNESS', message: `[INTENT] Redirected "${input}" from ${decision.toolName} to SCREEN_TOGGLE_OVERLAY (input names the overlay widget).` });
+        decision = {
+          ...decision,
+          toolName: 'SCREEN_TOGGLE_OVERLAY',
+          reasoning: 'Reclassified screen-monitor intent to SCREEN_TOGGLE_OVERLAY: the input names the overlay widget, not background monitoring.'
+        };
+      }
+    }
+
     // Guard against the AI classifier over-eagerly tagging a non-screen
     // question (e.g. "what is the weather in my location") as SCREEN_QUERY,
     // which would send it to screen vision to read a screenshot instead of
