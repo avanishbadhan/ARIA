@@ -1166,7 +1166,10 @@ export class JarvisCore {
       }
 
       if (!answerText) {
-        answerText = `I have logged your request: "${input}". The multi-agent swarm has processed the intent and updated system state.`;
+        // Both providers failed (or no key). Never pretend success — tell the
+        // user why the brain is offline so a rejected/revoked API key gets
+        // fixed in Settings instead of silently falling back forever.
+        answerText = this._offlineNotice();
       }
       this._updateAgentState("agent-6", "ACTIVE", "Fallback used");
     }
@@ -1232,6 +1235,20 @@ export class JarvisCore {
     if (preferGroq && this.groq.apiKey) return 'Groq';
     if (this.openRouter.apiKey) return 'OpenRouter';
     return 'local knowledge base';
+  }
+
+  /**
+   * Honest offline notice for the conversational path: both LLM providers
+   * failed (rejected/revoked/missing key). The old fallback claimed
+   * "multi-agent swarm processed the intent", which the user rightly took as
+   * ARIA lying — nothing was actually processed.
+   */
+  _offlineNotice() {
+    const groqKeyConfigured = Boolean(this.groq.apiKey);
+    if (!groqKeyConfigured && !this.openRouter.apiKey) {
+      return 'I have no language model key configured, Sir. Add your Groq API key in Settings and I will be back online.';
+    }
+    return 'My language model is rejected or unreachable right now, Sir. Re-enter your Groq API key in Settings to restore me.';
   }
 
   async _chatWithActiveLLM(userInput, context, options = {}) {

@@ -56,6 +56,7 @@ const neuralColor = { r: 110, g: 175, b: 255 }; // lerped toward the state targe
 let spherePts = [];
 let sphereEdges = [];
 let sphereAdj = [];
+let sphereAdjEdge = [];  // parallel adjacency storing edge indices (for ember trails)
 // Drag-to-spin globe state: flick velocity decays into inertia after release.
 let neuralDragging = false;
 let neuralDragWired = false;
@@ -676,7 +677,7 @@ function startVisualizerAnimation() {
  * retracting with the speech meter while ARIA talks, and turning yellow
  * while thinking. Pure canvas 2D — no dependencies, DPR-aware.
  */
-function buildNeuralSphere(count = 220) {
+function buildNeuralSphere(count = 330) {
   spherePts = [];
   sphereEdges = [];
   sphereAdj = [];
@@ -687,14 +688,18 @@ function buildNeuralSphere(count = 220) {
     const theta = golden * i;
     // Organic radial jitter so it reads as a neural web, not a perfect globe.
     const nr = 0.86 + Math.random() * 0.28;
-    spherePts.push({ x: Math.cos(theta) * r * nr, y: y * nr, z: Math.sin(theta) * r * nr });
+    spherePts.push({
+      x: Math.cos(theta) * r * nr, y: y * nr, z: Math.sin(theta) * r * nr,
+      tw: Math.random() * Math.PI * 2,          // per-node twinkle phase
+      hub: i % 13 === 0                          // sparse glow cores
+    });
   }
   // Neighbor pairs are rotation-invariant — compute once, plus an adjacency
   // list so thought-pulses can hop neuron to neuron.
   const maxChord = 0.46;
   let edges = 0;
-  for (let i = 0; i < count && edges < 950; i++) {
-    for (let j = i + 1; j < count && edges < 950; j++) {
+  for (let i = 0; i < count && edges < 1500; i++) {
+    for (let j = i + 1; j < count && edges < 1500; j++) {
       const a = spherePts[i], b = spherePts[j];
       const dx = a.x - b.x, dy = a.y - b.y, dz = a.z - b.z;
       if (dx * dx + dy * dy + dz * dz < maxChord * maxChord) {
@@ -704,10 +709,13 @@ function buildNeuralSphere(count = 220) {
     }
   }
   sphereAdj = Array.from({ length: count }, () => []);
-  for (const [i, j] of sphereEdges) {
+  sphereAdjEdge = Array.from({ length: count }, () => []);
+  sphereEdges.forEach(([i, j], k) => {
     sphereAdj[i].push(j);
     sphereAdj[j].push(i);
-  }
+    sphereAdjEdge[i].push({ n: j, e: k });
+    sphereAdjEdge[j].push({ n: i, e: k });
+  });
 }
 
 function sizeNeuralCanvas() {
@@ -734,12 +742,30 @@ function startNeuralSphere() {
   let t = 0;
   let thinkAlpha = 0;
   let speakEnergy = 0; // smoothed speech drive — fast attack, slow release, never jerky
-  let pulses = [];
+  let flashes... let pulses = [];     // orange thought streak (thinking)
+  let embers = [];     // per-edge afterglow: the comet leaves burning links
+  let sparks = [];     // fireflies shed by the comet head (and its death burst)
+  let cometRings = []; // heartbeat rings pulsing off each comet head
+  let cometSpacing = 0;
+  let packets = [];    // cyan data packets — always-on ambient mesh traffic
+  let flow = [];       // flowing current streams (orbits of drifting particles)
+  let bolts = [];      // jagged lightning arcs jumping across the web
+  let boltTimer = 0;
+  let burst = 0;       // decaying packet-burst driver for state transitions
+  let shock = [];      // expanding shockwaves on state transitions
+  let flash = 0;       // brief full-frame flash on transitions
+  let prevState = 'idle';
+  let scan = { active: false, phi: -1.35, next: 320 }; // idle radar pole scan
+  let spokes = [];     // nucleus energy filaments (pinned node indices)
+  let sonar = [];      // expanding rings while listening
+  let bloomCanvas = null;
+  let bloomCtx = null;
   let dust = [];
 
   if (!spherePts.length) buildNeuralSphere();
   if (!dust.length) buildDust();
   sizeNeuralCanvas();
+  for (let i = 0; i < 9; i++) spokes.push((Math.random() * spherePts.length) | 0);
 
   // Click-drag spins the globe like an online globe: direct 1:1 steering
   // while held, flick velocity decaying into inertia on release. Wired once
@@ -774,7 +800,7 @@ function startNeuralSphere() {
     neuralStage.addEventListener('pointercancel', endDrag);
   }
 
-  function buildDust(n = 46) {
+  function buildDust(n = 110) {
     dust = [];
     for (let i = 0; i < n; i++) {
       dust.push({
@@ -803,6 +829,30 @@ function startNeuralSphere() {
     return { node, next: pickNeighbor(node, -1), t: Math.random(), pace: 0.9 + Math.random() * 0.2, trail: [] };
   }
 
+  // Jagged arc between two distant points on the shell: a lerp with a random
+  // mid-bulge, re-normalized to the sphere. Points stay in 3D so the whole
+  // bolt rotates with the globe during its short life.
+  function makeBolt() {
+    const i = (Math.random() * spherePts.length) | 0;
+    let j = (Math.random() * spherePts.length) | 0;
+    for (let tries = 0; tries < 8; tries++) {
+      if (Math.hypot(spherePts[i].x - spherePts[j].x, spherePts[i].y - spherePts[j].y, spherePts[i].z - spherePts[j].z) > 0.9) break;
+      j = (Math.random() * spherePts.length) | 0;
+    }
+    const a = spherePts[i], b = spherePts[j];
+    const mx = Math.random() - 0.5, my = Math.random() - 0.5, mz = Math.random() - 0.5;
+    const pts = [];
+    for (let k = 0; k <= 9; k++) {
+      const f = k / 9;
+      let x = a.x + (b.x - a.x) * f, y = a.y + (b.y - a.y) * f, z = a.z + (b.z - a.z) * f;
+      const env = Math.sin(f * Math.PI); // pinned endpoints, bulged middle
+      x += mx * env * 0.5; y += my * env * 0.5; z += mz * env * 0.5;
+      const L = Math.hypot(x, y, z) || 1;
+      pts.push({ x: x / L, y: y / L, z: z / L });
+    }
+    return { pts, life: 1, seed: Math.random() * 10 };
+  }
+
   function stateNow() {
     const speaking = voiceEngine ? voiceEngine.isSpeaking : false;
     const listening = voiceEngine ? voiceEngine.isListening : false;
@@ -824,7 +874,7 @@ function startNeuralSphere() {
 
     // Rotation speed per state. Color: the whole web burns yellow only while
     // speaking (thought completed); thinking stays blue with a single pulse.
-    const speed = state === 'thinking' ? 0.0075 : (state === 'speaking' ? 0.0042 : (state === 'listening' ? 0.0032 : 0.0016));
+    const speed = state === 'thinking' ? 0.0105 : (state === 'speaking' ? 0.0055 : (state === 'listening' ? 0.0038 : 0.0022));
     if (!neuralDragging) neuralAngle += speed;
     // Flick inertia: release velocity keeps the globe coasting, decaying out.
     neuralAngle += dragVelY;
@@ -858,6 +908,17 @@ function startNeuralSphere() {
     const cosA = Math.cos(neuralAngle), sinA = Math.sin(neuralAngle);
     const cosT = Math.cos(neuralTilt), sinT = Math.sin(neuralTilt);
 
+    // State-change theatre: a flash + expanding shockwave + a burst of
+    // packets punctuate every transition into thinking or speaking.
+    if (state !== prevState) {
+      if (state === 'speaking' || state === 'thinking') {
+        shock.push({ r: R * 0.9, a: 0.5, lw: 3 });
+        flash = Math.max(flash, state === 'thinking' ? 0.22 : 0.3);
+        burst = 1;
+      }
+      prevState = state;
+    }
+
     // Project all nodes once. The speech wave is keyed to each neuron's
     // shell radius and latitude — neighbors share nearly the same phase,
     // so the web swells and settles coherently instead of shearing sideways.
@@ -873,7 +934,7 @@ function startNeuralSphere() {
       const y1 = py * cosT - z1 * sinT;
       const z2 = py * sinT + z1 * cosT;
       const s = FOCAL / (FOCAL - z2);
-      proj[i] = { x: cx + x1 * R * s, y: cy + y1 * R * s, s, z: z2 };
+      proj[i] = { x: cx + x1 * R * s, y: cy + y1 * R * s, s, z: z2, tw: p.tw, hub: p.hub, lat: p.y };
     }
 
     // Advance the thought streak first: its head position drives which
@@ -905,6 +966,46 @@ function startNeuralSphere() {
     const headActive = thinkAlpha > 0.02 && pulses.length > 0;
     const igniteR = R * 0.55; // links inside this radius of the head burn yellow
 
+    // Ambient mesh traffic: cyan data packets hop the wiring constantly, at a
+    // density set by the mood (listening = busy airwaves, speaking = flood).
+    // Transitions ride a decaying `burst` so extra packets live a second.
+    if (burst > 0.01) burst *= 0.9; else burst = 0;
+    const wantPackets = (state === 'speaking' ? 14 : (state === 'listening' ? 8 : (state === 'thinking' ? 5 : 4)))
+      + Math.round(10 * burst);
+    const packetSpeed = (state === 'speaking' ? 2.1 : 1);
+    while (packets.length < wantPackets) packets.push(newPulse());
+    if (packets.length > wantPackets) packets.length = wantPackets;
+    for (const pk of packets) {
+      const a0 = proj[pk.node], b0 = proj[pk.next];
+      const edgeLen = Math.max(1, Math.hypot(b0.x - a0.x, b0.y - a0.y));
+      pk.t += ((w / 16000) * pk.pace * packetSpeed) / edgeLen + 0.004;
+      if (pk.t >= 1) {
+        pk.node = pk.next;
+        pk.next = pickNeighbor(pk.node, pk.next);
+        pk.t = 0;
+      }
+      const a = proj[pk.node], b = proj[pk.next];
+      pk.hx = a.x + (b.x - a.x) * pk.t;
+      pk.hy = a.y + (b.y - a.y) * pk.t;
+      pk.s = (a.s + b.s) / 2;
+      pk.trail.push({ x: pk.hx, y: pk.hy });
+      if (pk.trail.length > 10) pk.trail.shift();
+    }
+
+    // Lightning arcs: at high energy, jagged bolts jump between distant
+    // neurons — thinking sparks steadily, talking crackles at peaks.
+    if (--boltTimer <= 0) {
+      if (state === 'thinking' || speakEnergy > 0.45) {
+        boltTimer = (state === 'thinking' ? 42 : 90) + ((Math.random() * 70) | 0);
+        bolts.push(makeBolt());
+        if (bolts.length > 3) bolts.shift();
+      } else {
+        boltTimer = 60;
+      }
+    }
+    for (const b of bolts) b.life -= 0.08;
+    bolts = bolts.filter(b => b.life > 0);
+
     nctx.clearRect(0, 0, w, h);
     const cr = Math.round(neuralColor.r), cg = Math.round(neuralColor.g), cb = Math.round(neuralColor.b);
 
@@ -914,6 +1015,113 @@ function startNeuralSphere() {
     glow.addColorStop(1, 'rgba(0,0,0,0)');
     nctx.fillStyle = glow;
     nctx.fillRect(cx - R * 1.5, cy - R * 1.5, R * 3, R * 3);
+
+    // The nucleus: a white-hot core wrapped in a colored corona of rotating
+    // filaments — breathes with speech, runs amber when engaged.
+    const nR = R * (0.15 + 0.025 * Math.sin(t * 0.02) + speakEnergy * 0.07);
+    const warmCore = speakEnergy > 0.12 || state === 'thinking';
+    nctx.save();
+    nctx.globalCompositeOperation = 'lighter';
+    const nGrad = nctx.createRadialGradient(cx, cy, 0, cx, cy, nR * 2.4);
+    nGrad.addColorStop(0, `rgba(255,252,244,${Math.min(1, 0.5 + speakEnergy * 0.5).toFixed(3)})`);
+    nGrad.addColorStop(0.28, warmCore
+      ? `rgba(255,190,110,${(0.5 + 0.4 * Math.min(1, speakEnergy * 2)).toFixed(3)})`
+      : `rgba(140,205,255,0.55)`);
+    nGrad.addColorStop(1, 'rgba(20,30,60,0)');
+    nctx.fillStyle = nGrad;
+    nctx.beginPath();
+    nctx.arc(cx, cy, nR * 2.4, 0, Math.PI * 2);
+    nctx.fill();
+    for (let cs = 0; cs < 5; cs++) {
+      const ca = t * (0.008 + cs * 0.004) + cs * 1.7;
+      const cRad = nR * (1.15 + cs * 0.16);
+      const cLen = 0.7 + cs * 0.35 + Math.sin(t * 0.03 + cs * 2.1) * 0.35;
+      nctx.strokeStyle = warmCore
+        ? `rgba(255,180,105,${(0.30 - cs * 0.045).toFixed(3)})`
+        : `rgba(120,190,255,${(0.26 - cs * 0.04).toFixed(3)})`;
+      nctx.lineWidth = Math.max(1, w / 900);
+      nctx.beginPath();
+      nctx.arc(cx, cy, cRad, ca, ca + cLen);
+      nctx.stroke();
+    }
+    // Energy spokes: hairline filaments from the nucleus out to pinned
+    // neurons — the web reads as fed by the core. Only front-facing spokes.
+    for (const nd of spokes) {
+      const sp = proj[nd];
+      if (!sp || sp.s < 0.78) continue;
+      const sgrad = nctx.createLinearGradient(cx, cy, sp.x, sp.y);
+      sgrad.addColorStop(0, `rgba(${cr},${cg},${cb},0.15)`);
+      sgrad.addColorStop(1, 'rgba(0,0,0,0)');
+      nctx.strokeStyle = sgrad;
+      nctx.lineWidth = Math.max(0.6, w / 1800);
+      nctx.beginPath();
+      nctx.moveTo(cx, cy);
+      nctx.lineTo(sp.x, sp.y);
+      nctx.stroke();
+    }
+    nctx.restore();
+
+    // Mantle structure: faint latitude bands + a detached outer orbit ring,
+    // both breathing slowly — the planet-scale frame from the references.
+    nctx.lineWidth = Math.max(0.5, w / 2200);
+    for (let ring = 0; ring < 5; ring++) {
+      const phi = (-0.75 + ring * 0.375) + Math.sin(t * 0.003 + ring) * 0.02;
+      const ry = Math.cos(phi), rr = Math.sin(phi);
+      nctx.beginPath();
+      for (let k = 0; k <= 72; k++) {
+        const ang = (k / 72) * Math.PI * 2;
+        const x0 = rr * Math.cos(ang), z0 = rr * Math.sin(ang);
+        const x1 = x0 * cosA + z0 * sinA;
+        const z1 = -x0 * sinA + z0 * cosA;
+        const y1 = ry * cosT - z1 * sinT;
+        if (k === 0) nctx.moveTo(cx + x1 * R, cy + y1 * R);
+        else nctx.lineTo(cx + x1 * R, cy + y1 * R);
+      }
+      nctx.strokeStyle = `rgba(${cr},${cg},${cb},${(0.045 + 0.02 * boost).toFixed(3)})`;
+      nctx.stroke();
+    }
+    // Outer orbit halo — a detached ring drifting around the whole core.
+    nctx.beginPath();
+    const orbR = R * 1.34 * (1 + Math.sin(t * 0.01) * 0.015);
+    for (let k = 0; k <= 96; k++) {
+      const ang = (k / 96) * Math.PI * 2;
+      const x0 = Math.cos(ang), z0 = Math.sin(ang);
+      const x1 = x0 * cosA + z0 * sinA;
+      const z1 = -x0 * sinA + z0 * cosA;
+      const y1 = -z1 * sinT;
+      if (k === 0) nctx.moveTo(cx + x1 * orbR, cy + y1 * orbR);
+      else nctx.lineTo(cx + x1 * orbR, cy + y1 * orbR);
+    }
+    nctx.strokeStyle = `rgba(${cr},${cg},${cb},${(0.10 + speakEnergy * 0.08).toFixed(3)})`;
+    nctx.stroke();
+
+    // Idle radar scan: a bright latitude band sweeps pole to pole every
+    // once in a while when the core is idle, waking nodes it passes.
+    if (state === 'idle' && !scan.active) {
+      if (--scan.next <= 0) { scan.active = true; scan.phi = -1.35; }
+    }
+    if (scan.active) {
+      scan.phi += 0.011;
+      if (scan.phi > 1.35) {
+        scan.active = false;
+        scan.next = 560 + ((Math.random() * 480) | 0);
+      } else {
+        const sry = Math.cos(scan.phi), srr = Math.sin(scan.phi);
+        nctx.beginPath();
+        for (let k = 0; k <= 72; k++) {
+          const ang = (k / 72) * Math.PI * 2;
+          const x0 = srr * Math.cos(ang) * 1.02, z0 = srr * Math.sin(ang) * 1.02;
+          const x1 = x0 * cosA + z0 * sinA;
+          const z1 = -x0 * sinA + z0 * cosA;
+          const y1 = sry * cosT - z1 * sinT;
+          if (k === 0) nctx.moveTo(cx + x1 * R, cy + y1 * R);
+          else nctx.lineTo(cx + x1 * R, cy + y1 * R);
+        }
+        nctx.strokeStyle = `rgba(190,225,255,${(0.10 + 0.06 * Math.abs(Math.sin(t * 0.2))).toFixed(3)})`;
+        nctx.lineWidth = Math.max(0.8, w / 1400);
+        nctx.stroke();
+      }
+    }
 
     // Ambient drifting dust motes.
     for (let d = 0; d < dust.length; d++) {
@@ -932,7 +1140,8 @@ function startNeuralSphere() {
       const a = proj[sphereEdges[e][0]], b = proj[sphereEdges[e][1]];
       const depth = Math.max(0, Math.min(1, ((a.s + b.s) / 2 - 0.72) / 0.6));
       let er = cr, eg = cg, eb = cb;
-      let alpha = Math.min(1, (0.025 + 0.22 * depth) * boost * grabBoost);
+      let alpha = Math.min(1, (0.025 + 0.22 * depth) * boost * grabBoost
+        * (0.85 + 0.3 * Math.sin(t * 0.045 + e * 0.23)));
       if (headActive) {
         const hd = Math.hypot((a.x + b.x) / 2 - headX, (a.y + b.y) / 2 - headY);
         const glow = Math.max(0, 1 - hd / igniteR) * thinkAlpha;
@@ -950,6 +1159,52 @@ function startNeuralSphere() {
       nctx.stroke();
     }
 
+    // Flowing current streams: 300 particles advected in stacked latitude
+    // lanes around the shell — the "swirling atlas" layer from the refs.
+    // Warm embers (every 17th) catch the speak/think emphasis.
+    if (!flow.length) {
+      for (let i = 0; i < 420; i++) {
+        flow.push({
+          lane: (i % 6) * 0.44 - 1.05,
+          u: Math.random() * Math.PI * 2,
+          r: 0.82 + Math.random() * 0.2,
+          sp: (0.0025 + Math.random() * 0.0045) * (i % 2 ? 1 : -1),
+          ph: Math.random() * Math.PI * 2,
+          warm: i % 17 === 0,
+          trail: []
+        });
+      }
+    }
+    const flowBoost = 1 + speakEnergy * 1.4;
+    nctx.save();
+    nctx.globalCompositeOperation = 'lighter';
+    nctx.lineCap = 'round';
+    for (const q of flow) {
+      q.u += q.sp * flowBoost * (state === 'thinking' ? 1.6 : 1);
+      const v = q.lane * 0.45 + Math.sin(t * 0.004 * 2 + q.ph) * 0.08;
+      const cv = Math.cos(v), sv = Math.sin(v);
+      const x0 = q.r * cv * Math.cos(q.u), z0 = q.r * cv * Math.sin(q.u);
+      const x1 = x0 * cosA + z0 * sinA;
+      const z1 = -x0 * sinA + z0 * cosA;
+      const y1 = q.r * sv * cosT - z1 * sinT;
+      const z2 = q.r * sv * sinT + z1 * cosT;
+      const s = FOCAL / (FOCAL - z2);
+      q.trail.push({ x: cx + x1 * R * s, y: cy + y1 * R * s });
+      if (q.trail.length > 7) q.trail.shift();
+      const depth = Math.max(0, Math.min(1, (s - 0.72) / 0.6));
+      const a = (0.05 + 0.40 * depth) * (q.warm ? 1.2 : 1) * Math.min(1.6, 0.55 + 0.45 * boost);
+      if (a < 0.02 || q.trail.length < 2) continue;
+      nctx.strokeStyle = q.warm
+        ? `rgba(255,168,92,${(a * 0.8).toFixed(3)})`
+        : `rgba(${Math.round(60 + 30 * depth)},${Math.round(185 + 45 * depth)},255,${a.toFixed(3)})`;
+      nctx.lineWidth = Math.max(0.7, (1 + depth * 1.4) * (w / 960));
+      nctx.beginPath();
+      nctx.moveTo(q.trail[0].x, q.trail[0].y);
+      for (let k = 1; k < q.trail.length; k++) nctx.lineTo(q.trail[k].x, q.trail[k].y);
+      nctx.stroke();
+    }
+    nctx.restore();
+
     // Neurons: miniscule pinprick cores in varied sizes (stable per-node
     // jitter), with a whisper of glow only on sparse "hub" neurons.
     for (let i = 0; i < proj.length; i++) {
@@ -957,6 +1212,14 @@ function startNeuralSphere() {
       const depth = Math.max(0, Math.min(1, (p.s - 0.72) / 0.6));
       const jitter = 0.6 + 0.7 * (Math.abs(Math.sin(i * 12.9898) * 43758.5453) % 1);
       const coreR = (0.32 + depth * 0.6) * jitter * (w / 1600 + 0.35);
+      // Each neuron twinkles on its own clock; speaking sweeps heat waves
+      // across the web (nodes tint warm by latitude band in time with the
+      // swell the edges already ride).
+      const scanK = scan.active
+        ? Math.exp(-Math.pow(Math.acos(Math.max(-1, Math.min(1, p.lat))) - scan.phi, 2) / 0.02)
+        : 0;
+      const twinkle = (0.78 + 0.32 * Math.sin(t * 0.05 + p.tw)) * (1 + scanK * 1.6);
+      const heat = Math.max(0, speakEnergy * (0.5 + 0.5 * Math.sin(t * 0.09 + p.lat * 3)));
       // Neurons near the thought head catch the same yellow fire.
       let hr = cr, hg = cg, hb = cb;
       let cwr = 235, cwg = 244, cwb = 255;
@@ -971,15 +1234,23 @@ function startNeuralSphere() {
           cwb = Math.round(255 - 105 * glow);
         }
       }
-      if (i % 19 === 0) {
-        nctx.fillStyle = `rgba(${hr},${hg},${hb},${(0.18 * boost).toFixed(3)})`;
+      // Speaking heat: cores lean amber in sync with the radio-wave swell.
+      if (heat > 0.02) {
+        const wl = Math.max(0, Math.min(1, heat));
+        cwr = Math.round(235 + 20 * wl);
+        cwg = Math.round(244 - 70 * wl);
+        cwb = Math.round(255 - 150 * wl);
+      }
+      if (p.hub) {
+        const pulseHub = 0.16 + 0.10 * Math.sin(t * 0.045 + p.tw);
+        nctx.fillStyle = `rgba(${hr},${hg},${hb},${(pulseHub * boost).toFixed(3)})`;
         nctx.beginPath();
-        nctx.arc(p.x, p.y, coreR * 2.5, 0, Math.PI * 2);
+        nctx.arc(p.x, p.y, coreR * 3.2, 0, Math.PI * 2);
         nctx.fill();
       }
-      nctx.fillStyle = `rgba(${cwr},${cwg},${cwb},${(0.45 + depth * 0.5).toFixed(3)})`;
+      nctx.fillStyle = `rgba(${cwr},${cwg},${cwb},${((0.45 + depth * 0.5) * twinkle).toFixed(3)})`;
       nctx.beginPath();
-      nctx.arc(p.x, p.y, coreR, 0, Math.PI * 2);
+      nctx.arc(p.x, p.y, coreR * (p.hub ? 1.35 : 1), 0, Math.PI * 2);
       nctx.fill();
     }
 
@@ -1026,6 +1297,139 @@ function startNeuralSphere() {
     } else if (pulses.length) {
       pulses = [];
     }
+
+    // Ambient packets: small cyan comets with whisper trails, busiest when
+    // the web is engaged (speaking floods the wiring).
+    nctx.save();
+    nctx.globalCompositeOperation = 'lighter';
+    nctx.lineCap = 'round';
+    for (const pk of packets) {
+      const pt = pk.trail;
+      for (let k = 1; k < pt.length; k++) {
+        const frac = k / pt.length;
+        const alpha = frac * 0.30 * (0.5 + 0.5 * (pk.s || 0.8));
+        nctx.strokeStyle = `rgba(96,210,255,${alpha.toFixed(3)})`;
+        nctx.lineWidth = Math.max(0.8, frac * w / 900);
+        nctx.beginPath();
+        nctx.moveTo(pt[k - 1].x, pt[k - 1].y);
+        nctx.lineTo(pt[k].x, pt[k].y);
+        nctx.stroke();
+      }
+      const hr = Math.max(1.2, w / 700);
+      const halo = nctx.createRadialGradient(pk.hx, pk.hy, 0, pk.hx, pk.hy, hr * 5);
+      halo.addColorStop(0, 'rgba(190,235,255,0.55)');
+      halo.addColorStop(1, 'rgba(96,210,255,0)');
+      nctx.fillStyle = halo;
+      nctx.beginPath();
+      nctx.arc(pk.hx, pk.hy, hr * 5, 0, Math.PI * 2);
+      nctx.fill();
+      nctx.fillStyle = 'rgba(235,250,255,0.85)';
+      nctx.beginPath();
+      nctx.arc(pk.hx, pk.hy, hr * 0.7, 0, Math.PI * 2);
+      nctx.fill();
+    }
+    nctx.restore();
+
+    // Lightning bolts over the web: glow pass under a white-hot core line,
+    // flickering out over their brief life.
+    nctx.save();
+    nctx.globalCompositeOperation = 'lighter';
+    nctx.lineCap = 'round';
+    nctx.lineJoin = 'round';
+    const warmBolt = speakEnergy > 0.4;
+    for (const b of bolts) {
+      const flick = b.life * (0.6 + 0.4 * Math.sin(t * 0.83 + b.seed * 7));
+      if (flick <= 0.02) continue;
+      // Project the 3D bolt once, build one path used by both passes.
+      const pts = b.pts.map(q => {
+        const x1 = q.x * cosA + q.z * sinA;
+        const z1 = -q.x * sinA + q.z * cosA;
+        const y1 = q.y * cosT - z1 * sinT;
+        const z2 = q.y * sinT + z1 * cosT;
+        const sc = FOCAL / (FOCAL - z2 * breathe);
+        return { x: cx + x1 * R * sc, y: cy + y1 * R * sc };
+      });
+      nctx.strokeStyle = warmBolt
+        ? `rgba(255,190,110,${(flick * 0.25).toFixed(3)})`
+        : `rgba(140,220,255,${(flick * 0.25).toFixed(3)})`;
+      nctx.lineWidth = Math.max(2.5, w / 220);
+      nctx.beginPath();
+      nctx.moveTo(pts[0].x, pts[0].y);
+      for (let k = 1; k < pts.length; k++) nctx.lineTo(pts[k].x, pts[k].y);
+      nctx.stroke();
+      nctx.strokeStyle = `rgba(245,250,255,${(flick * 0.85).toFixed(3)})`;
+      nctx.lineWidth = Math.max(0.8, w / 700);
+      nctx.beginPath();
+      nctx.moveTo(pts[0].x, pts[0].y);
+      for (let k = 1; k < pts.length; k++) nctx.lineTo(pts[k].x, pts[k].y);
+      nctx.stroke();
+    }
+    nctx.restore();
+
+    // Sonar rings: the core emits soft expanding rings while it listens.
+    if (state === 'listening' && t % 130 === 0) {
+      sonar.push({ r: R * 0.6, a: 0.5 });
+    }
+    for (let s = sonar.length - 1; s >= 0; s--) {
+      const sg = sonar[s];
+      sg.r += R * 0.02;
+      sg.a *= 0.972;
+      if (sg.a < 0.02) { sonar.splice(s, 1); continue; }
+      nctx.strokeStyle = `rgba(${cr},${cg},${cb},${sg.a.toFixed(3)})`;
+      nctx.lineWidth = Math.max(0.8, w / 1000);
+      nctx.beginPath();
+      nctx.arc(cx, cy, sg.r, 0, Math.PI * 2);
+      nctx.stroke();
+    }
+
+    // Transition shockwaves: bright rings blast outward on every state
+    // flip into thinking/speaking.
+    for (let s = shock.length - 1; s >= 0; s--) {
+      const sk = shock[s];
+      sk.r += (R * 2.4 - sk.r) * 0.055;
+      sk.a *= 0.94;
+      if (sk.a < 0.02) { shock.splice(s, 1); continue; }
+      nctx.strokeStyle = `rgba(170,215,255,${sk.a.toFixed(3)})`;
+      nctx.lineWidth = Math.max(1, sk.lw * (R / 300));
+      nctx.beginPath();
+      nctx.arc(cx, cy, sk.r, 0, Math.PI * 2);
+      nctx.stroke();
+    }
+
+    // Transition flash: one near-invisible full-frame wash, decaying fast.
+    if (flash > 0.01) {
+      nctx.fillStyle = `rgba(180,220,255,${(flash * 0.16).toFixed(3)})`;
+      nctx.fillRect(0, 0, w, h);
+      flash *= 0.86;
+    }
+
+    // Focus vignette: darken the outer frame so the core pops forward.
+    const vg = nctx.createRadialGradient(cx, cy, R * 1.15, cx, cy, Math.max(w, h) * 0.75);
+    vg.addColorStop(0, 'rgba(0,0,0,0)');
+    vg.addColorStop(1, 'rgba(1,3,9,0.42)');
+    nctx.fillStyle = vg;
+    nctx.fillRect(0, 0, w, h);
+
+    // Bloom: a half-resolution blurred copy of the frame composited back
+    // additively — glow halos on every bright element, cheap on GPU.
+    if (!bloomCanvas) {
+      bloomCanvas = document.createElement('canvas');
+      bloomCtx = bloomCanvas.getContext('2d');
+    }
+    const bw = Math.max(1, w >> 1), bh = Math.max(1, h >> 1);
+    if (bloomCanvas.width !== bw || bloomCanvas.height !== bh) {
+      bloomCanvas.width = bw;
+      bloomCanvas.height = bh;
+    }
+    bloomCtx.clearRect(0, 0, bw, bh);
+    bloomCtx.drawImage(neuralCanvas, 0, 0, bw, bh);
+    nctx.save();
+    nctx.globalCompositeOperation = 'lighter';
+    nctx.filter = 'blur(10px)';
+    nctx.globalAlpha = 0.55 + speakEnergy * 0.15;
+    nctx.drawImage(bloomCanvas, 0, 0, w, h);
+    nctx.restore();
+    nctx.filter = 'none';
 
   }
 
