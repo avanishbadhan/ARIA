@@ -7,6 +7,8 @@ contextBridge.exposeInMainWorld('jarvisElectron', {
   xboxGetInstalledGames: () => ipcRenderer.invoke('xbox:get-installed-games'),
   xboxLaunchApp: (appId) => ipcRenderer.invoke('xbox:launch-app', { appId }),
   solveMath: (appId, query) => ipcRenderer.invoke('wolfram:solve', { appId, query }),
+  synthesizeElevenlabs: (text, apiKey, voiceId, modelId) =>
+    ipcRenderer.invoke('elevenlabs:tts', { text, apiKey, voiceId, modelId }),
   weather: {
     current: (lat, lon) => ipcRenderer.invoke('weather:current', { lat, lon })
   },

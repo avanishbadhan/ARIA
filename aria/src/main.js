@@ -56,7 +56,6 @@ const neuralColor = { r: 110, g: 175, b: 255 }; // lerped toward the state targe
 let spherePts = [];
 let sphereEdges = [];
 let sphereAdj = [];
-let sphereAdjEdge = [];  // parallel adjacency storing edge indices (for ember trails)
 // Drag-to-spin globe state: flick velocity decays into inertia after release.
 let neuralDragging = false;
 let neuralDragWired = false;
@@ -709,13 +708,10 @@ function buildNeuralSphere(count = 330) {
     }
   }
   sphereAdj = Array.from({ length: count }, () => []);
-  sphereAdjEdge = Array.from({ length: count }, () => []);
-  sphereEdges.forEach(([i, j], k) => {
+  for (const [i, j] of sphereEdges) {
     sphereAdj[i].push(j);
     sphereAdj[j].push(i);
-    sphereAdjEdge[i].push({ n: j, e: k });
-    sphereAdjEdge[j].push({ n: i, e: k });
-  });
+  }
 }
 
 function sizeNeuralCanvas() {
@@ -742,15 +738,15 @@ function startNeuralSphere() {
   let t = 0;
   let thinkAlpha = 0;
   let speakEnergy = 0; // smoothed speech drive — fast attack, slow release, never jerky
-  let flashes... let pulses = [];     // orange thought streak (thinking)
-  let embers = [];     // per-edge afterglow: the comet leaves burning links
-  let sparks = [];     // fireflies shed by the comet head (and its death burst)
-  let cometRings = []; // heartbeat rings pulsing off each comet head
-  let cometSpacing = 0;
+  let pulses = [];     // orange thought streak (thinking)
+  let afterglow = [];  // fading ember halos at neurons the comet struck
+  let ripples = [];    // micro rings at hop impact points
+  let cometSparks = []; // shed embers drifting off the comet head
   let packets = [];    // cyan data packets — always-on ambient mesh traffic
   let flow = [];       // flowing current streams (orbits of drifting particles)
   let bolts = [];      // jagged lightning arcs jumping across the web
   let boltTimer = 0;
+  let boltGlow = 0;    // thunder: ambient light kick from strikes (decays)
   let burst = 0;       // decaying packet-burst driver for state transitions
   let shock = [];      // expanding shockwaves on state transitions
   let flash = 0;       // brief full-frame flash on transitions
@@ -760,6 +756,8 @@ function startNeuralSphere() {
   let sonar = [];      // expanding rings while listening
   let bloomCanvas = null;
   let bloomCtx = null;
+  let bloomWide = null;   // quarter-res wide-scale bloom (cinematic halo)
+  let bloomWideCtx = null;
   let dust = [];
 
   if (!spherePts.length) buildNeuralSphere();
@@ -803,11 +801,12 @@ function startNeuralSphere() {
   function buildDust(n = 110) {
     dust = [];
     for (let i = 0; i < n; i++) {
+      const z = Math.random(); // pseudo-depth: 0 = far, 1 = near
       dust.push({
-        bx: Math.random(), by: Math.random(),
-        sp: 0.00006 + Math.random() * 0.00022,
+        bx: Math.random(), by: Math.random(), z,
+        sp: (0.00006 + Math.random() * 0.00022) * (0.5 + z),
         tw: Math.random() * Math.PI * 2,
-        sz: 0.6 + Math.random() * 1.4
+        sz: (0.6 + Math.random() * 1.4) * (0.6 + z * 0.9)
       });
     }
   }
@@ -826,12 +825,17 @@ function startNeuralSphere() {
   function newPulse() {
     let node = (Math.random() * spherePts.length) | 0;
     if (!(sphereAdj[node] || []).length) node = 0;
-    return { node, next: pickNeighbor(node, -1), t: Math.random(), pace: 0.9 + Math.random() * 0.2, trail: [] };
+    return {
+      node, next: pickNeighbor(node, -1), t: Math.random(),
+      pace: 0.9 + Math.random() * 0.2, trail: [],
+      phase: Math.random() * Math.PI * 2
+    };
   }
 
-  // Jagged arc between two distant points on the shell: a lerp with a random
-  // mid-bulge, re-normalized to the sphere. Points stay in 3D so the whole
-  // bolt rotates with the globe during its short life.
+  // Lightning between two distant points on the shell: repeated midpoint
+  // displacement with pinned endpoints, re-normalized to the sphere, plus
+  // two branch forks stamped onto random midpoints. Points stay in 3D so
+  // the whole bolt rotates with the globe during its life.
   function makeBolt() {
     const i = (Math.random() * spherePts.length) | 0;
     let j = (Math.random() * spherePts.length) | 0;
@@ -840,17 +844,40 @@ function startNeuralSphere() {
       j = (Math.random() * spherePts.length) | 0;
     }
     const a = spherePts[i], b = spherePts[j];
-    const mx = Math.random() - 0.5, my = Math.random() - 0.5, mz = Math.random() - 0.5;
+    const segs = 13;
     const pts = [];
-    for (let k = 0; k <= 9; k++) {
-      const f = k / 9;
+    for (let k = 0; k <= segs; k++) {
+      const f = k / segs;
       let x = a.x + (b.x - a.x) * f, y = a.y + (b.y - a.y) * f, z = a.z + (b.z - a.z) * f;
-      const env = Math.sin(f * Math.PI); // pinned endpoints, bulged middle
-      x += mx * env * 0.5; y += my * env * 0.5; z += mz * env * 0.5;
+      const env = Math.sin(f * Math.PI) * 0.55; // pinned endpoints, wild middle
+      x += (Math.random() - 0.5) * 2 * env;
+      y += (Math.random() - 0.5) * 2 * env;
+      z += (Math.random() - 0.5) * 2 * env;
       const L = Math.hypot(x, y, z) || 1;
       pts.push({ x: x / L, y: y / L, z: z / L });
     }
-    return { pts, life: 1, seed: Math.random() * 10 };
+    const branches = [];
+    const jitFrom = () => (Math.random() * spherePts.length) | 0;
+    for (let br = 0; br < 2; br++) {
+      if (Math.random() >= 0.75) continue;
+      const from = pts[4 + ((Math.random() * (segs - 8)) | 0) || 1];
+      const jTarget = jitFrom();
+      const bpts = [];
+      for (let k = 0; k <= 5; k++) {
+        const f = k / 5;
+        let x = from.x + (spherePts[jTarget].x - from.x) * f;
+        let y = from.y + (spherePts[jTarget].y - from.y) * f;
+        let z = from.z + (spherePts[jTarget].z - from.z) * f;
+        const env = Math.sin(f * Math.PI) * 0.28;
+        x += (Math.random() - 0.5) * 2 * env;
+        y += (Math.random() - 0.5) * 2 * env;
+        z += (Math.random() - 0.5) * 2 * env;
+        const L = Math.hypot(x, y, z) || 1;
+        bpts.push({ x: x / L, y: y / L, z: z / L });
+      }
+      branches.push(bpts);
+    }
+    return { pts, branches, life: 1, seed: Math.random() * 10 };
   }
 
   function stateNow() {
@@ -946,17 +973,50 @@ function startNeuralSphere() {
       for (const pu of pulses) {
         const a0 = proj[pu.node], b0 = proj[pu.next];
         const edgeLen = Math.max(1, Math.hypot(b0.x - a0.x, b0.y - a0.y));
-        pu.t += ((w / 160) * pu.pace) / edgeLen;
+        const hopSpeed = state === 'thinking' ? 3.4 : 2.2;
+        pu.t += ((w / 50) * pu.pace * hopSpeed) / edgeLen;
         if (pu.t >= 1) {
           pu.node = pu.next;
           pu.next = pickNeighbor(pu.node, pu.next);
           pu.t = 0;
+          // Hop impact: the struck neuron keeps an ember halo, and a
+          // micro-ripple rings out from impact.
+          const hit = proj[pu.node];
+          if (hit) {
+            afterglow.push({ x: hit.x, y: hit.y, a: 0.5, r: Math.max(3, w / 140) });
+            ripples.push({ x: hit.x, y: hit.y, r: 2, a: 0.32 });
+            if (afterglow.length > 12) afterglow.shift();
+            // Hop burst: sparks kicked out radially from the strike point.
+            for (let bs = 0; bs < 5 && cometSparks.length < 46; bs++) {
+              const ba = Math.random() * Math.PI * 2;
+              const bv = (0.3 + Math.random() * 0.7) * w / 1100;
+              cometSparks.push({
+                x: hit.x, y: hit.y, vx: Math.cos(ba) * bv, vy: Math.sin(ba) * bv,
+                life: 0.4 + Math.random() * 0.4, warm: true,
+                tw: Math.random() * Math.PI * 2, glint: Math.random() < 0.35
+              });
+            }
+          }
         }
         const a = proj[pu.node], b = proj[pu.next];
+        // Constant fast velocity — a shooting star, not a lingering pulse.
         pu.hx = a.x + (b.x - a.x) * pu.t;
         pu.hy = a.y + (b.y - a.y) * pu.t;
         pu.trail.push({ x: pu.hx, y: pu.hy });
-        if (pu.trail.length > 30) pu.trail.shift();
+        if (pu.trail.length > 26) pu.trail.shift();
+        // Shed embers: sparks thrown off the head as it travels. Some are
+        // glints — brighter, with a tiny cross flare.
+        if (cometSparks.length < 46 && Math.random() < 0.5) {
+          cometSparks.push({
+            x: pu.hx, y: pu.hy,
+            vx: (Math.random() - 0.3) * w / 900,
+            vy: (Math.random() - 0.5) * w / 900,
+            life: 0.7 + Math.random() * 0.5,
+            warm: Math.random() < 0.8,
+            tw: Math.random() * Math.PI * 2,
+            glint: Math.random() < 0.12
+          });
+        }
       }
       headX = pulses[0].hx;
       headY = pulses[0].hy;
@@ -992,26 +1052,36 @@ function startNeuralSphere() {
       if (pk.trail.length > 10) pk.trail.shift();
     }
 
-    // Lightning arcs: at high energy, jagged bolts jump between distant
-    // neurons — thinking sparks steadily, talking crackles at peaks.
+    // Lightning arcs: thinking crackles hard, talking at peaks, and even
+    // idle throws out a rare faint distant crack. Every strike kicks the
+    // ambient light of the scene — the thunder answering itself.
     if (--boltTimer <= 0) {
       if (state === 'thinking' || speakEnergy > 0.45) {
-        boltTimer = (state === 'thinking' ? 42 : 90) + ((Math.random() * 70) | 0);
+        boltTimer = (state === 'thinking' ? 16 : 34) + ((Math.random() * 40) | 0);
         bolts.push(makeBolt());
-        if (bolts.length > 3) bolts.shift();
+        boltGlow = Math.min(1, boltGlow + 0.4);
+        if (bolts.length > 4) bolts.shift();
+      } else if (state === 'idle' && Math.random() < 0.22) {
+        boltTimer = 260 + ((Math.random() * 240) | 0);
+        const dimBolt = makeBolt();
+        dimBolt.dim = true;
+        bolts.push(dimBolt);
+        boltGlow = Math.min(1, boltGlow + 0.18);
+        if (bolts.length > 4) bolts.shift();
       } else {
         boltTimer = 60;
       }
     }
     for (const b of bolts) b.life -= 0.08;
     bolts = bolts.filter(b => b.life > 0);
+    boltGlow *= 0.90;
 
     nctx.clearRect(0, 0, w, h);
     const cr = Math.round(neuralColor.r), cg = Math.round(neuralColor.g), cb = Math.round(neuralColor.b);
 
     // Back glow disc.
     const glow = nctx.createRadialGradient(cx, cy, 0, cx, cy, R * 1.5);
-    glow.addColorStop(0, `rgba(${cr},${cg},${cb},${Math.min(1, 0.08 * boost + speakEnergy * 0.12 + dragGlow * 0.1).toFixed(3)})`);
+    glow.addColorStop(0, `rgba(${cr},${cg},${cb},${Math.min(1, 0.08 * boost + speakEnergy * 0.12 + dragGlow * 0.1 + boltGlow * 0.10).toFixed(3)})`);
     glow.addColorStop(1, 'rgba(0,0,0,0)');
     nctx.fillStyle = glow;
     nctx.fillRect(cx - R * 1.5, cy - R * 1.5, R * 3, R * 3);
@@ -1044,18 +1114,47 @@ function startNeuralSphere() {
       nctx.arc(cx, cy, cRad, ca, ca + cLen);
       nctx.stroke();
     }
-    // Energy spokes: hairline filaments from the nucleus out to pinned
-    // neurons — the web reads as fed by the core. Only front-facing spokes.
+    // Rosette: twelve thin energy rays sweeping slowly around the nucleus —
+    // the core quietly radiating structured light.
+    for (let rs = 0; rs < 12; rs++) {
+      const ra = t * 0.006 + rs * Math.PI / 6;
+      const rl = nR * (1.9 + 0.7 * Math.sin(t * 0.017 + rs * 1.31));
+      const rf = 0.5 + 0.5 * Math.sin(t * 0.9 + rs * 2.4); // per-ray crackle
+      const rg = nctx.createLinearGradient(
+        cx + Math.cos(ra) * nR * 0.8, cy + Math.sin(ra) * nR * 0.8,
+        cx + Math.cos(ra) * rl, cy + Math.sin(ra) * rl
+      );
+      rg.addColorStop(0, warmCore
+        ? `rgba(255,200,120,${(0.10 + 0.05 * rf).toFixed(3)})`
+        : `rgba(120,190,255,${(0.09 + 0.05 * rf).toFixed(3)})`);
+      rg.addColorStop(1, 'rgba(0,0,0,0)');
+      nctx.strokeStyle = rg;
+      nctx.lineWidth = Math.max(0.6, w / 1400);
+      nctx.beginPath();
+      nctx.moveTo(cx + Math.cos(ra) * nR * 0.8, cy + Math.sin(ra) * nR * 0.8);
+      nctx.lineTo(cx + Math.cos(ra) * rl, cy + Math.sin(ra) * rl);
+      nctx.stroke();
+    }
+    // Electric feeding arcs: the nucleus feeds pinned neurons by crackling
+    // lightning — jagged midpoints re-randomized every frame — instead of
+    // steady hairlines. Only front-facing spokes.
     for (const nd of spokes) {
       const sp = proj[nd];
       if (!sp || sp.s < 0.78) continue;
+      const flick2 = 0.6 + 0.4 * Math.sin(t * 0.31 + nd * 2.7);
       const sgrad = nctx.createLinearGradient(cx, cy, sp.x, sp.y);
-      sgrad.addColorStop(0, `rgba(${cr},${cg},${cb},0.15)`);
-      sgrad.addColorStop(1, 'rgba(0,0,0,0)');
+      sgrad.addColorStop(0, `rgba(255,235,190,${(0.11 * flick2).toFixed(3)})`);
+      sgrad.addColorStop(1, `rgba(${cr},${cg},${cb},${(0.05 * flick2).toFixed(3)})`);
       nctx.strokeStyle = sgrad;
-      nctx.lineWidth = Math.max(0.6, w / 1800);
+      nctx.lineWidth = Math.max(0.7, w / 1500);
       nctx.beginPath();
       nctx.moveTo(cx, cy);
+      for (let q2 = 1; q2 < 4; q2++) {
+        const f2 = q2 / 4;
+        const ex = cx + (sp.x - cx) * f2 + (Math.random() - 0.5) * (w / 90) * Math.sin(f2 * Math.PI);
+        const ey = cy + (sp.y - cy) * f2 + (Math.random() - 0.5) * (w / 90) * Math.sin(f2 * Math.PI);
+        nctx.lineTo(ex, ey);
+      }
       nctx.lineTo(sp.x, sp.y);
       nctx.stroke();
     }
@@ -1123,41 +1222,22 @@ function startNeuralSphere() {
       }
     }
 
-    // Ambient drifting dust motes.
+    // Ambient drifting dust motes — parallax starfield: near motes are
+    // bigger, brighter, faster; far motes whisper.
     for (let d = 0; d < dust.length; d++) {
       const m = dust[d];
       const dx = ((m.bx + t * m.sp) % 1) * w;
       const dy = (m.by * h + Math.sin(t * 0.008 + m.tw) * h * 0.01 + h) % h;
-      const tw = 0.08 + 0.12 * (0.5 + 0.5 * Math.sin(t * 0.03 + m.tw));
-      nctx.fillStyle = `rgba(150,180,230,${tw.toFixed(3)})`;
-      nctx.fillRect(dx, dy, m.sz, m.sz);
+      const twD = ((0.09 + 0.10 * m.z) * (0.55 + 0.45 * Math.sin(t * 0.03 + m.tw))).toFixed(3);
+      nctx.fillStyle = `rgba(160,190,235,${twD})`;
+      const msz = m.sz * (0.7 + m.z);
+      nctx.fillRect(dx, dy, msz, msz);
     }
 
-    // Edges — hairline wireframe, brighter toward the front. Links near the
-    // thought head ignite yellow, the same burn as the speaking state.
-    nctx.lineWidth = Math.max(0.6, w / 1400);
-    for (let e = 0; e < sphereEdges.length; e++) {
-      const a = proj[sphereEdges[e][0]], b = proj[sphereEdges[e][1]];
-      const depth = Math.max(0, Math.min(1, ((a.s + b.s) / 2 - 0.72) / 0.6));
-      let er = cr, eg = cg, eb = cb;
-      let alpha = Math.min(1, (0.025 + 0.22 * depth) * boost * grabBoost
-        * (0.85 + 0.3 * Math.sin(t * 0.045 + e * 0.23)));
-      if (headActive) {
-        const hd = Math.hypot((a.x + b.x) / 2 - headX, (a.y + b.y) / 2 - headY);
-        const glow = Math.max(0, 1 - hd / igniteR) * thinkAlpha;
-        if (glow > 0) {
-          er = Math.round(cr + (255 - cr) * glow);
-          eg = Math.round(cg + (198 - cg) * glow);
-          eb = Math.round(cb + (80 - cb) * glow);
-          alpha = Math.min(1, alpha + glow * 0.35);
-        }
-      }
-      nctx.strokeStyle = `rgba(${er},${eg},${eb},${alpha.toFixed(3)})`;
-      nctx.beginPath();
-      nctx.moveTo(a.x, a.y);
-      nctx.lineTo(b.x, b.y);
-      nctx.stroke();
-    }
+    // NOTE: static edge wireframe intentionally not drawn — the connection
+    // lines were removed, leaving the nodes, flows and traffic as the shape.
+    // Edge/adjacency data is still computed: pulses, packets and bolts hop
+    // node-to-node through it.
 
     // Flowing current streams: 300 particles advected in stacked latitude
     // lanes around the shell — the "swirling atlas" layer from the refs.
@@ -1205,13 +1285,15 @@ function startNeuralSphere() {
     }
     nctx.restore();
 
-    // Neurons: miniscule pinprick cores in varied sizes (stable per-node
-    // jitter), with a whisper of glow only on sparse "hub" neurons.
+    // Neurons: defined glowing dots — layered additive halo, a saturated
+    // color rim, and a crisp white-hot center (bloom amplifies all of it).
+    nctx.save();
+    nctx.globalCompositeOperation = 'lighter';
     for (let i = 0; i < proj.length; i++) {
       const p = proj[i];
       const depth = Math.max(0, Math.min(1, (p.s - 0.72) / 0.6));
       const jitter = 0.6 + 0.7 * (Math.abs(Math.sin(i * 12.9898) * 43758.5453) % 1);
-      const coreR = (0.32 + depth * 0.6) * jitter * (w / 1600 + 0.35);
+      const coreR = (0.6 + depth * 1.2) * jitter * (w / 1600 + 0.5);
       // Each neuron twinkles on its own clock; speaking sweeps heat waves
       // across the web (nodes tint warm by latitude band in time with the
       // swell the edges already ride).
@@ -1241,62 +1323,137 @@ function startNeuralSphere() {
         cwg = Math.round(244 - 70 * wl);
         cwb = Math.round(255 - 150 * wl);
       }
-      if (p.hub) {
-        const pulseHub = 0.16 + 0.10 * Math.sin(t * 0.045 + p.tw);
-        nctx.fillStyle = `rgba(${hr},${hg},${hb},${(pulseHub * boost).toFixed(3)})`;
-        nctx.beginPath();
-        nctx.arc(p.x, p.y, coreR * 3.2, 0, Math.PI * 2);
-        nctx.fill();
-      }
-      nctx.fillStyle = `rgba(${cwr},${cwg},${cwb},${((0.45 + depth * 0.5) * twinkle).toFixed(3)})`;
+      const alphaBase = Math.min(1, (0.55 + depth * 0.45) * twinkle * (1 + boltGlow * 0.35));
+      const hubScale = p.hub ? 1.5 : 1;
+      // Two-step fake halo (additive): wide whisper + tight intimate glow.
+      nctx.fillStyle = `rgba(${hr},${hg},${hb},${(0.10 * alphaBase * hubScale).toFixed(3)})`;
       nctx.beginPath();
-      nctx.arc(p.x, p.y, coreR * (p.hub ? 1.35 : 1), 0, Math.PI * 2);
+      nctx.arc(p.x, p.y, coreR * 3.4 * hubScale, 0, Math.PI * 2);
+      nctx.fill();
+      nctx.fillStyle = `rgba(${hr},${hg},${hb},${(0.24 * alphaBase * hubScale).toFixed(3)})`;
+      nctx.beginPath();
+      nctx.arc(p.x, p.y, coreR * 1.9 * hubScale, 0, Math.PI * 2);
+      nctx.fill();
+      // Saturated color rim — this is the "dot" the eye reads.
+      nctx.fillStyle = `rgba(${hr},${hg},${hb},${Math.min(1, 0.9 * alphaBase).toFixed(3)})`;
+      nctx.beginPath();
+      nctx.arc(p.x, p.y, coreR * hubScale, 0, Math.PI * 2);
+      nctx.fill();
+      // Crisp white-hot center — the definition.
+      nctx.fillStyle = `rgba(${cwr},${cwg},${cwb},${Math.min(1, (0.85 + depth * 0.15) * twinkle).toFixed(3)})`;
+      nctx.beginPath();
+      nctx.arc(p.x, p.y, coreR * 0.55 * hubScale, 0, Math.PI * 2);
       nctx.fill();
     }
+    nctx.restore();
 
-    // The thought streak itself: bright two-pass trail + shining head, drawn
-    // over the ignited links (advanced earlier, before the web was drawn).
+    // The thought comet: layered tapered trail, hop impacts that ring and
+    // linger, shed embers, and a scintillating star head. Decay layers run
+    // here so afterglow/embers fade out gracefully even as thinking ends.
+    nctx.save();
+    nctx.globalCompositeOperation = 'lighter';
+    // Afterglow: visited neurons keep a fading ember halo.
+    for (let g = afterglow.length - 1; g >= 0; g--) {
+      const ag = afterglow[g];
+      ag.a *= (headActive ? 0.94 : 0.85);
+      ag.r += w / 2400;
+      if (ag.a < 0.02) { afterglow.splice(g, 1); continue; }
+      const gg = nctx.createRadialGradient(ag.x, ag.y, 0, ag.x, ag.y, ag.r * 3);
+      gg.addColorStop(0, `rgba(255,200,110,${ag.a.toFixed(3)})`);
+      gg.addColorStop(1, 'rgba(255,160,60,0)');
+      nctx.fillStyle = gg;
+      nctx.beginPath();
+      nctx.arc(ag.x, ag.y, ag.r * 3, 0, Math.PI * 2);
+      nctx.fill();
+    }
+    // Hop ripples: micro rings striking outward at impact points.
+    for (let ri = ripples.length - 1; ri >= 0; ri--) {
+      const rp = ripples[ri];
+      rp.r += w / 260;
+      rp.a *= 0.90;
+      const ra = rp.a * thinkAlpha;
+      if (rp.a < 0.02 || ra < 0.015) { ripples.splice(ri, 1); continue; }
+      nctx.strokeStyle = `rgba(255,215,150,${ra.toFixed(3)})`;
+      nctx.lineWidth = Math.max(0.7, w / 1200);
+      nctx.beginPath();
+      nctx.arc(rp.x, rp.y, rp.r, 0, Math.PI * 2);
+      nctx.stroke();
+    }
     if (headActive) {
-      nctx.save();
-      nctx.globalCompositeOperation = 'lighter';
       nctx.lineCap = 'round';
-      nctx.lineJoin = 'round';
       for (const pu of pulses) {
-        const px = pu.hx, py = pu.hy;
-        // Two-pass trail: wide soft aura under a bright core = long glow line.
+        const pt = pu.trail;
+        const n2 = pt.length;
+        // Shooting-star streak: smooth spline through the trail (each
+        // segment is a quad curve meeting at shared midpoints — no kinks).
         for (let pass = 0; pass < 2; pass++) {
-          const wide = pass === 0;
-          for (let k = 1; k < pu.trail.length; k++) {
-            const frac = k / pu.trail.length;
-            const alpha = frac * (wide ? 0.28 : 0.9) * thinkAlpha;
-            nctx.strokeStyle = wide
+          for (let k = 1; k < n2 - 1; k++) {
+            const frac = k / n2;
+            const alpha = pass === 0
+              ? frac * 0.30 * thinkAlpha
+              : Math.pow(frac, 1.2) * 0.9 * thinkAlpha;
+            nctx.strokeStyle = pass === 0
               ? `rgba(255,170,60,${alpha.toFixed(3)})`
-              : `rgba(255,${Math.round(200 + 45 * frac)},120,${alpha.toFixed(3)})`;
-            nctx.lineWidth = Math.max(1, frac * w / (wide ? 150 : 340));
+              : `rgba(255,${Math.round(210 + 40 * frac)},${Math.round(140 - 60 * frac)},${alpha.toFixed(3)})`;
+            nctx.lineWidth = Math.max(0.8, frac * w / (pass === 0 ? 160 : 420));
+            const mx0 = (pt[k - 1].x + pt[k].x) * 0.5, my0 = (pt[k - 1].y + pt[k].y) * 0.5;
+            const mx1 = (pt[k].x + pt[k + 1].x) * 0.5, my1 = (pt[k].y + pt[k + 1].y) * 0.5;
             nctx.beginPath();
-            nctx.moveTo(pu.trail[k - 1].x, pu.trail[k - 1].y);
-            nctx.lineTo(pu.trail[k].x, pu.trail[k].y);
+            nctx.moveTo(mx0, my0);
+            nctx.quadraticCurveTo(pt[k].x, pt[k].y, mx1, my1);
             nctx.stroke();
           }
         }
-        // Shining head.
-        const headR = Math.max(2, w / 340);
-        const halo = nctx.createRadialGradient(px, py, 0, px, py, headR * 6);
-        halo.addColorStop(0, `rgba(255,238,180,${(0.95 * thinkAlpha).toFixed(3)})`);
-        halo.addColorStop(1, 'rgba(255,180,60,0)');
-        nctx.fillStyle = halo;
+        // Glowing head: packet-style layered halo + white-hot dot.
+        const px = pu.hx, py = pu.hy;
+        const baseR = Math.max(1.6, w / 520);
+        const hgrad = nctx.createRadialGradient(px, py, 0, px, py, baseR * 5);
+        hgrad.addColorStop(0, `rgba(255,240,200,${(0.9 * thinkAlpha).toFixed(3)})`);
+        hgrad.addColorStop(0.3, `rgba(255,200,110,${(0.45 * thinkAlpha).toFixed(3)})`);
+        hgrad.addColorStop(1, 'rgba(255,170,60,0)');
+        nctx.fillStyle = hgrad;
         nctx.beginPath();
-        nctx.arc(px, py, headR * 6, 0, Math.PI * 2);
+        nctx.arc(px, py, baseR * 5, 0, Math.PI * 2);
         nctx.fill();
-        nctx.fillStyle = `rgba(255,255,244,${(0.98 * thinkAlpha).toFixed(3)})`;
+        nctx.fillStyle = `rgba(255,252,240,${(0.95 * thinkAlpha).toFixed(3)})`;
         nctx.beginPath();
-        nctx.arc(px, py, headR, 0, Math.PI * 2);
+        nctx.arc(px, py, baseR, 0, Math.PI * 2);
         nctx.fill();
       }
-      nctx.restore();
-    } else if (pulses.length) {
-      pulses = [];
     }
+    // Shed embers: additive sparks with tiny streaks, drifting on a slight
+    // gravity — twinkling individually; glints carry a small cross flare.
+    for (let es = cometSparks.length - 1; es >= 0; es--) {
+      const spk = cometSparks[es];
+      spk.x += spk.vx; spk.y += spk.vy;
+      spk.vy += w / 19000;
+      spk.vx *= 0.985;
+      spk.life -= 0.028;
+      if (spk.life <= 0) { cometSparks.splice(es, 1); continue; }
+      const tw2 = 0.55 + 0.45 * Math.sin(t * 0.5 + (spk.tw || 0));
+      const sal = Math.min(0.85, spk.life) * thinkAlpha * tw2;
+      if (sal < 0.02) { cometSparks.splice(es, 1); continue; }
+      nctx.strokeStyle = spk.warm
+        ? `rgba(255,205,120,${sal.toFixed(3)})`
+        : `rgba(255,232,178,${sal.toFixed(3)})`;
+      nctx.lineWidth = Math.max(0.6, w / 1100);
+      nctx.beginPath();
+      nctx.moveTo(spk.x - spk.vx * 3, spk.y - spk.vy * 3);
+      nctx.lineTo(spk.x, spk.y);
+      nctx.stroke();
+      if (spk.glint && spk.life > 0.3) {
+        const gl = w / 1600;
+        nctx.strokeStyle = `rgba(255,242,205,${(sal * 0.9).toFixed(3)})`;
+        nctx.lineWidth = Math.max(0.5, w / 1600);
+        nctx.beginPath();
+        nctx.moveTo(spk.x - gl * 3, spk.y);
+        nctx.lineTo(spk.x + gl * 3, spk.y);
+        nctx.moveTo(spk.x, spk.y - gl * 3);
+        nctx.lineTo(spk.x, spk.y + gl * 3);
+        nctx.stroke();
+      }
+    }
+    nctx.restore();
 
     // Ambient packets: small cyan comets with whisper trails, busiest when
     // the web is engaged (speaking floods the wiring).
@@ -1330,39 +1487,47 @@ function startNeuralSphere() {
     }
     nctx.restore();
 
-    // Lightning bolts over the web: glow pass under a white-hot core line,
-    // flickering out over their brief life.
+    // Lightning bolts over the web: re-jagged EVERY frame so the arcs
+    // crackle like raw electricity, white-hot core under colored glow,
+    // with branch forks. Idle bolts are faint distant cracks.
     nctx.save();
     nctx.globalCompositeOperation = 'lighter';
     nctx.lineCap = 'round';
     nctx.lineJoin = 'round';
     const warmBolt = speakEnergy > 0.4;
     for (const b of bolts) {
-      const flick = b.life * (0.6 + 0.4 * Math.sin(t * 0.83 + b.seed * 7));
+      const dimK = b.dim ? 0.5 : 1;
+      const flick = b.life * (0.6 + 0.4 * Math.sin(t * 0.83 + b.seed * 7)) * dimK;
       if (flick <= 0.02) continue;
-      // Project the 3D bolt once, build one path used by both passes.
-      const pts = b.pts.map(q => {
+      const drawPts = (arr, jitterW) => arr.map((q, k2) => {
+        const env = Math.sin((k2 / (arr.length - 1)) * Math.PI);
         const x1 = q.x * cosA + q.z * sinA;
-        const z1 = -q.x * sinA + q.z * cosA;
-        const y1 = q.y * cosT - z1 * sinT;
-        const z2 = q.y * sinT + z1 * cosT;
+        const z1l = -q.x * sinA + q.z * cosA;
+        const y1 = q.y * cosT - z1l * sinT;
+        const z2 = q.y * sinT + z1l * cosT;
         const sc = FOCAL / (FOCAL - z2 * breathe);
-        return { x: cx + x1 * R * sc, y: cy + y1 * R * sc };
+        return {
+          x: cx + x1 * R * sc + (Math.random() - 0.5) * jitterW * env,
+          y: cy + y1 * R * sc + (Math.random() - 0.5) * jitterW * env
+        };
       });
-      nctx.strokeStyle = warmBolt
-        ? `rgba(255,190,110,${(flick * 0.25).toFixed(3)})`
-        : `rgba(140,220,255,${(flick * 0.25).toFixed(3)})`;
-      nctx.lineWidth = Math.max(2.5, w / 220);
-      nctx.beginPath();
-      nctx.moveTo(pts[0].x, pts[0].y);
-      for (let k = 1; k < pts.length; k++) nctx.lineTo(pts[k].x, pts[k].y);
-      nctx.stroke();
-      nctx.strokeStyle = `rgba(245,250,255,${(flick * 0.85).toFixed(3)})`;
-      nctx.lineWidth = Math.max(0.8, w / 700);
-      nctx.beginPath();
-      nctx.moveTo(pts[0].x, pts[0].y);
-      for (let k = 1; k < pts.length; k++) nctx.lineTo(pts[k].x, pts[k].y);
-      nctx.stroke();
+      const strokePts = (arr, color, lw) => {
+        nctx.strokeStyle = color;
+        nctx.lineWidth = lw;
+        nctx.beginPath();
+        nctx.moveTo(arr[0].x, arr[0].y);
+        for (let k = 1; k < arr.length; k++) nctx.lineTo(arr[k].x, arr[k].y);
+        nctx.stroke();
+      };
+      const main = drawPts(b.pts, w / 240);
+      const gcol = warmBolt ? '255,225,170' : '160,220,255';
+      // Wide sky-wash glow, tight body, white-hot fuzzy core.
+      strokePts(main, `rgba(${gcol},${(flick * 0.12).toFixed(3)})`, Math.max(3, w / 110));
+      strokePts(main, `rgba(${gcol},${(flick * 0.30).toFixed(3)})`, Math.max(1.6, w / 300));
+      strokePts(main, `rgba(255,252,245,${(flick * 0.85).toFixed(3)})`, Math.max(0.8, w / 700));
+      for (const br of (b.branches || [])) {
+        strokePts(drawPts(br, w / 300), `rgba(${gcol},${(flick * 0.22).toFixed(3)})`, Math.max(0.7, w / 500));
+      }
     }
     nctx.restore();
 
@@ -1382,17 +1547,22 @@ function startNeuralSphere() {
       nctx.stroke();
     }
 
-    // Transition shockwaves: bright rings blast outward on every state
-    // flip into thinking/speaking.
+    // Transition shockwaves: a bright pressure front with a cool trailing
+    // echo ring, blasted outward on every state flip into thinking/speaking.
     for (let s = shock.length - 1; s >= 0; s--) {
       const sk = shock[s];
       sk.r += (R * 2.4 - sk.r) * 0.055;
       sk.a *= 0.94;
       if (sk.a < 0.02) { shock.splice(s, 1); continue; }
-      nctx.strokeStyle = `rgba(170,215,255,${sk.a.toFixed(3)})`;
-      nctx.lineWidth = Math.max(1, sk.lw * (R / 300));
+      nctx.strokeStyle = `rgba(255,240,215,${(sk.a * 0.8).toFixed(3)})`;
+      nctx.lineWidth = Math.max(1, sk.lw * (R / 300) * 0.7);
       nctx.beginPath();
       nctx.arc(cx, cy, sk.r, 0, Math.PI * 2);
+      nctx.stroke();
+      nctx.strokeStyle = `rgba(140,190,255,${(sk.a * 0.5).toFixed(3)})`;
+      nctx.lineWidth = Math.max(1, sk.lw * (R / 300) * 1.6);
+      nctx.beginPath();
+      nctx.arc(cx, cy, sk.r * 1.07, 0, Math.PI * 2);
       nctx.stroke();
     }
 
@@ -1401,6 +1571,13 @@ function startNeuralSphere() {
       nctx.fillStyle = `rgba(180,220,255,${(flash * 0.16).toFixed(3)})`;
       nctx.fillRect(0, 0, w, h);
       flash *= 0.86;
+    }
+
+    // Thunder wash: every strike briefly lifts the whole sky — the storm
+    // answering itself, even at idle.
+    if (boltGlow > 0.02) {
+      nctx.fillStyle = `rgba(210,235,255,${(boltGlow * 0.05).toFixed(3)})`;
+      nctx.fillRect(0, 0, w, h);
     }
 
     // Focus vignette: darken the outer frame so the core pops forward.
@@ -1428,6 +1605,27 @@ function startNeuralSphere() {
     nctx.filter = 'blur(10px)';
     nctx.globalAlpha = 0.55 + speakEnergy * 0.15;
     nctx.drawImage(bloomCanvas, 0, 0, w, h);
+    nctx.restore();
+    nctx.filter = 'none';
+
+    // Wide bloom: a quarter-res pass at a much larger blur is composited
+    // under/over the tight one — layered tight+wide = cinematic halo depth.
+    if (!bloomWide) {
+      bloomWide = document.createElement('canvas');
+      bloomWideCtx = bloomWide.getContext('2d');
+    }
+    const w2 = Math.max(1, w >> 2), h2 = Math.max(1, h >> 2);
+    if (bloomWide.width !== w2 || bloomWide.height !== h2) {
+      bloomWide.width = w2;
+      bloomWide.height = h2;
+    }
+    bloomWideCtx.clearRect(0, 0, w2, h2);
+    bloomWideCtx.drawImage(neuralCanvas, 0, 0, w2, h2);
+    nctx.save();
+    nctx.globalCompositeOperation = 'lighter';
+    nctx.filter = 'blur(18px)';
+    nctx.globalAlpha = 0.32 + speakEnergy * 0.1 + thinkAlpha * 0.08;
+    nctx.drawImage(bloomWide, 0, 0, w, h);
     nctx.restore();
     nctx.filter = 'none';
 
@@ -1501,6 +1699,8 @@ function initSettingsPanel() {
   const groqKeyInput = document.getElementById('groqKeyInput');
   const geminiKeyInput = document.getElementById('geminiKeyInput');
   const deepgramKeyInput = document.getElementById('deepgramKeyInput');
+  const elevenlabsKeyInput = document.getElementById('elevenlabsKeyInput');
+  const elevenlabsVoiceIdInput = document.getElementById('elevenlabsVoiceIdInput');
   const wolframKeyInput = document.getElementById('wolframKeyInput');
   const spotifyClientIdInput = document.getElementById('spotifyClientIdInput');
   const spotifyClientSecretInput = document.getElementById('spotifyClientSecretInput');
@@ -1543,6 +1743,18 @@ function initSettingsPanel() {
   }
   if (deepgramKeyInput) {
     deepgramKeyInput.placeholder = keyPlaceholder('Deepgram API Key', localStorage.getItem('jarvis_deepgram_api_key'));
+  }
+  if (elevenlabsKeyInput) {
+    elevenlabsKeyInput.placeholder = keyPlaceholder('ElevenLabs API Key', localStorage.getItem('jarvis_elevenlabs_api_key'));
+  }
+  if (elevenlabsVoiceIdInput) {
+    const savedVoiceId = localStorage.getItem('jarvis_elevenlabs_voice_id');
+    const savedDefault = localStorage.getItem('jarvis_elevenlabs_api_key')
+      ? (loadSettings().voiceGender === 'female' ? 'Rachel/21m00Tcm4TlvDq8ikWAM' : 'Adam/pNInz6obpgDQGcFmaJgB')
+      : 'Rachel/Adam (no key yet)';
+    elevenlabsVoiceIdInput.placeholder = savedVoiceId
+      ? `ElevenLabs Voice ID: ${savedVoiceId} (saved)`
+      : `ElevenLabs Voice ID (${savedDefault})`;
   }
   if (wolframKeyInput) {
     wolframKeyInput.placeholder = keyPlaceholder('WolframAlpha AppID', localStorage.getItem('jarvis_wolfram_app_id'));
@@ -1616,6 +1828,8 @@ function initSettingsPanel() {
       const groqKey = groqKeyInput ? groqKeyInput.value.trim() : '';
       const geminiKey = geminiKeyInput ? geminiKeyInput.value.trim() : '';
       const deepgramKey = deepgramKeyInput ? deepgramKeyInput.value.trim() : '';
+      const elevenlabsKey = elevenlabsKeyInput ? elevenlabsKeyInput.value.trim() : '';
+      const elevenlabsVoiceId = elevenlabsVoiceIdInput ? elevenlabsVoiceIdInput.value.trim() : '';
       const wolframAppId = wolframKeyInput ? wolframKeyInput.value.trim() : '';
       const spotifyClientId = spotifyClientIdInput ? spotifyClientIdInput.value.trim() : '';
       const spotifyClientSecret = spotifyClientSecretInput ? spotifyClientSecretInput.value.trim() : '';
@@ -1669,6 +1883,20 @@ function initSettingsPanel() {
         deepgramKeyInput.value = '';
         deepgramKeyInput.placeholder = keyPlaceholder('Deepgram API Key', deepgramKey);
       }
+      if (elevenlabsKey) {
+        localStorage.setItem('jarvis_elevenlabs_api_key', elevenlabsKey);
+        // Hot-wired by design: speak() re-reads the key each call, so the
+        // premium voice kicks in on the next reply — no restart needed.
+        elevenlabsKeyInput.value = '';
+        elevenlabsKeyInput.placeholder = keyPlaceholder('ElevenLabs API Key', elevenlabsKey);
+      }
+      if (elevenlabsVoiceId) {
+        localStorage.setItem('jarvis_elevenlabs_voice_id', elevenlabsVoiceId);
+        // Re-read per speak() like the key — a custom voice takes effect on
+        // the next reply with no restart.
+        elevenlabsVoiceIdInput.value = '';
+        elevenlabsVoiceIdInput.placeholder = `ElevenLabs Voice ID: ${elevenlabsVoiceId} (saved)`;
+      }
       if (wolframAppId) {
         localStorage.setItem('jarvis_wolfram_app_id', wolframAppId);
         if (jarvis) jarvis.wolfram.appId = wolframAppId;
@@ -1699,13 +1927,8 @@ function initSettingsPanel() {
         googleClientSecretInput.value = '';
         googleClientSecretInput.placeholder = keyPlaceholder('Google Client Secret', googleClientSecret);
       }
-      // Any previously-saved ElevenLabs key is now orphaned (feature removed):
-      // drop it so no dead credential lingers in storage.
-      localStorage.removeItem('jarvis_elevenlabs_api_key');
-      localStorage.removeItem('jarvis_elevenlabs_voice_id');
-
       if (apiKeysStatus) {
-        if (openrouterKey || groqKey || geminiKey || deepgramKey || wolframAppId || spotifyClientId || spotifyClientSecret || googleClientId || googleClientSecret) {
+        if (openrouterKey || groqKey || geminiKey || deepgramKey || elevenlabsKey || elevenlabsVoiceId || wolframAppId || spotifyClientId || spotifyClientSecret || googleClientId || googleClientSecret) {
           apiKeysStatus.textContent = '✅ Saved.';
           apiKeysStatus.style.color = '#39ff14';
         } else {

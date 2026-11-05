@@ -564,8 +564,31 @@ export class VoiceEngine {
 
     this.stopSpeaking();
 
+    // ElevenLabs path: a saved Settings key switches ARIA's voice to
+    // ElevenLabs synthesis (played through the main-process proxy). Any
+    // failure falls back to the built-in Web Speech voice below.
+    let elKey = null;
+    try { elKey = localStorage.getItem('jarvis_elevenlabs_api_key'); } catch (e) {}
+    if (elKey && typeof window !== 'undefined' && window.jarvisElectron && window.jarvisElectron.synthesizeElevenlabs) {
+      return new Promise((resolve) => {
+        this._speakElevenlabs(text, elKey, gen, isCurrentSpeech, resolve);
+      });
+    }
+
     if (!this.synthesis) return Promise.resolve();
     return new Promise((resolve) => {
+      this._speakWithSynthesis(text, gen, isCurrentSpeech, resolve);
+    });
+  }
+
+  /**
+   * The built-in Web Speech voice — extracted from speak() so the
+   * ElevenLabs path can fall back to it on any failure (bad key, no
+   * quota, blocked playback, decode error) without duplicating the
+   * lifecycle logic.
+   */
+  _speakWithSynthesis(text, gen, isCurrentSpeech, resolve) {
+    try {
       const utterance = new SpeechSynthesisUtterance(text);
       if (this.voice) utterance.voice = this.voice;
       utterance.rate = this.voiceRate;
@@ -617,6 +640,105 @@ export class VoiceEngine {
       };
 
       this.synthesis.speak(utterance);
+    } catch (e) {
+      console.warn(`TTS start failed (${e && e.message ? e.message : 'unknown'})`);
+      this.isSpeaking = false;
+      this.suppressMic = false;
+      resolve();
+    }
+  }
+
+  /**
+   * ElevenLabs TTS: requests mp3 synthesis through the main-process proxy
+   * (the key travels only renderer→preload, same trust boundary as every
+   * other harness call), plays it via an <audio> element and drives the
+   * same SPEAKING lifecycle as the built-in voice (state, chime, meter
+   * pulses, mic guard). Voice follows the Settings gender preference
+   * (premade catalog: Rachel / Adam). Any failure falls back to
+   * _speakWithSynthesis so ARIA always still answers out loud.
+   */
+  _speakElevenlabs(text, apiKey, gen, isCurrentSpeech, resolve) {
+    const gender = loadSettings().voiceGender === 'female' ? 'female' : 'male';
+    // A Settings-saved Voice ID (elevenlabs.io → Voices) overrides the
+    // premade catalog default; re-read per call so it hot-swaps.
+    let customVoiceId = null;
+    try { customVoiceId = localStorage.getItem('jarvis_elevenlabs_voice_id'); } catch (e) {}
+    const voiceId = (customVoiceId && customVoiceId.trim())
+      || (gender === 'female'
+        ? '21m00Tcm4TlvDq8ikWAM' // Rachel
+        : 'pNInz6obpgDQGcFmaJgB'); // Adam
+
+    const finish = () => {
+      if (!isCurrentSpeech()) return resolve();
+      this.isSpeaking = false;
+      this.onSpeechMeter({ active: false, intensity: 0 });
+      this.onStateChange({ status: "IDLE", message: "System online" });
+      // Same echo guard as the built-in path.
+      setTimeout(() => {
+        if (isCurrentSpeech()) {
+          this.suppressMic = false;
+          if (this.continuousMode) this.startListening();
+        }
+        resolve();
+      }, 1200);
+    };
+    this._elFinish = finish;
+
+    const fallback = (why) => {
+      console.warn(`[TTS] ElevenLabs unavailable (${why}) — falling back to built-in voice.`);
+      if (isCurrentSpeech()) {
+        this._elFinish = null;
+        this._speakWithSynthesis(text, gen, isCurrentSpeech, resolve);
+      } else {
+        resolve();
+      }
+    };
+
+    window.jarvisElectron.synthesizeElevenlabs(text, apiKey, voiceId).then((res) => {
+      if (!res || !res.success || !res.base64) {
+        fallback(res && res.message ? res.message : 'unknown error');
+        return;
+      }
+      if (!isCurrentSpeech()) return resolve();
+      try {
+        const bin = atob(res.base64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        const blob = new Blob([bytes], { type: res.mime || 'audio/mpeg' });
+        const audio = new Audio(URL.createObjectURL(blob));
+        this._elAudio = audio;
+        audio.onplay = () => {
+          if (!isCurrentSpeech()) return;
+          this.isSpeaking = true;
+          this.playFuturisticChime();
+          this.onStateChange({ status: "SPEAKING", message: "ARIA speaking..." });
+          // Streamed audio has no word-boundary events — keep the
+          // visualizer alive with the muted-reply metronome.
+          this._elMeterTimer = setInterval(() => {
+            if (isCurrentSpeech()) {
+              this.onSpeechMeter({ active: true, intensity: 0.45 + Math.random() * 0.3 });
+            }
+          }, 400);
+          if (typeof this._elMeterTimer.unref === 'function') this._elMeterTimer.unref();
+        };
+        audio.onended = () => {
+          if (this._elAudio === audio) this._elAudio = null;
+          try { URL.revokeObjectURL(audio.src); } catch (e) {}
+          finish();
+        };
+        audio.onerror = () => {
+          if (this._elAudio === audio) this._elAudio = null;
+          fallback('audio playback error');
+        };
+        audio.play().catch(() => {
+          if (this._elAudio === audio) this._elAudio = null;
+          fallback('audio play() blocked');
+        });
+      } catch (e) {
+        fallback('decode error');
+      }
+    }).catch((e) => {
+      fallback(e && e.message ? e.message : 'request failed');
     });
   }
 
@@ -685,6 +807,23 @@ export class VoiceEngine {
   stopSpeaking() {
     if (this.synthesis && this.synthesis.speaking) {
       this.synthesis.cancel();
+    }
+    // Cut off any ElevenLabs playback and settle its pending lifecycle so
+    // the awaited promise (and the serialized input queue) never hangs.
+    if (this._elAudio) {
+      const audio = this._elAudio;
+      this._elAudio = null;
+      try { audio.pause(); } catch (e) {}
+      try { audio.src = ''; } catch (e) {}
+    }
+    if (this._elMeterTimer) {
+      clearInterval(this._elMeterTimer);
+      this._elMeterTimer = null;
+    }
+    if (this._elFinish) {
+      const finish = this._elFinish;
+      this._elFinish = null;
+      finish();
     }
     // Settle a cut-off silent reply through its normal finish path so its
     // caller (and the serialized input queue) never hangs.

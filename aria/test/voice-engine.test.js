@@ -366,3 +366,133 @@ test('stopSpeaking() during a muted reply settles it instead of hanging', async 
   await pending; // must resolve via the mic-guard delay, not hang forever
   assert.equal(engine.isSpeaking, false);
 });
+
+// --- ElevenLabs voice synthesis (Settings-saved key, main-process proxy) ---
+
+const ELEVENLABS_ADAM_ID = 'pNInz6obpgDQGcFmaJgB';
+
+function installFakeAudio() {
+  const instances = [];
+  global.Audio = class FakeAudio {
+    constructor(src) {
+      this.src = src;
+      this.paused = false;
+      instances.push(this);
+    }
+    play() { this.paused = false; return Promise.resolve(); }
+    pause() { this.paused = true; }
+  };
+  global.atob = (b64) => Buffer.from(b64, 'base64').toString('binary');
+  global.Blob = class { constructor(parts) { this.parts = parts; } };
+  global.URL.createObjectURL = () => 'blob:fake';
+  global.URL.revokeObjectURL = () => {};
+  return instances;
+}
+
+function makeElectronWindow(impl) {
+  const win = makeWindow();
+  win.speechSynthesis = {
+    speaking: false,
+    getVoices: () => [],
+    speak() {},
+    cancel() { this.speaking = false; }
+  };
+  win.jarvisElectron = {
+    synthesizeElevenlabs: (...args) => impl(...args)
+  };
+  win.SpeechSynthesisUtterance = class { constructor(text) { this.text = text; } };
+  return win;
+}
+
+test('a saved ElevenLabs key routes speak() through the bridge with the gender-preferred voice', async () => {
+  global.localStorage.store.clear();
+  global.localStorage.store.set('jarvis_elevenlabs_api_key', 'el-key');
+  const audioInstances = installFakeAudio();
+  let requested = null;
+  global.window = makeElectronWindow((text, apiKey, voiceId) => {
+    requested = { text, apiKey, voiceId };
+    return Promise.resolve({ success: true, base64: 'AAAA', mime: 'audio/mpeg' });
+  });
+
+  const states = [];
+  const engine = new VoiceEngine({ onStateChange: (s) => states.push(s.status) });
+
+  const pending = engine.speak('Systems online, Sir');
+  await new Promise((r) => setTimeout(r, 20)); // let the synth request land
+  const audio = audioInstances[0];
+  audio.onplay(); // model `play()` fires the SPEAKING state + chime
+  audio.onended();
+
+  await pending;
+
+  assert.deepEqual(requested, { text: 'Systems online, Sir', apiKey: 'el-key', voiceId: ELEVENLABS_ADAM_ID }, 'male default voice goes through the bridge');
+  assert.equal(engine.isSpeaking, false);
+  assert.deepEqual(states.filter((s) => s === 'SPEAKING' || s === 'IDLE').slice(-1), ['IDLE']);
+  assert.ok(states.includes('SPEAKING'), 'core animation still sees the speaking state');
+});
+
+test('an ElevenLabs failure falls back to the built-in voice without hanging', async () => {
+  global.localStorage.store.clear();
+  global.localStorage.store.set('jarvis_elevenlabs_api_key', 'bad-key');
+  installFakeAudio();
+  const spoken = [];
+  let cancels = 0;
+  global.window = makeElectronWindow(() => Promise.resolve({ success: false, message: 'ElevenLabs HTTP 401' }));
+  global.window.speechSynthesis.speak = (u) => spoken.push(u);
+
+  const engine = new VoiceEngine({});
+  engine.continuousMode = true;
+  engine.startListening = () => true;
+
+  const pending = engine.speak('Fallback reply');
+  await new Promise((r) => setTimeout(r, 20)); // let the failed request land
+  assert.equal(spoken.length, 1, 'the built-in Web Speech voice picks the reply up');
+  assert.equal(spoken[0].text, 'Fallback reply');
+
+  spoken[0].onend(); // resolve the fallback lifecycle
+  await pending;
+  assert.equal(engine.isSpeaking, false);
+  assert.equal(cancels, 0);
+});
+
+test('a saved ElevenLabs Voice ID overrides the premade catalog default', async () => {
+  global.localStorage.store.clear();
+  global.localStorage.store.set('jarvis_elevenlabs_api_key', 'el-key');
+  global.localStorage.store.set('jarvis_elevenlabs_voice_id', 'my-custom-voice-id');
+  const audioInstances = installFakeAudio();
+  let requested = null;
+  global.window = makeElectronWindow((text, apiKey, voiceId) => {
+    requested = { text, apiKey, voiceId };
+    return Promise.resolve({ success: true, base64: 'AAAA', mime: 'audio/mpeg' });
+  });
+
+  const engine = new VoiceEngine({});
+  const pending = engine.speak('Using my own voice');
+  await new Promise((r) => setTimeout(r, 20)); // let the synth request land
+  const audio = audioInstances[0];
+  audio.onplay();
+  audio.onended();
+  await pending;
+
+  assert.ok(requested, 'synthesis must be requested');
+  assert.equal(requested.voiceId, 'my-custom-voice-id');
+  assert.equal(requested.apiKey, 'el-key');
+});
+
+test('stopSpeaking() during an ElevenLabs replay settles it instead of hanging', async () => {
+  global.localStorage.store.clear();
+  global.localStorage.store.set('jarvis_elevenlabs_api_key', 'el-key');
+  const audioInstances = installFakeAudio();
+  global.window = makeElectronWindow(() => Promise.resolve({ success: true, base64: 'AAAA', mime: 'audio/mpeg' }));
+
+  const engine = new VoiceEngine({});
+  const pending = engine.speak('Cut off mid-sentence');
+  await new Promise((r) => setTimeout(r, 20));
+  const audio = audioInstances[0];
+  audio.onplay();
+  assert.equal(engine.isSpeaking, true);
+
+  engine.stopSpeaking(); // interrupts the ElevenLabs audio element
+  await pending; // must resolve via the settle path, not hang forever
+  assert.equal(engine.isSpeaking, false);
+});

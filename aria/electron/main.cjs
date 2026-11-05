@@ -509,6 +509,54 @@ function registerScreenCaptureIpc() {
   });
 }
 
+function registerElevenlabsIpc() {
+  // Same plain-Node-HTTPS-in-main-process trick as Steam/Wolfram/Spotify:
+  // keeps the API key out of renderer-observable request history and avoids
+  // CORS entirely for the packaged app. Synthesizes mp3 audio for the
+  // renderer's voice engine to play.
+  ipcMain.handle('elevenlabs:tts', (event, { text, apiKey, voiceId, modelId }) => {
+    if (!text || !apiKey) return Promise.resolve({ success: false, message: 'Missing text or ElevenLabs API key.' });
+    const voice = voiceId || '21m00Tcm4TlvDq8ikWAM';
+    const model = modelId || 'eleven_multilingual_v2';
+    const body = JSON.stringify({
+      text,
+      model_id: model,
+      voice_settings: { stability: 0.55, similarity_boost: 0.8, style: 0.15, use_speaker_boost: true }
+    });
+    const options = {
+      method: 'POST',
+      headers: {
+        'xi-api-key': apiKey,
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body)
+      }
+    };
+    return new Promise((resolve) => {
+      const req = https.request(
+        `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voice)}?output_format=mp3_44100_128`,
+        options,
+        (res) => {
+          const chunks = [];
+          res.on('data', (chunk) => chunks.push(chunk));
+          res.on('end', () => {
+            const buf = Buffer.concat(chunks);
+            if (res.statusCode >= 200 && res.statusCode < 300 && buf.length > 0) {
+              resolve({ success: true, base64: buf.toString('base64'), mime: 'audio/mpeg' });
+            } else {
+              let detail = '';
+              try { detail = JSON.parse(buf.toString('utf8')).detail?.message || ''; } catch (e) {}
+              resolve({ success: false, message: `ElevenLabs HTTP ${res.statusCode}${detail ? `: ${detail}` : ''}` });
+            }
+          });
+        }
+      );
+      req.on('error', (e) => resolve({ success: false, message: `ElevenLabs request failed: ${e.message}` }));
+      req.write(body);
+      req.end();
+    });
+  });
+}
+
 function registerSteamIpc() {
   // Runs in the main process, so it's a plain Node HTTPS request — not subject
   // to browser CORS at all. Replaces the dev-only Vite proxy / public CORS
@@ -1951,6 +1999,7 @@ app.whenReady().then(() => {
   registerScreenCaptureIpc();
   registerScreenMonitorIpc();
   registerWolframIpc();
+  registerElevenlabsIpc();
   registerWeatherIpc();
   registerMapsIpc();
   registerFilesIpc();
