@@ -694,7 +694,7 @@ function buildNeuralSphere(count = 330) {
     });
   }
   // Neighbor pairs are rotation-invariant — compute once, plus an adjacency
-  // list so thought-pulses can hop neuron to neuron.
+  // list so packets can hop neuron to neuron.
   const maxChord = 0.46;
   let edges = 0;
   for (let i = 0; i < count && edges < 1500; i++) {
@@ -738,10 +738,8 @@ function startNeuralSphere() {
   let t = 0;
   let thinkAlpha = 0;
   let speakEnergy = 0; // smoothed speech drive — fast attack, slow release, never jerky
-  let pulses = [];     // orange thought streak (thinking)
-  let afterglow = [];  // fading ember halos at neurons the comet struck
-  let ripples = [];    // micro rings at hop impact points
-  let cometSparks = []; // shed embers drifting off the comet head
+  // The yellow thought comet (streak, embers, hop impacts) was removed on
+  // request — processing no longer sends a shooting star through the web.
   let packets = [];    // cyan data packets — always-on ambient mesh traffic
   let flow = [];       // flowing current streams (orbits of drifting particles)
   let bolts = [];      // jagged lightning arcs jumping across the web
@@ -811,7 +809,8 @@ function startNeuralSphere() {
     }
   }
 
-  // Random neighbor hop for thought-pulses (falls back to staying put on
+  // Random neighbor hop for packets, bolts and flow orbits (falls back to
+  // staying put on
   // isolated neurons, which shouldn't happen but costs nothing to guard).
   function pickNeighbor(node, avoid) {
     const nb = sphereAdj[node] || [];
@@ -964,67 +963,10 @@ function startNeuralSphere() {
       proj[i] = { x: cx + x1 * R * s, y: cy + y1 * R * s, s, z: z2, tw: p.tw, hub: p.hub, lat: p.y };
     }
 
-    // Advance the thought streak first: its head position drives which
-    // links ignite yellow below.
+    // Thinking engages the web through thinkAlpha (scene brightness below
+    // lifts slightly). The yellow thought comet was removed on request —
+    // processing shows no shooting star.
     thinkAlpha += ((state === 'thinking' ? 1 : 0) - thinkAlpha) * 0.07;
-    let headX = 0, headY = 0;
-    if (thinkAlpha > 0.02) {
-      if (!pulses.length) pulses.push(newPulse());
-      for (const pu of pulses) {
-        const a0 = proj[pu.node], b0 = proj[pu.next];
-        const edgeLen = Math.max(1, Math.hypot(b0.x - a0.x, b0.y - a0.y));
-        const hopSpeed = state === 'thinking' ? 3.4 : 2.2;
-        pu.t += ((w / 50) * pu.pace * hopSpeed) / edgeLen;
-        if (pu.t >= 1) {
-          pu.node = pu.next;
-          pu.next = pickNeighbor(pu.node, pu.next);
-          pu.t = 0;
-          // Hop impact: the struck neuron keeps an ember halo, and a
-          // micro-ripple rings out from impact.
-          const hit = proj[pu.node];
-          if (hit) {
-            afterglow.push({ x: hit.x, y: hit.y, a: 0.5, r: Math.max(3, w / 140) });
-            ripples.push({ x: hit.x, y: hit.y, r: 2, a: 0.32 });
-            if (afterglow.length > 12) afterglow.shift();
-            // Hop burst: sparks kicked out radially from the strike point.
-            for (let bs = 0; bs < 5 && cometSparks.length < 46; bs++) {
-              const ba = Math.random() * Math.PI * 2;
-              const bv = (0.3 + Math.random() * 0.7) * w / 1100;
-              cometSparks.push({
-                x: hit.x, y: hit.y, vx: Math.cos(ba) * bv, vy: Math.sin(ba) * bv,
-                life: 0.4 + Math.random() * 0.4, warm: true,
-                tw: Math.random() * Math.PI * 2, glint: Math.random() < 0.35
-              });
-            }
-          }
-        }
-        const a = proj[pu.node], b = proj[pu.next];
-        // Constant fast velocity — a shooting star, not a lingering pulse.
-        pu.hx = a.x + (b.x - a.x) * pu.t;
-        pu.hy = a.y + (b.y - a.y) * pu.t;
-        pu.trail.push({ x: pu.hx, y: pu.hy });
-        if (pu.trail.length > 26) pu.trail.shift();
-        // Shed embers: sparks thrown off the head as it travels. Some are
-        // glints — brighter, with a tiny cross flare.
-        if (cometSparks.length < 46 && Math.random() < 0.5) {
-          cometSparks.push({
-            x: pu.hx, y: pu.hy,
-            vx: (Math.random() - 0.3) * w / 900,
-            vy: (Math.random() - 0.5) * w / 900,
-            life: 0.7 + Math.random() * 0.5,
-            warm: Math.random() < 0.8,
-            tw: Math.random() * Math.PI * 2,
-            glint: Math.random() < 0.12
-          });
-        }
-      }
-      headX = pulses[0].hx;
-      headY = pulses[0].hy;
-    } else if (pulses.length) {
-      pulses = [];
-    }
-    const headActive = thinkAlpha > 0.02 && pulses.length > 0;
-    const igniteR = R * 0.55; // links inside this radius of the head burn yellow
 
     // Ambient mesh traffic: cyan data packets hop the wiring constantly, at a
     // density set by the mood (listening = busy airwaves, speaking = flood).
@@ -1302,20 +1244,8 @@ function startNeuralSphere() {
         : 0;
       const twinkle = (0.78 + 0.32 * Math.sin(t * 0.05 + p.tw)) * (1 + scanK * 1.6);
       const heat = Math.max(0, speakEnergy * (0.5 + 0.5 * Math.sin(t * 0.09 + p.lat * 3)));
-      // Neurons near the thought head catch the same yellow fire.
       let hr = cr, hg = cg, hb = cb;
       let cwr = 235, cwg = 244, cwb = 255;
-      if (headActive) {
-        const hd = Math.hypot(p.x - headX, p.y - headY);
-        const glow = Math.max(0, 1 - hd / igniteR) * thinkAlpha;
-        if (glow > 0) {
-          hr = Math.round(cr + (255 - cr) * glow);
-          hg = Math.round(cg + (198 - cg) * glow);
-          hb = Math.round(cb + (80 - cb) * glow);
-          cwg = Math.round(244 - 34 * glow);
-          cwb = Math.round(255 - 105 * glow);
-        }
-      }
       // Speaking heat: cores lean amber in sync with the radio-wave swell.
       if (heat > 0.02) {
         const wl = Math.max(0, Math.min(1, heat));
@@ -1347,113 +1277,8 @@ function startNeuralSphere() {
     }
     nctx.restore();
 
-    // The thought comet: layered tapered trail, hop impacts that ring and
-    // linger, shed embers, and a scintillating star head. Decay layers run
-    // here so afterglow/embers fade out gracefully even as thinking ends.
-    nctx.save();
-    nctx.globalCompositeOperation = 'lighter';
-    // Afterglow: visited neurons keep a fading ember halo.
-    for (let g = afterglow.length - 1; g >= 0; g--) {
-      const ag = afterglow[g];
-      ag.a *= (headActive ? 0.94 : 0.85);
-      ag.r += w / 2400;
-      if (ag.a < 0.02) { afterglow.splice(g, 1); continue; }
-      const gg = nctx.createRadialGradient(ag.x, ag.y, 0, ag.x, ag.y, ag.r * 3);
-      gg.addColorStop(0, `rgba(255,200,110,${ag.a.toFixed(3)})`);
-      gg.addColorStop(1, 'rgba(255,160,60,0)');
-      nctx.fillStyle = gg;
-      nctx.beginPath();
-      nctx.arc(ag.x, ag.y, ag.r * 3, 0, Math.PI * 2);
-      nctx.fill();
-    }
-    // Hop ripples: micro rings striking outward at impact points.
-    for (let ri = ripples.length - 1; ri >= 0; ri--) {
-      const rp = ripples[ri];
-      rp.r += w / 260;
-      rp.a *= 0.90;
-      const ra = rp.a * thinkAlpha;
-      if (rp.a < 0.02 || ra < 0.015) { ripples.splice(ri, 1); continue; }
-      nctx.strokeStyle = `rgba(255,215,150,${ra.toFixed(3)})`;
-      nctx.lineWidth = Math.max(0.7, w / 1200);
-      nctx.beginPath();
-      nctx.arc(rp.x, rp.y, rp.r, 0, Math.PI * 2);
-      nctx.stroke();
-    }
-    if (headActive) {
-      nctx.lineCap = 'round';
-      for (const pu of pulses) {
-        const pt = pu.trail;
-        const n2 = pt.length;
-        // Shooting-star streak: smooth spline through the trail (each
-        // segment is a quad curve meeting at shared midpoints — no kinks).
-        for (let pass = 0; pass < 2; pass++) {
-          for (let k = 1; k < n2 - 1; k++) {
-            const frac = k / n2;
-            const alpha = pass === 0
-              ? frac * 0.30 * thinkAlpha
-              : Math.pow(frac, 1.2) * 0.9 * thinkAlpha;
-            nctx.strokeStyle = pass === 0
-              ? `rgba(255,170,60,${alpha.toFixed(3)})`
-              : `rgba(255,${Math.round(210 + 40 * frac)},${Math.round(140 - 60 * frac)},${alpha.toFixed(3)})`;
-            nctx.lineWidth = Math.max(0.8, frac * w / (pass === 0 ? 160 : 420));
-            const mx0 = (pt[k - 1].x + pt[k].x) * 0.5, my0 = (pt[k - 1].y + pt[k].y) * 0.5;
-            const mx1 = (pt[k].x + pt[k + 1].x) * 0.5, my1 = (pt[k].y + pt[k + 1].y) * 0.5;
-            nctx.beginPath();
-            nctx.moveTo(mx0, my0);
-            nctx.quadraticCurveTo(pt[k].x, pt[k].y, mx1, my1);
-            nctx.stroke();
-          }
-        }
-        // Glowing head: packet-style layered halo + white-hot dot.
-        const px = pu.hx, py = pu.hy;
-        const baseR = Math.max(1.6, w / 520);
-        const hgrad = nctx.createRadialGradient(px, py, 0, px, py, baseR * 5);
-        hgrad.addColorStop(0, `rgba(255,240,200,${(0.9 * thinkAlpha).toFixed(3)})`);
-        hgrad.addColorStop(0.3, `rgba(255,200,110,${(0.45 * thinkAlpha).toFixed(3)})`);
-        hgrad.addColorStop(1, 'rgba(255,170,60,0)');
-        nctx.fillStyle = hgrad;
-        nctx.beginPath();
-        nctx.arc(px, py, baseR * 5, 0, Math.PI * 2);
-        nctx.fill();
-        nctx.fillStyle = `rgba(255,252,240,${(0.95 * thinkAlpha).toFixed(3)})`;
-        nctx.beginPath();
-        nctx.arc(px, py, baseR, 0, Math.PI * 2);
-        nctx.fill();
-      }
-    }
-    // Shed embers: additive sparks with tiny streaks, drifting on a slight
-    // gravity — twinkling individually; glints carry a small cross flare.
-    for (let es = cometSparks.length - 1; es >= 0; es--) {
-      const spk = cometSparks[es];
-      spk.x += spk.vx; spk.y += spk.vy;
-      spk.vy += w / 19000;
-      spk.vx *= 0.985;
-      spk.life -= 0.028;
-      if (spk.life <= 0) { cometSparks.splice(es, 1); continue; }
-      const tw2 = 0.55 + 0.45 * Math.sin(t * 0.5 + (spk.tw || 0));
-      const sal = Math.min(0.85, spk.life) * thinkAlpha * tw2;
-      if (sal < 0.02) { cometSparks.splice(es, 1); continue; }
-      nctx.strokeStyle = spk.warm
-        ? `rgba(255,205,120,${sal.toFixed(3)})`
-        : `rgba(255,232,178,${sal.toFixed(3)})`;
-      nctx.lineWidth = Math.max(0.6, w / 1100);
-      nctx.beginPath();
-      nctx.moveTo(spk.x - spk.vx * 3, spk.y - spk.vy * 3);
-      nctx.lineTo(spk.x, spk.y);
-      nctx.stroke();
-      if (spk.glint && spk.life > 0.3) {
-        const gl = w / 1600;
-        nctx.strokeStyle = `rgba(255,242,205,${(sal * 0.9).toFixed(3)})`;
-        nctx.lineWidth = Math.max(0.5, w / 1600);
-        nctx.beginPath();
-        nctx.moveTo(spk.x - gl * 3, spk.y);
-        nctx.lineTo(spk.x + gl * 3, spk.y);
-        nctx.moveTo(spk.x, spk.y - gl * 3);
-        nctx.lineTo(spk.x, spk.y + gl * 3);
-        nctx.stroke();
-      }
-    }
-    nctx.restore();
+    // (The yellow thought comet's trail/embers/ripple pass was removed on
+    // request — the ambient cyan packets below carry all mesh traffic.)
 
     // Ambient packets: small cyan comets with whisper trails, busiest when
     // the web is engaged (speaking floods the wiring).
