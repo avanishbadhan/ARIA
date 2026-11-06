@@ -40,13 +40,6 @@ const speechMeterBars = speechMeter ? Array.from(speechMeter.querySelectorAll('.
 const neuralCanvas = document.getElementById('neuralSphere');
 const neuralStage = document.getElementById('sphereStage');
 const homeView = document.getElementById('view-home');
-const modelCanvas = document.getElementById('assistantModelCanvas');
-const vizTestPanel = document.getElementById('vizTestPanel');
-// Three.js hero visualization is experimental — flip off here to fall back
-// to the legacy 2D core everywhere.
-const MODEL_VIZ = true;
-let assistantViz = null;
-let vizTestForced = null;
 
 // Visualizer Canvas Context
 const ctx = visualizerCanvas ? visualizerCanvas.getContext('2d') : null;
@@ -525,37 +518,6 @@ function initApp() {
     }
   }
 
-  // 11c. Three.js assistant model hero (Same stage, layered over the 2D
-  // sphere). Loads exploded_assembly_hq.glb; failure degrades to the
-  // legacy canvas core without touching any app logic.
-  if (MODEL_VIZ && modelCanvas) {
-    import('./assistant-model.js').then(({ createAssistantModel }) => {
-      assistantViz = createAssistantModel({
-        canvas: modelCanvas,
-        // Real speaking amplitude: the ElevenLabs reply's <audio> element.
-        getSpeechAudio: () => (voiceEngine && voiceEngine._elAudio) || null
-      });
-      window.__assistantViz = {
-        // Testing surface — forceState/forceAudio come from the ?visztest panel.
-        renderOnce: () => assistantViz && assistantViz.renderOnce(),
-        forceState: (s) => { if (assistantViz) { assistantViz.forceState(s); vizTestForced = s || null; if (!s) assistantViz.setAudioLevel(null); } },
-        forceAudio: (v) => { if (assistantViz) assistantViz.setAudioLevel(v); },
-        setState: (s) => assistantViz && assistantViz.setState(s),
-        setAudioLevel: (v) => assistantViz && assistantViz.feedAudio(v),
-        get ready() { return assistantViz ? assistantViz.ready : Promise.resolve(false); },
-        get _debug() { return assistantViz ? assistantViz._debug : null; }
-      };
-      wireVizTestPanel();
-      return window.__assistantViz.ready;
-    }).then((ok) => {
-      if (ok) addLog({ type: 'SUCCESS', message: '[ARIA-VIZ] 3D assistant model online.' });
-      else addLog({ type: 'ERROR', message: '[ARIA-VIZ] 3D assistant model failed to load — legacy core in use.' });
-    }).catch((e) => {
-      console.error('[ARIA-VIZ] init failed:', e);
-      addLog({ type: 'ERROR', message: '[ARIA-VIZ] 3D assistant model init failed.' });
-    });
-  }
-
   addLog({
     type: 'SUCCESS',
     message: '[SWARM ONLINE] Multi-Agent Mesh active. Voice I/O, Steam Harness, & Google Automation primed.'
@@ -754,7 +716,7 @@ function buildNeuralSphere(count = 330) {
 
 function sizeNeuralCanvas() {
   if (!neuralCanvas || !neuralStage) return false;
-  const dpr = Math.min(2, Math.max(1.5, window.devicePixelRatio || 1));
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
   const w = Math.max(1, Math.floor(neuralStage.clientWidth * dpr));
   const h = Math.max(1, Math.floor(neuralStage.clientHeight * dpr));
   if (neuralCanvas.width !== w || neuralCanvas.height !== h) {
@@ -791,7 +753,6 @@ function startNeuralSphere() {
   let prevState = 'idle';
   let scan = { active: false, phi: -1.35, next: 320 }; // idle radar pole scan
   let spokes = [];     // nucleus energy filaments (pinned node indices)
-  let morph = 0;       // HUD morph: 0 = exploded gyro rings (idle), 1 = face-on compass (engaged)
   let sonar = [];      // expanding rings while listening
   let bloomCanvas = null;
   let bloomCtx = null;
@@ -803,18 +764,6 @@ function startNeuralSphere() {
   if (!dust.length) buildDust();
   sizeNeuralCanvas();
   for (let i = 0; i < 9; i++) spokes.push((Math.random() * spherePts.length) | 0);
-  // HUD dial rings: face-on compass circles that fade/rotate in whenever
-  // ARIA engages, and are invisible at idle (the core web is the idle hero).
-  // `del` staggers each ring's assemble so the dial builds ring-by-ring;
-  // spins are deliberately slow and steady for a precision-instrument feel.
-  const HUD_RINGS = [
-    { type: 'ticks', r: 1.30, ticks: 120, group: 30, cut: 4, spin: 0.0007, ph: 0.0, w: 1, del: 0.00, cardinals: true },
-    { type: 'arcs', r: 1.14, arcs: [[0.0, 1.15], [1.95, 0.85], [3.4, 1.35]], spin: -0.0011, ph: 1.1, w: 1, del: 0.06 },
-    { type: 'accent', r: 1.02, arcs: [[0.35, 2.2]], spin: 0.0016, ph: 2.3, w: 1.4, del: 0.10 },
-    { type: 'thin', r: 0.88, spin: -0.0005, ph: 0.6, w: 1, del: 0.14 },
-    { type: 'ticks', r: 0.72, ticks: 60, group: 15, cut: 2, spin: 0.0010, ph: 0.9, w: 0.9, del: 0.18 },
-    { type: 'dash', r: 0.60, spin: -0.0009, ph: 0.0, w: 1, del: 0.22 }
-  ];
 
   // Click-drag spins the globe like an online globe: direct 1:1 steering
   // while held, flick velocity decaying into inertia on release. Wired once
@@ -949,14 +898,6 @@ function startNeuralSphere() {
     const w = neuralCanvas.width, h = neuralCanvas.height;
     const state = stateNow();
     t += 1;
-
-    // Feed the Three.js hero model: the app's own state plus the mic/speech
-    // meter level (feeding is a no-op until the model finishes loading).
-    if (MODEL_VIZ && assistantViz) {
-      assistantViz.setState(state);
-      // Manual test override wins while active; else the live meter level.
-      if (vizTestForced == null) assistantViz.feedAudio(meterLevel);
-    }
 
     // Rotation speed per state. Color: the whole web burns yellow only while
     // speaking (thought completed); thinking stays blue with a single pulse.
@@ -1238,176 +1179,20 @@ function startNeuralSphere() {
       nctx.strokeStyle = `rgba(${cr},${cg},${cb},${(0.045 + 0.02 * boost).toFixed(3)})`;
       nctx.stroke();
     }
-    // ---- HUD dial: face-on compass rings that come around the core when
-    // ARIA engages (thinking/speaking/listening) and fade away when idle.
-    // Each ring spins at its own speed; alpha and radius ease with the
-    // morph so the dial grows out of the core.
-    const morphTarget = state === 'idle' ? 0 : 1;
-    morph += (morphTarget - morph) * 0.035;
-    const mE = morph * morph * (3 - 2 * morph); // eased
-    if (mE > 0.02) {
-      const hudSpinBoost = 1 + speakEnergy * 0.9 + thinkAlpha * 0.6;
-      const RED_ACC = '255,96,84';
-      const tickColor = (a) => `rgba(210,228,255,${Math.min(1, a * mE).toFixed(3)})`;
-      nctx.lineCap = 'round';
-      for (const rg of HUD_RINGS) {
-        // Staggered per-ring assemble: each ring eases in slightly after the
-        // previous one, so the dial builds outward like an instrument booting.
-        const e0 = Math.min(1, Math.max(0, mE * 1.35 - rg.del));
-        const e = e0 * e0 * (3 - 2 * e0);
-        const rr = R * rg.r * (0.80 + 0.20 * e);
-        const rot = t * rg.spin * hudSpinBoost + rg.ph;
-        // Face-on projection with no depth term — pixel-space z against a
-        // unit focal length once mirrored a ring into a giant line across
-        // the whole UI (fixed here).
-        const project = (a, rad) => {
-          const p0x = Math.cos(a) * rad, p0y = Math.sin(a) * rad;
-          return { x: cx + p0x, y: cy + p0y };
-        };
-        // Slow traveling shimmer that glides around each ring (a single wave,
-        // not per-tick twinkle — keeps the dial calm and defined).
-        const shimmer = (a) => 0.85 + 0.15 * Math.sin(a * 3 - t * 0.008 + rg.ph);
-
-        if (rg.type === 'ticks') {
-          // Two path-batched passes (minor group, major group). Each pass is
-          // a wide soft-glow stroke under a crisp hairline core, so ticks
-          // read as solid machined marks rather than faint scratches.
-          for (const wantMajor of [false, true]) {
-            nctx.beginPath();
-            for (let k = 0; k < rg.ticks; k++) {
-              if (k % rg.group < rg.cut) continue; // grouped pattern with gaps
-              const isMajor = k % 7 === 0;
-              if (isMajor !== wantMajor) continue;
-              const a = rot + (k / rg.ticks) * Math.PI * 2;
-              const p1 = project(a, rr * (isMajor ? 0.90 : 0.945));
-              const p2 = project(a, rr * (isMajor ? 1.07 : 1.012));
-              nctx.moveTo(p1.x, p1.y);
-              nctx.lineTo(p2.x, p2.y);
-            }
-            const level = wantMajor ? 0.92 : 0.46;
-            const tickSweep = shimmer(rot);
-            nctx.strokeStyle = tickColor(level * tickSweep * 0.35);
-            nctx.lineWidth = Math.max(2.2, (w / 620) * rg.w);
-            nctx.stroke();
-            nctx.strokeStyle = tickColor(level * tickSweep);
-            nctx.lineWidth = Math.max(wantMajor ? 1.1 : 0.8, (w / (wantMajor ? 1000 : 1500)) * rg.w);
-            nctx.stroke();
-          }
-          if (rg.cardinals) {
-            // Bold cardinal marks (N/E/S/W) — the dial's primary bearings.
-            for (let q = 0; q < 4; q++) {
-              const a = rot + q * Math.PI / 2;
-              const p1 = project(a, rr * 0.86);
-              const p2 = project(a, rr * 1.10);
-              nctx.strokeStyle = tickColor(0.95 * 0.35);
-              nctx.lineWidth = Math.max(3, (w / 420) * rg.w);
-              nctx.beginPath(); nctx.moveTo(p1.x, p1.y); nctx.lineTo(p2.x, p2.y); nctx.stroke();
-              nctx.strokeStyle = tickColor(0.95);
-              nctx.lineWidth = Math.max(1.4, (w / 650) * rg.w);
-              nctx.beginPath(); nctx.moveTo(p1.x, p1.y); nctx.lineTo(p2.x, p2.y); nctx.stroke();
-            }
-          }
-        } else if (rg.type === 'thin') {
-          nctx.beginPath();
-          for (let k = 0; k <= 96; k++) {
-            const a = rot + (k / 96) * Math.PI * 2;
-            const p = project(a, rr);
-            if (k === 0) nctx.moveTo(p.x, p.y);
-            else nctx.lineTo(p.x, p.y);
-          }
-          nctx.strokeStyle = tickColor(0.30 * shimmer(rot) * 0.4);
-          nctx.lineWidth = Math.max(2, (w / 620) * rg.w);
-          nctx.stroke();
-          nctx.strokeStyle = tickColor(0.34 * shimmer(rot));
-          nctx.lineWidth = Math.max(0.8, (w / 1500) * rg.w);
-          nctx.stroke();
-        } else if (rg.type === 'dash') {
-          // Dashed micro-ring — the dial's fine "data ring". Spins by moving
-          // the dash offset (not the geometry) for perfectly uniform marks.
-          nctx.setLineDash([Math.max(3, w * 0.0035), Math.max(5, w * 0.006)]);
-          nctx.lineDashOffset = -rot * rr;
-          nctx.beginPath();
-          nctx.arc(cx, cy, rr, 0, Math.PI * 2);
-          nctx.strokeStyle = tickColor(0.40 * shimmer(rot) * 0.4);
-          nctx.lineWidth = Math.max(1.6, (w / 700) * rg.w);
-          nctx.stroke();
-          nctx.strokeStyle = tickColor(0.42 * shimmer(rot));
-          nctx.lineWidth = Math.max(0.7, (w / 1600) * rg.w);
-          nctx.stroke();
-          nctx.setLineDash([]);
-        } else {
-          // Segmented arcs: white segments ('arcs') and the red primary
-          // 'accent' arc — soft wide glow, hot mid core, then a hairline
-          // white-hot center, with rounded caps for machined ends.
-          for (const [startA, arcLen] of rg.arcs) {
-            const isAccent = rg.type === 'accent';
-            // Round-capped path built once per pass width.
-            const arcPath = () => {
-              nctx.beginPath();
-              const steps = Math.max(24, Math.round(arcLen * 34));
-              for (let k = 0; k <= steps; k++) {
-                const a = rot + startA + (k / steps) * arcLen;
-                const p = project(a, rr);
-                if (k === 0) nctx.moveTo(p.x, p.y);
-                else nctx.lineTo(p.x, p.y);
-              }
-            };
-            if (isAccent) {
-              arcPath();
-              nctx.strokeStyle = `rgba(${RED_ACC},${(0.20 * e).toFixed(3)})`;
-              nctx.lineWidth = Math.max(7, w / 100);
-              nctx.stroke();
-              arcPath();
-              nctx.strokeStyle = `rgba(255,130,105,${Math.min(1, 0.75 * (0.9 + 0.1 * Math.sin(t * 0.02 + rg.ph)) * e).toFixed(3)})`;
-              nctx.lineWidth = Math.max(2.4, (w / 460) * rg.w);
-              nctx.stroke();
-              arcPath();
-              nctx.strokeStyle = `rgba(255,235,225,${(0.55 * e + 0.25).toFixed(3)})`;
-              nctx.lineWidth = Math.max(1, (w / 1400) * rg.w);
-              nctx.stroke();
-            } else {
-              arcPath();
-              nctx.strokeStyle = tickColor(0.34 * 0.35);
-              nctx.lineWidth = Math.max(2.4, (w / 480) * rg.w);
-              nctx.stroke();
-              arcPath();
-              nctx.strokeStyle = tickColor(0.40);
-              nctx.lineWidth = Math.max(1.2, (w / 900) * rg.w);
-              nctx.stroke();
-            }
-            if (isAccent) {
-              // Beacon dots at the arc endpoints: soft halo over a white core.
-              for (const endA of [startA, startA + arcLen]) {
-                const p = project(rot + endA, rr);
-                nctx.fillStyle = `rgba(${RED_ACC},${(0.28 * e).toFixed(3)})`;
-                nctx.beginPath();
-                nctx.arc(p.x, p.y, Math.max(4.5, w / 150), 0, Math.PI * 2);
-                nctx.fill();
-                nctx.fillStyle = `rgba(255,242,230,${Math.min(1, 0.25 + 0.75 * e).toFixed(3)})`;
-                nctx.beginPath();
-                nctx.arc(p.x, p.y, Math.max(1.6, w / 420), 0, Math.PI * 2);
-                nctx.fill();
-              }
-            }
-          }
-        }
-      }
-      // Center crosshair — the dial's cardinal ticks.
-      const crossR = R * 0.34;
-      nctx.strokeStyle = tickColor(0.30);
-      nctx.lineWidth = Math.max(0.8, w / 1500);
-      nctx.beginPath();
-      nctx.moveTo(cx - crossR, cy);
-      nctx.lineTo(cx - crossR * 0.62, cy);
-      nctx.moveTo(cx + crossR * 0.62, cy);
-      nctx.lineTo(cx + crossR, cy);
-      nctx.moveTo(cx, cy - crossR);
-      nctx.lineTo(cx, cy - crossR * 0.62);
-      nctx.moveTo(cx, cy + crossR * 0.62);
-      nctx.lineTo(cx, cy + crossR);
-      nctx.stroke();
-      nctx.lineCap = 'butt'; // HUD used round caps; everything after this expects the default
+    // Outer orbit halo — a detached ring drifting around the whole core.
+    nctx.beginPath();
+    const orbR = R * 1.34 * (1 + Math.sin(t * 0.01) * 0.015);
+    for (let k = 0; k <= 96; k++) {
+      const ang = (k / 96) * Math.PI * 2;
+      const x0 = Math.cos(ang), z0 = Math.sin(ang);
+      const x1 = x0 * cosA + z0 * sinA;
+      const z1 = -x0 * sinA + z0 * cosA;
+      const y1 = -z1 * sinT;
+      if (k === 0) nctx.moveTo(cx + x1 * orbR, cy + y1 * orbR);
+      else nctx.lineTo(cx + x1 * orbR, cy + y1 * orbR);
     }
+    nctx.strokeStyle = `rgba(${cr},${cg},${cb},${(0.10 + speakEnergy * 0.08).toFixed(3)})`;
+    nctx.stroke();
 
     // Idle radar scan: a bright latitude band sweeps pole to pole every
     // once in a while when the core is idle, waking nodes it passes.
@@ -1847,28 +1632,6 @@ function startNeuralSphere() {
   }
 
   render();
-}
-
-// Temporary viz-test panel (?viztest=1): force animation states and audio
-// levels by hand while verifying the 3D assistant model. Hidden otherwise.
-function wireVizTestPanel() {
-  if (!vizTestPanel) return;
-  const show = /[?&]viztest=1/.test(window.location.search);
-  vizTestPanel.hidden = !show;
-  if (!show) return;
-  const buttons = vizTestPanel.querySelectorAll('[data-force]');
-  buttons.forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const v = btn.getAttribute('data-force');
-      window.__assistantViz.forceState(v || null);
-      buttons.forEach((b) => b.classList.toggle('active', b === btn));
-    });
-  });
-  const audio = document.getElementById('vizTestAudio');
-  if (audio) {
-    audio.addEventListener('input', () => window.__assistantViz.forceAudio(Number(audio.value) / 100));
-    audio.addEventListener('dblclick', () => window.__assistantViz.forceAudio(null));
-  }
 }
 
 /**

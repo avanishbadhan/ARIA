@@ -20,8 +20,7 @@
     "@playwright/mcp": "^0.0.29",
     "chrono-node": "^2.10.1",
     "electron-updater": "^6.8.9",
-    "lucide": "^0.344.0",
-    "three": "^0.187.0"
+    "lucide": "^0.344.0"
   },
   "devDependencies": {
     "electron": "^43.3.0",
