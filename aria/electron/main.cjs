@@ -711,7 +711,12 @@ function registerWeatherIpc() {
     const url =
       `https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(lat)}` +
       `&longitude=${encodeURIComponent(lon)}` +
-      `&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,is_day`;
+      `&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,is_day` +
+      // US units by default, matching the rest of ARIA's data (miles,
+      // Fahrenheit): Open-Meteo returns °F and mph natively with these params.
+      `&temperature_unit=fahrenheit` +
+      `&wind_speed_unit=mph` +
+      `&precipitation_unit=inch`;
     return new Promise((resolve, reject) => {
       https.get(url, (res) => {
         let data = '';

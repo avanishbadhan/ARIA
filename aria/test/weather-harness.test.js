@@ -38,10 +38,10 @@ test('getCurrentWeather delegates to window.jarvisElectron.weather.current and m
   const harness = new WeatherHarness();
   const result = await harness.getCurrentWeather(37.7749, -122.4194);
   assert.equal(result.success, true);
-  assert.equal(result.temperatureC, 18);
-  assert.equal(result.feelsLikeC, 17);
+  assert.equal(result.temperatureF, 18);
+  assert.equal(result.feelsLikeF, 17);
   assert.equal(result.humidityPct, 62);
-  assert.equal(result.windKmph, 11);
+  assert.equal(result.windMph, 11);
   assert.equal(result.description, 'partly cloudy');
 });
 

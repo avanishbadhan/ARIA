@@ -109,7 +109,7 @@ test('get_weather delegates to weather.getCurrentWeather with the parsed lat/lon
   const weather = {
     getCurrentWeather: async (lat, lon) => {
       calls.push({ lat, lon });
-      return { success: true, temperatureC: 22, feelsLikeC: 21, humidityPct: 40, windKmph: 12, description: 'partly cloudy' };
+      return { success: true, temperatureF: 72, feelsLikeF: 70, humidityPct: 40, windMph: 12, description: 'partly cloudy' };
     }
   };
   const executor = createToolExecutor({ wolfram: null, harness: null, weather });
@@ -117,7 +117,8 @@ test('get_weather delegates to weather.getCurrentWeather with the parsed lat/lon
   const result = await executor('get_weather', '{"lat":37.7749,"lon":-122.4194}');
 
   assert.deepEqual(calls, [{ lat: 37.7749, lon: -122.4194 }]);
-  assert.match(result, /22°C/);
+  assert.match(result, /72°F/);
+  assert.match(result, /mph/);
   assert.match(result, /partly cloudy/);
 });
 

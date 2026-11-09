@@ -143,7 +143,7 @@ export const GROUNDING_TOOLS = [
     type: 'function',
     function: {
       name: 'get_weather',
-      description: "Returns the current weather conditions (temperature in Celsius, feels-like, humidity, wind, and a short description) at the given latitude/longitude via Open-Meteo. Use this to answer weather or temperature questions for a specific place. Coordinates are required — call get_location first if the user means 'here'.",
+      description: "Returns the current weather conditions (temperature in Fahrenheit, feels-like, humidity, wind speed in mph, and a short description) at the given latitude/longitude via Open-Meteo. US units are used by default. Use this to answer weather or temperature questions for a specific place. Coordinates are required — call get_location first if the user means 'here'.",
       parameters: {
         type: 'object',
         properties: {
@@ -397,8 +397,8 @@ export function createToolExecutor({ wolfram, harness, gmail, calendar, location
         }
         const result = await weather.getCurrentWeather(lat, lon);
         if (result.success) {
-          const msg = `Current weather: ${result.temperatureC}°C (feels like ${result.feelsLikeC}°C), ${result.description}, humidity ${result.humidityPct}%, wind ${result.windKmph} km/h.`;
-          onLog({ type: 'TOOL', message: `[TOOL CALL] get_weather(${lat}, ${lon}) -> ${result.temperatureC}°C` });
+          const msg = `Current weather: ${result.temperatureF}°F (feels like ${result.feelsLikeF}°F), ${result.description}, humidity ${result.humidityPct}%, wind ${result.windMph} mph.`;
+          onLog({ type: 'TOOL', message: `[TOOL CALL] get_weather(${lat}, ${lon}) -> ${result.temperatureF}°F` });
           return msg;
         }
         return NO_WEATHER_RESULT;

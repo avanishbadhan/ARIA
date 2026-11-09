@@ -43,8 +43,8 @@ export class WeatherHarness {
    * Returns the current weather at (lat, lon).
    * @param {number} lat
    * @param {number} lon
-   * @returns {Promise<{success: boolean, temperatureC: number, feelsLikeC: number,
-   *   humidityPct: number, windKmph: number, description: string, raw: object}|{success: false, message: string}>}
+   * @returns {Promise<{success: boolean, temperatureF: number, feelsLikeF: number,
+   *   humidityPct: number, windMph: number, description: string, raw: object}|{success: false, message: string}>}
    */
   async getCurrentWeather(lat, lon) {
     if (!this._isElectron()) return this._notAvailable();
@@ -57,16 +57,16 @@ export class WeatherHarness {
         success: true,
         latitude: data.latitude,
         longitude: data.longitude,
-        temperatureC: Math.round(current.temperature_2m),
-        feelsLikeC: Math.round(current.apparent_temperature),
+        temperatureF: Math.round(current.temperature_2m),
+        feelsLikeF: Math.round(current.apparent_temperature),
         humidityPct: Math.round(current.relative_humidity_2m),
-        windKmph: Math.round(current.wind_speed_10m),
+        windMph: Math.round(current.wind_speed_10m),
         description: this._describeWeather(current.weather_code),
         raw: data
       };
       this.onLog({
         type: 'SUCCESS',
-        message: `[WEATHER] ${result.temperatureC}°C, ${result.description} at ${lat.toFixed(4)}, ${lon.toFixed(4)}.`
+        message: `[WEATHER] ${result.temperatureF}°F, ${result.description} at ${lat.toFixed(4)}, ${lon.toFixed(4)}.`
       });
       return result;
     } catch (err) {
