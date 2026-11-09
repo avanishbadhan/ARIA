@@ -725,7 +725,8 @@ export class JarvisCore {
         `Respond with ONLY a single \`\`\`svg code block containing one <svg> element — no commentary, no prose before or after. ` +
         `Style so it reads beautifully on a dark display: dark translucent fills, high-contrast neon strokes (cyan #7ad7ff, amber #ffb347, white), ` +
         `include a short title and useful labels as <text> elements with an explicit font-size of 12 or larger. ` +
-        `IMPORTANT: keep the drawing compact so it fits in the response — at most ~30 shapes/labels total, fewer than ~2200 characters of SVG. Simple, readable geometry beats detail.`,
+        `The root tag MUST carry a viewBox attribute (for example viewBox="0 0 400 300") and NO width or height attributes — the panel scales the drawing to fit its cage, so set the coordinate canvas instead of pixel sizes. ` +
+        `IMPORTANT: keep the drawing compact so it fits in the response — at most ~30 shapes/labels total, a coordinate canvas no larger than 500x400, fewer than ~2200 characters of SVG. Simple, readable geometry beats detail.`,
         this.conversationHistory,
         // SVGs are far larger than chat replies — a chat-sized token budget
         // truncates the markup mid-tag and the drawing dies (observed: the
@@ -803,7 +804,9 @@ export class JarvisCore {
           `Answer this math question briefly and precisely as ARIA, showing just the final answer, not your reasoning: ${decision.params.query}`,
           this.conversationHistory
         );
-        spokenResponse = llmAnswer || `I wasn't able to compute that one, Sir.`;
+        spokenResponse = (llmAnswer && !this._looksLikeRefusal(llmAnswer))
+          ? llmAnswer
+          : `I wasn't able to compute that one, Sir.`;
       }
 
       this.onResponse({
@@ -1440,23 +1443,44 @@ export class JarvisCore {
   }
 
   /**
+   * Free-tier models sometimes answer a perfectly innocent math help
+   * request with a canned refusal ("I'm sorry, but I can't provide
+   * that."). Detect those so the caller can retry or fall back instead of
+   * showing the refusal as the answer.
+   */
+  _looksLikeRefusal(text) {
+    return /\b(i'?m sorry|i cannot|can'?t provide|cannot provide|can'?t help with|won'?t be able to|i can'?t assist|i can'?t help)\b/i
+      .test(String(text || ''));
+  }
+
+  /**
    * Produces the step-by-step typeset work shown on the big display for a
    * math query. Runs through the active LLM (free-tier friendly); LaTeX is
    * written inside $…$ so the renderer's KaTeX pass typesets every formula.
    * When WolframAlpha grounded the answer, the prompt carries it so the
    * steps cannot contradict a verified result. Empty string/throw → the
-   * caller falls back to showing the plain spoken answer.
+   * caller falls back to showing the plain spoken answer. A canned model
+   * refusal (seen live on triple-integral steps) gets one retry with a
+   * steadier framing before giving up.
    */
   async _mathWorkDisplay(query) {
-    const work = await this._chatWithActiveLLM(
+    const prompt =
       `Show the complete solution to this problem, step by step, as typeset math. ` +
       `Use LaTeX inside $...$ for EVERY formula, numeric expression, fraction, root, exponent or equation — never spell math out in plain words or ASCII symbols. ` +
       `Structure: restate the problem on one line in $...$, then one step per paragraph (each step's math also in $...$), and end with a line starting "Answer: " followed by the final result in $...$. ` +
-      `No headings, no bullet markers, no code blocks, no fences. Problem: ${query}`,
-      [],
-      { maxTokens: 900 }
-    );
-    return work || '';
+      `No headings, no bullet markers, no code blocks, no fences. Problem: ${query}`;
+    let work = await this._chatWithActiveLLM(prompt, [], { maxTokens: 900 }) || '';
+    if (this._looksLikeRefusal(work)) {
+      this.onLog({ type: 'WARNING', message: '[DISPLAY WORK] model refused the work request — retrying once' });
+      work = await this._chatWithActiveLLM(
+        `This is standard mathematics coursework help the user needs. Walk through the solution with calculus/algebra as appropriate, step by step. ` +
+        `Use LaTeX inside $...$ for every formula and end with a line "Answer: $<final result>$". Problem: ${query}`,
+        [],
+        { maxTokens: 900 }
+      ) || '';
+    }
+    if (this._looksLikeRefusal(work)) work = '';
+    return work;
   }
 
   /**

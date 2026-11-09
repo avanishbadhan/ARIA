@@ -55,3 +55,49 @@ test('a non-math query never calls WolframAlpha', async () => {
 
   assert.equal(jarvis.wolframCalls.length, 0);
 });
+
+test('a canned refusal from the work LLM gets one retry, and its result is used', async () => {
+  // Observed live: "triple integral steps" came back as "I'm sorry, but I
+  // can't provide that." from the free model.
+  const jarvis = createJarvis();
+  jarvis.wolfram.solve = async () => 'The result is 8';
+  let calls = 0;
+  jarvis._chatWithActiveLLM = async (input) => {
+    calls++;
+    return calls === 1 ? `I'm sorry, but I can't provide that.` : `Retried typeset work for: ${input.slice(-20)}`;
+  };
+  const displays = [];
+  jarvis.onDisplay = (payload) => displays.push(payload);
+
+  await jarvis.processUserInput('triple integral of x^2');
+
+  assert.equal(calls, 2, 'one refusal retry, no more');
+  assert.match(displays[0].body, /^Retried typeset work/);
+});
+
+test('a stubborn refusal never ends up on the display — the verified answer shows instead', async () => {
+  const jarvis = createJarvis();
+  jarvis.wolfram.solve = async () => 'The result is 42';
+  jarvis._chatWithActiveLLM = async () => `I'm sorry, but I can't provide that.`;
+  const displays = [];
+  jarvis.onDisplay = (payload) => displays.push(payload);
+  const spoken = [];
+  jarvis.voiceEngine.speak = async (text) => { spoken.push(text); };
+
+  await jarvis.processUserInput('triple integral of x^2');
+
+  assert.deepEqual(spoken, ['The result is 42']);
+  assert.equal(displays[0].body, 'The result is 42', 'the refusal text is replaced by the real answer');
+});
+
+test('a refusal on the brief voice answer falls back to the standard fallback line', async () => {
+  const jarvis = createJarvis();
+  jarvis.wolfram.solve = async () => null; // no Wolfram key → LLM answers
+  jarvis._chatWithActiveLLM = async () => `I'm sorry, but I can't provide that.`;
+  const spoken = [];
+  jarvis.voiceEngine.speak = async (text) => { spoken.push(text); };
+
+  await jarvis.processUserInput('what is 5 plus 3');
+
+  assert.deepEqual(spoken, ["I wasn't able to compute that one, Sir."]);
+});

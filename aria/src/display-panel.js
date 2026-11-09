@@ -22,6 +22,50 @@ export function sanitizeSvg(svg) {
     .replace(/(href|xlink:href)\s*=\s*("|')\s*javascript:[^"']*\2/gi, '');
 }
 
+const ROOT_SVG_RE = /<svg\b([^>]*)>/i;
+const SVG_DIM_RE = /\s(width|height)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi;
+
+function stripFixedDims(svgText) {
+  return svgText.replace(ROOT_SVG_RE, (tag, attrs) => `<svg${attrs.replace(SVG_DIM_RE, '')}>`);
+}
+
+/**
+ * Pure string normalizer for SVG coming from the LLM (testable in node).
+ * Models often emit an SVG with fixed width/height attributes and NO
+ * viewBox — CSS then rescales the viewport but the shapes keep drawing at
+ * their raw coordinate size, so the picture explodes far past the panel
+ * (observed: the solar system render was miles too big). Rebuild the root
+ * tag here: derive a viewBox from width/height when missing and drop the
+ * fixed dimensions so the drawing scales to fit the panel.
+ */
+export function normalizeSvg(svg) {
+  const svgText = String(svg || '');
+  if (!ROOT_SVG_RE.test(svgText)) return svgText;
+  if (/<svg[^>]*viewBox=/i.test(svgText)) {
+    // viewBox present — just strip fixed pixel dimensions so CSS can fit it.
+    return stripFixedDims(svgText);
+  }
+  if (typeof DOMParser === 'undefined' || !/width|height/i.test(svgText)) {
+    // No DOM in node tests (or nothing to derive a canvas from) — strip the
+    // fixed dimensions at least; the renderer always takes the DOM route.
+    return stripFixedDims(svgText);
+  }
+  try {
+    const doc = new DOMParser().parseFromString(svgText, 'image/svg+xml');
+    const el = doc.querySelector('svg');
+    if (!el || !el.querySelector) return stripFixedDims(svgText);
+    const w = parseFloat(el.getAttribute('width'));
+    const h = parseFloat(el.getAttribute('height'));
+    if (w > 0 && h > 0) el.setAttribute('viewBox', `0 0 ${w} ${h}`);
+    el.removeAttribute('width');
+    el.removeAttribute('height');
+    el.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+    return new XMLSerializer().serializeToString(el);
+  } catch (e) {
+    return stripFixedDims(svgText);
+  }
+}
+
 const KATEX_CSS = 'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css';
 const KATEX_JS = 'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js';
 const DOCK_WIDGET_WIDTH = 210;   // px of the docked sphere widget (wide edge)
@@ -85,7 +129,7 @@ export class DisplayPanel {
     if (kind === 'svg') {
       const fig = document.createElement('div');
       fig.className = 'display-figure';
-      fig.innerHTML = sanitizeSvg(body);
+      fig.innerHTML = normalizeSvg(sanitizeSvg(body));
       this.bodyEl.appendChild(fig);
       // Scale the drawing to the panel: SVGs produced without a viewBox
       // still stretch to fit because the container is a flex box.
