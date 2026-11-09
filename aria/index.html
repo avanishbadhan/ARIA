@@ -677,15 +677,26 @@ fill="#1E90FF" stroke="#1E90FF" stroke-width="8" stroke-linejoin="round" stroke-
   <!-- ARIA Display — big popup for visual answers (math, drawings).
        Lives at body level so it overlays any view; the AI core docks to the
        bottom-right corner while it is open (choreography in display-panel.js). -->
+  <div class="display-backdrop" aria-hidden="true"></div>
   <div class="display-panel" id="displayPanel" hidden role="dialog" aria-label="ARIA display">
+    <!-- HUD chrome: backdrop glow, grid, scanlines, sweep beam, corner brackets -->
+    <div class="display-fx fx-grid" aria-hidden="true"></div>
+    <div class="display-fx fx-beam" aria-hidden="true"></div>
+    <div class="display-fx fx-scanlines" aria-hidden="true"></div>
+    <i class="display-corner c-tl" aria-hidden="true"></i><i class="display-corner c-tr" aria-hidden="true"></i>
+    <i class="display-corner c-bl" aria-hidden="true"></i><i class="display-corner c-br" aria-hidden="true"></i>
     <div class="display-panel-head">
       <div class="display-panel-title-row">
-        <span class="display-panel-badge">◉ ARIA</span>
+        <span class="display-panel-badge"><b class="badge-pip"></b>ARIA</span>
         <h2 id="displayPanelTitle">Display</h2>
       </div>
       <button class="display-panel-close" id="displayPanelClose" title="Close (Esc)" aria-label="Close display">✕</button>
     </div>
     <div class="display-panel-body" id="displayPanelBody"></div>
+    <div class="display-panel-foot">
+      <span class="foot-left">ARIA&#8201;//&#8201;DISPLAY</span>
+      <span class="foot-right"><b class="live-dot"></b>LIVE FEED</span>
+    </div>
   </div>
 </body>
 </html>

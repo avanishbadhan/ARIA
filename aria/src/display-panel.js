@@ -97,6 +97,7 @@ export class DisplayPanel {
   _fillText(text) {
     const wrap = document.createElement('div');
     wrap.className = 'display-prose';
+    this._paraIndex = 0;
     // Render inline `$math$` / display `$$math$$` with KaTeX when available.
     const mathSpans = /\$\$([\s\S]+?)\$\$|\$([^$\n]+?)\$/g;
     const hasMath = mathSpans.test(text);
@@ -112,12 +113,20 @@ export class DisplayPanel {
   }
 
   // Escape everything, then render trusted math fragments via KaTeX.
+  // Each paragraph carries an --i stagger index so CSS can cascade the
+  // entrance animation; a paragraph that begins with "Answer:" is flagged
+  // as the summary line and styled as such.
   _typesetHtml(text) {
     const esc = (s) => s
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     let out = String(text)
       .split(/\n{2,}/)
-      .map((para) => `<p>${esc(para.trim()).replace(/\n/g, '<br>')}</p>`)
+      .map((para) => {
+        const trimmed = para.trim();
+        const i = this._paraIndex++;
+        const cls = /^answer[:.\s]/i.test(trimmed) ? ' p-answer' : '';
+        return `<p class="display-p${cls}" style="--i:${i}">${esc(trimmed).replace(/\n/g, '<br>')}</p>`;
+      })
       .join('');
     if (window.katex) {
       out = out.replace(/\$\$([\s\S]+?)\$\$/g, (_, m) => {
