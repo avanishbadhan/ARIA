@@ -724,12 +724,18 @@ export class JarvisCore {
         `Draw "${subject}" as ONE complete standalone SVG image (a schematic/vector illustration). ` +
         `Respond with ONLY a single \`\`\`svg code block containing one <svg> element — no commentary, no prose before or after. ` +
         `Style so it reads beautifully on a dark display: dark translucent fills, high-contrast neon strokes (cyan #7ad7ff, amber #ffb347, white), ` +
-        `include a short title and useful labels as <text> elements. Keep it well-composed and legible.`,
-        this.conversationHistory
+        `include a short title and useful labels as <text> elements with an explicit font-size of 12 or larger. ` +
+        `IMPORTANT: keep the drawing compact so it fits in the response — at most ~30 shapes/labels total, fewer than ~2200 characters of SVG. Simple, readable geometry beats detail.`,
+        this.conversationHistory,
+        // SVGs are far larger than chat replies — a chat-sized token budget
+        // truncates the markup mid-tag and the drawing dies (observed: the
+        // water cycle render put a "<circle cx=… r" cut in half on screen).
+        { maxTokens: 4000 }
       );
 
       // Pull the first <svg>…</svg> out of fences or raw markup alike.
       let svg = null;
+      let truncated = false;
       const raw = drawing || '';
       const fenceMatch = raw.match(/```(?:svg|xml)?\s*([\s\S]*?)```/i);
       const source = fenceMatch ? fenceMatch[1] : raw;
@@ -737,6 +743,12 @@ export class JarvisCore {
       const closeIdx = source.lastIndexOf('</svg>');
       if (openIdx !== -1 && closeIdx !== -1) {
         svg = source.slice(openIdx, closeIdx + '</svg>'.length).trim();
+      } else if (openIdx !== -1) {
+        // The model ran out of tokens before closing the tag. Salvage what
+        // rendered so far: the HTML parser tolerates the last broken
+        // element, so a synthetic close usually recovers the whole picture.
+        svg = source.slice(openIdx).trim() + '</svg>';
+        truncated = true;
       }
 
       let spokenResponse;
@@ -745,7 +757,9 @@ export class JarvisCore {
       if (svg) {
         displayBody = svg;
         displayKind = 'svg';
-        spokenResponse = `Here's my drawing of ${subject}. It's up on the display for you.`;
+        spokenResponse = truncated
+          ? `Here's my drawing of ${subject} — it ran long, so the last bit may be cropped.`
+          : `Here's my drawing of ${subject}. It's up on the display for you.`;
       } else {
         // The model balked at pure SVG — show whatever it gave us as text.
         displayBody = raw || `I wasn't able to draw that, Sir.`;
@@ -798,17 +812,22 @@ export class JarvisCore {
         data: { query: decision.params.query, wolframAnswered: Boolean(wolframAnswer) }
       });
 
-      // The math result belongs on the big display too — the query as title,
-      // the computed answer as body (spoken text is kept for voice only).
+      // The display gets the real treatment: a typeset, step-by-step
+      // derivation (LaTeX in $…$, rendered by KaTeX). The work call runs in
+      // parallel with the voice so the spoken answer stays fast; if it
+      // fails, the plain computed answer still shows on the display.
+      const workPromise = this._mathWorkDisplay(decision.params.query);
+      await this.voiceEngine.speak(spokenResponse);
+      let work;
+      try { work = await workPromise; } catch (e) { work = null; }
       this.onDisplay({
         kind: 'text',
         title: decision.params.query,
-        body: spokenResponse
+        body: (work && work.trim()) ? this._mathWorkDeliverable(decision.params.query, work) : spokenResponse
       });
 
       this._updateAgentState("agent-3", "ACTIVE", `Computation complete: "${decision.params.query}"`);
       this._pushHistory(input, spokenResponse);
-      await this.voiceEngine.speak(spokenResponse);
       return;
     }
 
@@ -1418,6 +1437,34 @@ export class JarvisCore {
     const openRouterAnswer = await tryOpenRouter();
     if (openRouterAnswer) return openRouterAnswer;
     return tryGroq();
+  }
+
+  /**
+   * Produces the step-by-step typeset work shown on the big display for a
+   * math query. Runs through the active LLM (free-tier friendly); LaTeX is
+   * written inside $…$ so the renderer's KaTeX pass typesets every formula.
+   * When WolframAlpha grounded the answer, the prompt carries it so the
+   * steps cannot contradict a verified result. Empty string/throw → the
+   * caller falls back to showing the plain spoken answer.
+   */
+  async _mathWorkDisplay(query) {
+    const work = await this._chatWithActiveLLM(
+      `Show the complete solution to this problem, step by step, as typeset math. ` +
+      `Use LaTeX inside $...$ for EVERY formula, numeric expression, fraction, root, exponent or equation — never spell math out in plain words or ASCII symbols. ` +
+      `Structure: restate the problem on one line in $...$, then one step per paragraph (each step's math also in $...$), and end with a line starting "Answer: " followed by the final result in $...$. ` +
+      `No headings, no bullet markers, no code blocks, no fences. Problem: ${query}`,
+      [],
+      { maxTokens: 900 }
+    );
+    return work || '';
+  }
+
+  /**
+   * Final display deliverable for a math query: the query restated in
+   * display math if it reads as one, then the LLM's typeset work.
+   */
+  _mathWorkDeliverable(query, work) {
+    return work.trim();
   }
 
   /**

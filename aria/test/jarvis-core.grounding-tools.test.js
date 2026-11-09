@@ -57,8 +57,10 @@ test('MATH_QUERY LLM fallback (WolframAlpha already returned nothing) does not g
 
   await jarvis.processUserInput('what is 5 plus 3');
 
-  assert.equal(jarvis.groqCalls.length, 1);
-  assert.equal(jarvis.groqCalls[0].tools, undefined);
+  // The brief voice answer and the typeset work call both run without the
+  // grounding tools — math never needs web/action tools.
+  assert.equal(jarvis.groqCalls.length, 2);
+  assert.ok(jarvis.groqCalls.every(c => c.tools === undefined));
 });
 
 test('GOOGLE_SEARCH grounded-prompt path passes the grounding tools', async () => {
