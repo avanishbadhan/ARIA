@@ -21,6 +21,7 @@ const TOOL_PARAM_REQUIREMENTS = {
   XBOX_LAUNCH_GAME: ['gameQuery'],
   OPEN_SITE: ['siteName'],
   MATH_QUERY: ['query'],
+  DRAW_DISPLAY: ['subject'],
   SET_MODEL_TIER: ['tier'],
   SCREEN_MONITOR_START: [],
   SCREEN_MONITOR_STOP: [],
@@ -60,6 +61,7 @@ Available tools and their exact params shape:
 - XBOX_LAUNCH_GAME: { gameQuery: string }
 - OPEN_SITE: { siteName: string } — ONLY when the user names a specific real site (e.g. "open YouTube", "go to github.com") or gives a full URL. Do NOT use OPEN_SITE for "open my browser", "open a new tab", "click on the first link", or vague browsing — those are GOOGLE_SEARCH or CONVERSATIONAL, not OPEN_SITE.
 - MATH_QUERY: { query: string }
+- DRAW_DISPLAY: { subject: string } — the user asks ARIA to draw, sketch, diagram, chart, map out or visualize something on screen (e.g. "draw a solar system", "sketch the water cycle", "can you draw me a diagram of the internet"). subject is WHAT should be drawn (e.g. "the water cycle"). Do NOT use for pure numeric solving with no visual request (that's MATH_QUERY).
 - SET_MODEL_TIER: { tier: "quick"|"medium"|"high"|"ultra" }
 - SCREEN_MONITOR_START: {} — periodic background screen monitoring/stream analysis (e.g. "start monitoring my screen", "start watching my screen"). Do NOT use this when the user wants the floating overlay widget — that is SCREEN_TOGGLE_OVERLAY.
 - SCREEN_MONITOR_STOP: {} — background screen monitoring is no longer needed (e.g. "stop monitoring my screen", "stop watching my screen").

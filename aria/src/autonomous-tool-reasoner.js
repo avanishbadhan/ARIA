@@ -16,7 +16,7 @@ export class AutonomousToolReasoner {
    * Format returned:
    * {
    *    shouldCallTool: true|false,
-   *    toolName: 'GOOGLE_SEARCH' | 'STEAM_LAUNCH_GAME' | 'STEAM_OPEN_CLIENT' | 'SPOTIFY_PLAY_SONG' | 'SPOTIFY_PLAY_LIBRARY' | 'SPOTIFY_OPEN_CLIENT' | 'EPIC_OPEN_CLIENT' | 'XBOX_OPEN_CLIENT' | 'XBOX_LAUNCH_GAME' | 'EPIC_LAUNCH_GAME' | 'OPEN_SITE' | 'MATH_QUERY' | 'SET_MODEL_TIER' | 'SCREEN_MONITOR_START' | 'SCREEN_MONITOR_STOP' | 'SCREEN_QUERY' | 'CAMERA_START' | 'CAMERA_STOP' | 'CAMERA_QUERY' | 'GMAIL_CHECK_INBOX' | 'GMAIL_SEARCH' | 'GMAIL_READ_MESSAGE' | 'CALENDAR_LIST_UPCOMING' | 'CALENDAR_SEARCH' | 'CALENDAR_CREATE_EVENT' | 'CONVERSATIONAL',
+   *    toolName: 'GOOGLE_SEARCH' | 'DRAW_DISPLAY' | 'STEAM_LAUNCH_GAME' | 'STEAM_OPEN_CLIENT' | 'SPOTIFY_PLAY_SONG' | 'SPOTIFY_PLAY_LIBRARY' | 'SPOTIFY_OPEN_CLIENT' | 'EPIC_OPEN_CLIENT' | 'XBOX_OPEN_CLIENT' | 'XBOX_LAUNCH_GAME' | 'EPIC_LAUNCH_GAME' | 'OPEN_SITE' | 'MATH_QUERY' | 'SET_MODEL_TIER' | 'SCREEN_MONITOR_START' | 'SCREEN_MONITOR_STOP' | 'SCREEN_QUERY' | 'CAMERA_START' | 'CAMERA_STOP' | 'CAMERA_QUERY' | 'GMAIL_CHECK_INBOX' | 'GMAIL_SEARCH' | 'GMAIL_READ_MESSAGE' | 'CALENDAR_LIST_UPCOMING' | 'CALENDAR_SEARCH' | 'CALENDAR_CREATE_EVENT' | 'CONVERSATIONAL',
    *    confidence: 0.0 to 1.0,
    *    params: { ... },
    *    reasoning: "Explanation of autonomous decision"
@@ -630,6 +630,48 @@ export class AutonomousToolReasoner {
       }
       // Recognized phrasing but an unrecognized tier word (e.g. "switch
       // mode to insane") — fall through rather than guess.
+    }
+
+    // 4b. Check for draw/diagram requests (the big display popup) — checked
+    // before math specifically so "draw out 2+2" stays a drawing, while
+    // pure solving phrasing with no visual verb ("solve for x") still
+    // reaches the MATH_QUERY branch below.
+    const drawVerbMatch = text.match(/\b(?:draw|sketch|diagram|chart|illustrate|visualize)\b/);
+    // Learning/informational phrasing about drawings ("how to draw a face",
+    // "what is a diagram") is a knowledge question, not a display render.
+    const notADrawingQuestion = !/\b(?:what|which|who|where|why)\b/.test(text)
+      && !/^(?:how\s+(?:to|do|does|can|would)\b)/.test(text)
+      && !/^how\s+.*\b(?:draw|sketch|diagram|chart|illustrate|visualize)\b/.test(text);
+    if (drawVerbMatch && notADrawingQuestion) {
+      const stripTail = /(?:\s+(?:on|in|to)\s+(?:the\s+)?(?:screen|display|arias? display|overlay|window))\s*$/i;
+      const fillers = /^(?:for\s+me|me|us)\b\s*(?:,\s*)?|(?:,\s*)?\b(?:for\s+me|me|us|please)\b\s*$/gi;
+      let subject = '';
+      const capture = text.match(/(?:draw|sketch|diagram|chart|illustrate|visualize)\s+(?:out\s+)?(?:me\s+)?(?:for\s+me\s+)?(.+)$/i);
+      if (capture && capture[1] && /[a-z\d]/i.test(capture[1])) {
+        subject = capture[1];
+      } else {
+        // "draw something out for me" — the verb had no object; ask the
+        // model to improvise off the whole utterance.
+        subject = text;
+      }
+      subject = subject.replace(stripTail, '').trim();
+      if (subject) {
+        subject = subject
+          .split(',')
+          .filter(Boolean)
+          .join(',')
+          .replace(fillers, '')
+          .trim();
+      }
+      if (subject) {
+        return {
+          shouldCallTool: true,
+          toolName: 'DRAW_DISPLAY',
+          confidence: 0.8,
+          params: { subject },
+          reasoning: "Autonomous reasoner detected a request to draw/sketch/diagram something, routing to the display panel."
+        };
+      }
     }
 
     // 5. Check for math queries (arithmetic through high-level math) —

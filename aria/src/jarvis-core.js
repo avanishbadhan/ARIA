@@ -52,6 +52,9 @@ export class JarvisCore {
     this.onLog = options.onLog || (() => {});
     this.onStatusChange = options.onStatusChange || (() => {});
     this.onResponse = options.onResponse || (() => {});
+    // Visual-answer sink — the renderer's big display popup (math results,
+    // SVG drawings). Optional so tests and headless use stay silent.
+    this.onDisplay = options.onDisplay || (() => {});
     this.onSwarmUpdate = options.onSwarmUpdate || (() => {});
 
     // Instantiate OpenRouter Client (key set via the Settings UI, stored in localStorage)
@@ -709,7 +712,65 @@ export class JarvisCore {
       return;
     }
 
-    // 6. Handle Math Queries via WolframAlpha
+    // 6. Draw / diagram on the big display — the model produces a standalone
+    // SVG which opens on the ARIA Display panel (the core docks to the
+    // bottom-right corner while it's shown).
+    if (decision.toolName === 'DRAW_DISPLAY') {
+      const subject = decision.params.subject || input;
+      this._updateAgentState("agent-3", "COMPUTING", `Drawing: "${subject}"`);
+      this.voiceEngine.playSearchLaunchSound();
+
+      const drawing = await this._chatWithActiveLLM(
+        `Draw "${subject}" as ONE complete standalone SVG image (a schematic/vector illustration). ` +
+        `Respond with ONLY a single \`\`\`svg code block containing one <svg> element — no commentary, no prose before or after. ` +
+        `Style so it reads beautifully on a dark display: dark translucent fills, high-contrast neon strokes (cyan #7ad7ff, amber #ffb347, white), ` +
+        `include a short title and useful labels as <text> elements. Keep it well-composed and legible.`,
+        this.conversationHistory
+      );
+
+      // Pull the first <svg>…</svg> out of fences or raw markup alike.
+      let svg = null;
+      const raw = drawing || '';
+      const fenceMatch = raw.match(/```(?:svg|xml)?\s*([\s\S]*?)```/i);
+      const source = fenceMatch ? fenceMatch[1] : raw;
+      const openIdx = source.indexOf('<svg');
+      const closeIdx = source.lastIndexOf('</svg>');
+      if (openIdx !== -1 && closeIdx !== -1) {
+        svg = source.slice(openIdx, closeIdx + '</svg>'.length).trim();
+      }
+
+      let spokenResponse;
+      let displayBody;
+      let displayKind;
+      if (svg) {
+        displayBody = svg;
+        displayKind = 'svg';
+        spokenResponse = `Here's my drawing of ${subject}. It's up on the display for you.`;
+      } else {
+        // The model balked at pure SVG — show whatever it gave us as text.
+        displayBody = raw || `I wasn't able to draw that, Sir.`;
+        displayKind = 'text';
+        spokenResponse = raw ? `I couldn't render that as a drawing, so I've put what I know on the display instead.` : `I wasn't able to draw that, Sir.`;
+      }
+
+      this.onResponse({
+        text: spokenResponse,
+        actionType: 'DRAW_DISPLAY',
+        data: { subject, rendered: displayKind === 'svg' }
+      });
+      this.onDisplay({
+        kind: displayKind,
+        title: subject,
+        body: displayBody
+      });
+
+      this._updateAgentState("agent-3", "ACTIVE", `Drawing complete: "${subject}"`);
+      this._pushHistory(input, spokenResponse);
+      await this.voiceEngine.speak(spokenResponse);
+      return;
+    }
+
+    // 6b. Handle Math Queries via WolframAlpha
     if (decision.toolName === 'MATH_QUERY') {
       this._updateAgentState("agent-3", "COMPUTING", `Solving: "${decision.params.query}"`);
       this.voiceEngine.playSearchLaunchSound();
@@ -735,6 +796,14 @@ export class JarvisCore {
         text: spokenResponse,
         actionType: 'MATH_QUERY',
         data: { query: decision.params.query, wolframAnswered: Boolean(wolframAnswer) }
+      });
+
+      // The math result belongs on the big display too — the query as title,
+      // the computed answer as body (spoken text is kept for voice only).
+      this.onDisplay({
+        kind: 'text',
+        title: decision.params.query,
+        body: spokenResponse
       });
 
       this._updateAgentState("agent-3", "ACTIVE", `Computation complete: "${decision.params.query}"`);

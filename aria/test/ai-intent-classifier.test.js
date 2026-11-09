@@ -144,6 +144,24 @@ test('rejects a SET_TIMER decision missing the required duration param', async (
   assert.equal(result, null);
 });
 
+test('accepts a DRAW_DISPLAY decision with its required subject param', async () => {
+  const result = await classifyIntentWithAI({
+    input: 'draw a solar system',
+    classifyIntent: async () => JSON.stringify({ toolName: 'DRAW_DISPLAY', params: { subject: 'a solar system' } })
+  });
+  assert.equal(result.toolName, 'DRAW_DISPLAY');
+  assert.deepEqual(result.params, { subject: 'a solar system' });
+  assert.equal(result.shouldCallTool, true);
+});
+
+test('rejects a DRAW_DISPLAY decision missing the required subject param', async () => {
+  const result = await classifyIntentWithAI({
+    input: 'draw something',
+    classifyIntent: async () => JSON.stringify({ toolName: 'DRAW_DISPLAY', params: {} })
+  });
+  assert.equal(result, null);
+});
+
 test('accepts a TIMER_CANCEL decision', async () => {
   const result = await classifyIntentWithAI({
     input: 'cancel the timer',

@@ -674,5 +674,18 @@ fill="#1E90FF" stroke="#1E90FF" stroke-width="8" stroke-linejoin="round" stroke-
     setTimeout(window.__ariaHideBoot, 9000);
   </script>
   <script type="module" src="/src/main.js"></script>
+  <!-- ARIA Display — big popup for visual answers (math, drawings).
+       Lives at body level so it overlays any view; the AI core docks to the
+       bottom-right corner while it is open (choreography in display-panel.js). -->
+  <div class="display-panel" id="displayPanel" hidden role="dialog" aria-label="ARIA display">
+    <div class="display-panel-head">
+      <div class="display-panel-title-row">
+        <span class="display-panel-badge">◉ ARIA</span>
+        <h2 id="displayPanelTitle">Display</h2>
+      </div>
+      <button class="display-panel-close" id="displayPanelClose" title="Close (Esc)" aria-label="Close display">✕</button>
+    </div>
+    <div class="display-panel-body" id="displayPanelBody"></div>
+  </div>
 </body>
 </html>

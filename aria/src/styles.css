@@ -1149,3 +1149,134 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ============================================================
+   ARIA Display — the big popup for visual answers.
+   ============================================================ */
+.display-panel {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  width: min(80vw, 1500px);
+  height: min(80vh, 940px);
+  transform: translate(-50%, -50%);
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  border-radius: 18px;
+  overflow: hidden;
+  background: linear-gradient(165deg, rgba(10, 16, 32, 0.97) 0%, rgba(6, 10, 22, 0.94) 60%, rgba(8, 14, 30, 0.95) 100%);
+  border: 1px solid rgba(122, 215, 255, 0.30);
+  box-shadow:
+    0 40px 110px rgba(0, 0, 0, 0.60),
+    0 0 0 1px rgba(255, 255, 255, 0.05) inset,
+    0 0 46px rgba(64, 120, 255, 0.16);
+  backdrop-filter: blur(10px);
+}
+.display-panel[hidden] { display: none; }
+.display-panel.enter { animation: displayPanelIn 0.55s cubic-bezier(0.2, 0.9, 0.25, 1.05); }
+@keyframes displayPanelIn {
+  0% { opacity: 0; transform: translate(-50%, -48%) scale(1.12); filter: saturate(2) brightness(1.5); }
+  60% { opacity: 1; transform: translate(-50%, -50%) scale(0.99); filter: saturate(1.2) brightness(1.05); }
+  80% { transform: translate(-50%, -50%) scale(1.006); }
+  100% { opacity: 1; transform: translate(-50%, -50%) scale(1); filter: none; }
+}
+.display-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px 12px 20px;
+  border-bottom: 1px solid rgba(122, 215, 255, 0.16);
+  background: linear-gradient(180deg, rgba(30, 48, 90, 0.35), rgba(10, 16, 32, 0));
+}
+.display-panel-title-row { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.display-panel-badge {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  padding: 4px 10px;
+  border-radius: 999px;
+  color: #9fd4ff;
+  border: 1px solid rgba(122, 215, 255, 0.4);
+  background: rgba(40, 80, 160, 0.25);
+  white-space: nowrap;
+}
+#displayPanelTitle {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  color: #dceafe;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 76vw;
+}
+.display-panel-close {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 130, 130, 0.35);
+  background: rgba(60, 20, 30, 0.5);
+  color: #ffb6c1;
+  font-size: 15px;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.display-panel-close:hover { background: rgba(120, 30, 45, 0.65); }
+.display-panel-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 28px 34px 34px;
+}
+.display-prose { max-width: 1080px; margin: 0 auto; color: #dfe9fb; font-size: 1.5rem; line-height: 1.55; }
+.display-prose p { margin: 0 0 1em; }
+.display-prose .katex { font-size: 1.25em; color: #fff; }
+.math-plain { opacity: 0.85; font-family: ui-monospace, monospace; font-size: 1.3rem; }
+.math-raw { color: #aee0ff; }
+.display-figure {
+  width: 100%;
+  height: 100%;
+  min-height: 60vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 0 14px rgba(90, 170, 255, 0.25));
+}
+.display-figure svg { width: 100%; height: 100%; max-height: 72vh; }
+
+/* ============================================================
+   Core dock choreography — while the display is open the neural
+   sphere flies into the bottom-right corner as a live widget.
+   ============================================================ */
+.sphere-stage {
+  transition: transform 0.78s cubic-bezier(0.3, 1.25, 0.3, 1.02);
+  will-change: transform;
+}
+/* Motion garnish: an expanding ring flash while the core is in flight
+   (body.display-docking lives for the first ~0.8s of each flight). */
+.sphere-stage::after {
+  content: '';
+  position: absolute;
+  inset: -30%;
+  border-radius: 50%;
+  z-index: 7;
+  opacity: 0;
+  pointer-events: none;
+  border: 2px solid rgba(122, 215, 255, 0.55);
+  box-shadow: 0 0 40px rgba(90, 170, 255, 0.65), inset 0 0 40px rgba(90, 170, 255, 0.35);
+}
+body.display-docking .sphere-stage::after {
+  animation: dockRing 0.85s ease-out;
+}
+@keyframes dockRing {
+  0% { opacity: 0.95; transform: scale(0.18); }
+  55% { opacity: 0.55; transform: scale(0.85); }
+  100% { opacity: 0; transform: scale(1.18); }
+}
+/* The greeting sinks away while the core is docked. */
+body.display-open .sphere-greeting {
+  opacity: 0;
+  transform: translateY(-8px) scale(0.97);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  pointer-events: none;
+}

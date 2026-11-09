@@ -10,6 +10,7 @@ import { LocationHarness } from './location-harness.js';
 import { FileSystemHarness } from './file-harness.js';
 import { loadTasks, addTask, toggleTask, removeTask, clearCompleted } from './tasks-store.js';
 import { QUOTES, nextQuoteIndex } from './quotes.js';
+import { DisplayPanel } from './display-panel.js';
 
 // DOM Element References
 const micBtn = document.getElementById('micBtn');
@@ -40,6 +41,16 @@ const speechMeterBars = speechMeter ? Array.from(speechMeter.querySelectorAll('.
 const neuralCanvas = document.getElementById('neuralSphere');
 const neuralStage = document.getElementById('sphereStage');
 const homeView = document.getElementById('view-home');
+// Big display popup for visual answers — the core docks to the bottom-right
+// corner while it is open (choreography lives in display-panel.js).
+const displayPanel = new DisplayPanel({
+  stageEl: neuralStage,
+  panelEl: document.getElementById('displayPanel'),
+  titleEl: document.getElementById('displayPanelTitle'),
+  bodyEl: document.getElementById('displayPanelBody'),
+  closeBtnEl: document.getElementById('displayPanelClose')
+});
+window.__displayPanel = displayPanel;
 
 // Visualizer Canvas Context
 const ctx = visualizerCanvas ? visualizerCanvas.getContext('2d') : null;
@@ -272,6 +283,9 @@ function initApp() {
     onLog: addLog,
     onStatusChange: updateStatus,
     cameraVisionHarness,
+    // Visual answers (math results, SVG drawings) push onto the big display
+    // popup — the core flies into the bottom-right corner while it's open.
+    onDisplay: (payload) => displayPanel.open(payload),
     onResponse: ({ text, actionType, data }) => {
       addLog({ type: 'ARIA', message: text });
       showAriaResponse(text);
