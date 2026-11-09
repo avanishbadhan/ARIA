@@ -13,7 +13,18 @@ const mcpManager = require('./mcp-manager.cjs');
 
 const DEV_URL = 'http://localhost:3000';
 const ICON_PATH = path.join(__dirname, 'assets', 'aria-icon.png');
-const SPEECH_SCRIPT_PATH = path.join(__dirname, 'speech-recognizer.ps1');
+// The Windows Speech recognizer script must live ON DISK — PowerShell's
+// -File parameter cannot read inside the asar archive. electron-builder
+// unpacks it (asarUnpack) next to app.asar.unpacked; in dev and unpacked
+// builds __dirname already points at a real file, so only remap when the
+// resolved path sits inside an archive.
+const SPEECH_SCRIPT_PATH = (() => {
+  const resolved = path.join(__dirname, 'speech-recognizer.ps1');
+  if (resolved.includes('app.asar') && !resolved.includes('app.asar.unpacked')) {
+    return resolved.replace('app.asar', 'app.asar.unpacked');
+  }
+  return resolved;
+})();
 
 // Local loopback redirect for Spotify's Authorization Code OAuth flow — this
 // exact URI must be added to the app's "Redirect URIs" in the Spotify

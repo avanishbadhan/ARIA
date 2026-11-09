@@ -44,6 +44,9 @@
       "electron/**/*",
       "package.json"
     ],
+    "asarUnpack": [
+      "electron/speech-recognizer.ps1"
+    ],
     "win": {
       "target": "nsis",
       "icon": "electron/assets/aria-icon.png"
