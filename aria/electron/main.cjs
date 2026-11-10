@@ -54,7 +54,7 @@ let micProcess = null;
 // spawns so a new engine's legit re-recognition isn't wrongly swallowed.
 let lastFinalText = '';
 let lastFinalAt = 0;
-const FINAL_DUP_WINDOW_MS = 12000;
+const FINAL_DUP_WINDOW_MS = 30000;
 let indicatorWindow = null;
 let overlayWindow = null;
 app.isQuitting = false;

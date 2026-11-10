@@ -32,6 +32,15 @@ export class VoiceEngine {
     this.synthesis = window.speechSynthesis;
     this.isListening = false;
     this.isSpeaking = false;
+    // Consecutive-identical-final suppression (SAPI re-emit guard). Windows
+    // Speech re-finalizes the same utterance several times over a couple of
+    // minutes; ones that land while ARIA speaks get dropped by the isSpeaking
+    // gate, so the re-emit that slips through AFTER the reply is >12s behind
+    // the original and used to re-dispatch the same request (think → speak →
+    // think → speak …). Same text within this window is silently ignored.
+    this._lastFinalText = '';
+    this._lastFinalAt = 0;
+    this.FINAL_DUP_WINDOW_MS = 45000;
     this.isMuted = false;
     this.voice = null;
     this.audioCtx = null;
@@ -166,11 +175,15 @@ export class VoiceEngine {
 
       const currentText = finalTranscript || interimTranscript;
       if (currentText.trim()) {
-        this.onTranscript({
-          text: currentText,
-          isFinal: Boolean(finalTranscript),
-          alternatives: finalTranscript ? finalAlternatives : []
-        });
+        if (finalTranscript) {
+          this._emitFinal(currentText, finalAlternatives);
+        } else {
+          this.onTranscript({
+            text: currentText,
+            isFinal: false,
+            alternatives: []
+          });
+        }
       }
     };
 
@@ -245,12 +258,35 @@ export class VoiceEngine {
   // (electron/speech-recognizer.ps1) relayed over IPC. This keeps the same
   // onTranscript/onStateChange contract as the browser path — nothing else
   // in the app needs to know which engine is actually running.
+  /**
+   * Single funnel for every FINAL transcript across all engines (browser,
+   * Electron/Windows bridge, Deepgram). Drops a consecutive identical final
+   * if it arrives within FINAL_DUP_WINDOW_MS of the previous one — the speech
+   * engines (SAPI in particular) re-emit the same utterance after long TTS
+   * turns, and each surviving re-emit used to re-run the whole LLM pipeline.
+   */
+  _emitFinal(text, alternatives) {
+    const key = String(text || '').trim().toLowerCase();
+    const now = Date.now();
+    if (key && key === this._lastFinalText && now - this._lastFinalAt < this.FINAL_DUP_WINDOW_MS) {
+      console.log('[VoiceEngine] suppressed duplicate final (SAPI/speech re-emit)');
+      return;
+    }
+    this._lastFinalText = key;
+    this._lastFinalAt = now;
+    this.onTranscript({ text, isFinal: true, alternatives: alternatives || [] });
+  }
+
   _initElectronMic() {
     window.jarvisElectron.mic.onTranscript(({ text, isFinal, alternatives }) => {
       if (this.isSpeaking || this.suppressMic || (this.synthesis && this.synthesis.speaking)) return;
       if (text && text.trim()) {
         this._consecutiveErrors = 0;
-        this.onTranscript({ text, isFinal: Boolean(isFinal), alternatives: alternatives || [] });
+        if (isFinal) {
+          this._emitFinal(text, alternatives);
+        } else {
+          this.onTranscript({ text, isFinal: false, alternatives: alternatives || [] });
+        }
       }
     });
 
@@ -381,11 +417,15 @@ export class VoiceEngine {
       this._consecutiveErrors = 0;
       if (this.isSpeaking || this.suppressMic || (this.synthesis && this.synthesis.speaking)) return;
       if (alt.transcript.trim()) {
-        this.onTranscript({
-          text: alt.transcript,
-          isFinal: Boolean(data.is_final),
-          alternatives: alts.slice(1).map(a => a.transcript).filter(Boolean)
-        });
+        if (data.is_final) {
+          this._emitFinal(alt.transcript, alts.slice(1).map(a => a.transcript).filter(Boolean));
+        } else {
+          this.onTranscript({
+            text: alt.transcript,
+            isFinal: false,
+            alternatives: alts.slice(1).map(a => a.transcript).filter(Boolean)
+          });
+        }
       }
     };
 

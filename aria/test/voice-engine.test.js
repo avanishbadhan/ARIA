@@ -68,6 +68,41 @@ test('browser engine reports an empty alternatives array when the recognizer ret
   assert.deepEqual(transcripts[0].alternatives, []);
 });
 
+test('SAPI re-emit guard: a consecutive identical final is suppressed within the dup window', () => {
+  global.window = makeWindow();
+  const transcripts = [];
+  const engine = new VoiceEngine({ onTranscript: (t) => transcripts.push(t) });
+
+  engine._emitFinal('tell me a joke', []);
+  engine._emitFinal('Tell me a joke', []);
+
+  assert.equal(transcripts.length, 1, 'the re-emitted identical final must not dispatch again');
+});
+
+test('SAPI re-emit guard: a different final right after still dispatches', () => {
+  global.window = makeWindow();
+  const transcripts = [];
+  const engine = new VoiceEngine({ onTranscript: (t) => transcripts.push(t) });
+
+  engine._emitFinal('tell me a joke', []);
+  engine._emitFinal('what time is it', []);
+
+  assert.equal(transcripts.length, 2);
+  assert.equal(transcripts[1].text, 'what time is it');
+});
+
+test('SAPI re-emit guard: the identical final dispatches again once the window has elapsed', () => {
+  global.window = makeWindow();
+  const transcripts = [];
+  const engine = new VoiceEngine({ onTranscript: (t) => transcripts.push(t) });
+
+  engine._emitFinal('tell me a joke', []);
+  engine._lastFinalAt = Date.now() - engine.FINAL_DUP_WINDOW_MS - 1;
+  engine._emitFinal('tell me a joke', []);
+
+  assert.equal(transcripts.length, 2, 'a genuine later repeat must still work');
+});
+
 test('interim (non-final) results report no alternatives', () => {
   global.window = makeWindow();
   const transcripts = [];
