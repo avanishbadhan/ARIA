@@ -541,15 +541,13 @@ button.side-shortcut:active { transform: scale(0.97); }
   width: 38px;
   height: 38px;
   border-radius: 4px;
-  /* Cyber-cut chamfer to match the topbar buttons. */
-  clip-path: polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px);
   background: linear-gradient(135deg, #3b82f6, #60a5fa);
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 700;
   font-size: 1rem;
-  filter: drop-shadow(0 0 6px rgba(59, 130, 246, 0.35));
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
 }
 
 /* Views */
@@ -599,10 +597,7 @@ button.side-shortcut:active { transform: scale(0.97); }
   color: #c3cde6;
   padding: 7px 14px;
   cursor: pointer;
-  /* Cyber-cut chamfer: diagonal top-left / bottom-right corners instead of
-     the pill shape — matches the panel's angular HUD language. */
-  border-radius: 0;
-  clip-path: polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px);
+  border-radius: 4px;
   font-size: 0.75rem;
   font-family: var(--font-main);
   transition: all 0.2s ease;
@@ -613,7 +608,7 @@ button.side-shortcut:active { transform: scale(0.97); }
   color: #fff;
   border-color: rgba(148, 184, 255, 0.4);
   transform: translateY(-1px);
-  filter: drop-shadow(0 5px 10px rgba(59, 130, 246, 0.30));
+  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.25);
 }
 .btn-toggle:active { transform: translateY(0) scale(0.95); box-shadow: none; }
 .btn-toggle:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -621,9 +616,7 @@ button.side-shortcut:active { transform: scale(0.97); }
 .btn-harness {
   background: rgba(148, 184, 255, 0.07);
   border: 1px solid var(--border-color);
-  /* Cyber-cut chamfer, matching .btn-toggle. */
-  border-radius: 0;
-  clip-path: polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px);
+  border-radius: 4px;
   padding: 7px 14px;
   font-family: var(--font-main);
   font-size: 0.75rem;
@@ -637,7 +630,7 @@ button.side-shortcut:active { transform: scale(0.97); }
   color: #fff;
   border-color: rgba(148, 184, 255, 0.4);
   transform: translateY(-1px);
-  filter: drop-shadow(0 5px 10px rgba(59, 130, 246, 0.30));
+  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.25);
 }
 .btn-harness:hover {
   background: rgba(148, 184, 255, 0.2);
@@ -1149,8 +1142,8 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible {
 .device-row:hover, .activity-item:hover { background: rgba(148, 184, 255, 0.06); }
 
 /* Avatar micro-motion */
-.avatar { transition: transform 0.2s ease, filter 0.25s ease; }
-.avatar:hover { transform: scale(1.08); filter: drop-shadow(0 0 12px rgba(96, 165, 250, 0.55)); }
+.avatar { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+.avatar:hover { transform: scale(1.08); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.4), 0 0 18px rgba(59, 130, 246, 0.5); }
 
 /* Respect users who prefer minimal animation */
 @media (prefers-reduced-motion: reduce) {
@@ -1320,20 +1313,18 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible {
   width: 34px;
   height: 34px;
   border-radius: 4px;
-  /* Cyber-cut chamfer matching the topbar buttons; pink accent family. */
-  clip-path: polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px);
   border: 1px solid rgba(255, 0, 127, 0.45);
   background: rgba(80, 12, 48, 0.5);
   color: #ff8fc0;
   font-size: 15px;
   cursor: pointer;
   flex: 0 0 auto;
-  transition: background 0.22s ease, filter 0.25s ease, transform 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.2), color 0.22s ease;
+  transition: background 0.22s ease, box-shadow 0.22s ease, transform 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.2), color 0.22s ease;
 }
 .display-panel-close:hover {
   transform: scale(1.08) rotate(90deg);
   background: rgba(150, 20, 80, 0.6);
-  filter: drop-shadow(0 0 14px rgba(255, 0, 127, 0.45));
+  box-shadow: 0 0 18px rgba(255, 0, 127, 0.4);
   color: #fff;
 }
 
