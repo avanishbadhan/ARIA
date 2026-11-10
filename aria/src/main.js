@@ -2480,8 +2480,10 @@ async function refreshNotes() {
 }
 
 /**
- * Rebuilds the right-rail Connected Devices rows from live status text the
- * harness panels already maintain, plus the active mic engine.
+ * Rebuilds the right-rail connections rows from live status text the
+ * harness panels already maintain. Core system health (provider, internet,
+ * voice) lives in the static System Status rows above — voice shown twice
+ * on the same rail was redundant.
  */
 function refreshDevices() {
   const list = document.getElementById('devicesList');
@@ -2491,10 +2493,9 @@ function refreshDevices() {
     return el && el.textContent ? el.textContent.trim() : fallback;
   };
   const rows = [
-    { icon: '📧', name: 'Google Account', state: textOf('googleAccountStatus', 'Not connected') },
+    { icon: '📧', name: 'Google', state: textOf('googleAccountStatus', 'Not connected') },
     { icon: '🎵', name: 'Spotify', state: textOf('spotifyAccountStatus', 'Not connected') },
-    { icon: '🎮', name: 'Steam Library', state: textOf('steamLibraryStatus', 'Not connected') },
-    { icon: '🎙️', name: 'Voice Input', state: voiceEngine ? `${voiceEngine.engine} mic · ${voiceEngine.isListening ? 'listening' : 'idle'}` : 'Standby' }
+    { icon: '🎮', name: 'Steam', state: textOf('steamLibraryStatus', 'Not connected') }
   ];
   list.innerHTML = '';
   rows.forEach(r => {
@@ -2503,8 +2504,7 @@ function refreshDevices() {
     row.className = 'device-row';
     row.innerHTML = `<div class="d-icon">${r.icon}</div><div><div></div><small class="${off ? 'off' : ''}"></small></div>`;
     row.children[1].children[0].textContent = r.name;
-    row.children[1].children[1].textContent = off ? 'Offline' : 'Online';
-    row.children[1].children[1].textContent = r.state.length > 42 ? (off ? 'Offline' : 'Online') : r.state;
+    row.children[1].children[1].textContent = off ? 'Not linked' : r.state.length > 42 ? 'Linked' : r.state;
     list.appendChild(row);
   });
 

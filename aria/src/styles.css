@@ -721,6 +721,14 @@ button.side-shortcut:active { transform: scale(0.97); }
 .activity-item .a-time { color: var(--text-dim); font-size: 0.66rem; font-family: var(--font-mono); }
 
 .devices-list { display: flex; flex-direction: column; }
+.rail-subhead {
+  font-size: 0.62rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding: 10px 0 2px;
+}
+.devices-list-compact .device-row:first-child { border-top: none; }
 .device-row {
   display: flex;
   align-items: center;
