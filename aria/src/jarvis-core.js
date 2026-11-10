@@ -386,7 +386,9 @@ export class JarvisCore {
     const input = rawInput.trim();
     this.onLog({
       type: 'USER',
-      message: `[USER INPUT] "${input}"`
+      // Chat-style identity line: "Username: text" — raw quotes and bracket
+      // labels read like machinery, not a conversation log.
+      message: `${this._userNameLabel()}: ${input}`
     });
 
     // 0. Pending file-action confirmation (overwrite/delete two-step flow).
@@ -1268,11 +1270,10 @@ export class JarvisCore {
     }
 
     this._updateAgentState("agent-2", "SPEAKING", "Synthesizing vocal response");
-    
-    this.onLog({
-      type: 'ARIA',
-      message: `[ARIA VOICE RESPONSE] "${answerText}"`
-    });
+
+    // The chat entry for the answer is already pushed by the renderer's
+    // onResponse hook ("ARIA: …") — a second log line here used to double
+    // every reply in Recent Activity.
 
     this.onResponse({
       text: answerText,
@@ -1453,6 +1454,19 @@ export class JarvisCore {
   _looksLikeRefusal(text) {
     return /\b(i'?m sorry|i cannot|can'?t provide|cannot provide|can'?t help with|won'?t be able to|i can'?t assist|i can'?t help)\b/i
       .test(String(text || ''));
+  }
+
+  /**
+   * Display name for chat-log lines ("Username: text"), straight from the
+   * Settings identity — falls back to "You" when blank.
+   */
+  _userNameLabel() {
+    try {
+      const name = String(loadSettings().userName || '').trim();
+      return name || 'You';
+    } catch (e) {
+      return 'You';
+    }
   }
 
   /**

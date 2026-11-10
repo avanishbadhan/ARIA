@@ -306,7 +306,9 @@ function initApp() {
     // popup — the core flies into the bottom-right corner while it's open.
     onDisplay: (payload) => displayPanel.open(payload),
     onResponse: ({ text, actionType, data }) => {
-      addLog({ type: 'ARIA', message: text });
+      // Chat-style reply entry ("ARIA: response") — the core no longer logs
+      // its own [ARIA VOICE RESPONSE] copy, so this is the single line.
+      addLog({ type: 'ARIA', message: `ARIA: ${text}` });
       showAriaResponse(text);
       if (spokenLine) spokenLine.textContent = text;
       if (actionType === 'SET_MODEL_TIER') {
