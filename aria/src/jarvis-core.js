@@ -725,7 +725,9 @@ export class JarvisCore {
         `Respond with ONLY a single \`\`\`svg code block containing one <svg> element — no commentary, no prose before or after. ` +
         `Style so it reads beautifully on a dark display: dark translucent fills, high-contrast neon strokes (cyan #7ad7ff, amber #ffb347, white), ` +
         `include a short title and useful labels as <text> elements with an explicit font-size of 12 or larger. ` +
-        `The root tag MUST carry a viewBox attribute (for example viewBox="0 0 400 300") and NO width or height attributes — the panel scales the drawing to fit its cage, so set the coordinate canvas instead of pixel sizes. ` +
+        `The root tag MUST carry a viewBox attribute (for example viewBox="0 0 500 400") and NO width or height attributes — the panel scales the drawing to fit its cage, so set the coordinate canvas instead of pixel sizes. ` +
+        `Compose CENTERED on that canvas: keep every coordinate comfortably inside the viewBox with a margin of about 10% on every side — nothing may be cut off at any edge. For scenes like a solar system, arrange bodies in a balanced ellipse/spread across the whole canvas, not in a straight line running off one side. ` +
+        `Never include copyright marks, watermarks, signatures or a date line in the drawing. ` +
         `IMPORTANT: keep the drawing compact so it fits in the response — at most ~30 shapes/labels total, a coordinate canvas no larger than 500x400, fewer than ~2200 characters of SVG. Simple, readable geometry beats detail.`,
         this.conversationHistory,
         // SVGs are far larger than chat replies — a chat-sized token budget

@@ -35,35 +35,93 @@ function stripFixedDims(svgText) {
  * viewBox — CSS then rescales the viewport but the shapes keep drawing at
  * their raw coordinate size, so the picture explodes far past the panel
  * (observed: the solar system render was miles too big). Rebuild the root
- * tag here: derive a viewBox from width/height when missing and drop the
- * fixed dimensions so the drawing scales to fit the panel.
+ * tag here: derive a viewBox from width/height when missing, drop the fixed
+ * dimensions, and widen the canvas to the real content bounds when the
+ * model drew past its own viewBox. Renderer path uses DOMParser; in node
+ * tests (no DOM) it degrades to dimension-stripping.
  */
 export function normalizeSvg(svg) {
   const svgText = String(svg || '');
   if (!ROOT_SVG_RE.test(svgText)) return svgText;
-  if (/<svg[^>]*viewBox=/i.test(svgText)) {
-    // viewBox present — just strip fixed pixel dimensions so CSS can fit it.
-    return stripFixedDims(svgText);
+  if (typeof DOMParser !== 'undefined') {
+    try {
+      const doc = new DOMParser().parseFromString(svgText, 'image/svg+xml');
+      const el = doc.querySelector('svg');
+      if (el && el.querySelector) {
+        const existing = (el.getAttribute('viewBox') || '').split(/[\s,]+/).map(Number);
+        if (existing.length === 4 && existing.every(n => !Number.isNaN(n))) {
+          var [vx, vy, vw, vh] = existing;
+        } else {
+          var vx = 0, vy = 0;
+          var vw = parseFloat(el.getAttribute('width')) || 400;
+          var vh = parseFloat(el.getAttribute('height')) || 300;
+        }
+        el.setAttribute('viewBox', `${vx} ${vy} ${vw} ${vh}`);
+        el.removeAttribute('width');
+        el.removeAttribute('height');
+        el.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+        const expanded = _expandViewBoxToContent(el, vx, vy, vw, vh);
+        if (expanded) el.setAttribute('viewBox', expanded);
+        return new XMLSerializer().serializeToString(el);
+      }
+    } catch (e) { /* fall through to the string path */ }
   }
-  if (typeof DOMParser === 'undefined' || !/width|height/i.test(svgText)) {
-    // No DOM in node tests (or nothing to derive a canvas from) — strip the
-    // fixed dimensions at least; the renderer always takes the DOM route.
-    return stripFixedDims(svgText);
+  return stripFixedDims(svgText);
+}
+
+/**
+ * Estimates the content bounding box of a parsed SVG document from its
+ * coordinate attributes (cx/x/x1…, r/width as extents, labels approximated
+ * by character count) and returns a wider viewBox when the shapes overflow
+ * the declared canvas. Only usable with a real DOM — the node-test stubs
+ * carry no querySelectorAll and are skipped.
+ */
+function _expandViewBoxToContent(root, vx, vy, vw, vh) {
+  if (typeof root.querySelectorAll !== 'function') return null;
+  let minX = vx, minY = vy, maxX = vx + vw, maxY = vy + vh;
+  const num = (node, name) => {
+    const v = parseFloat(node.getAttribute(name));
+    return Number.isNaN(v) ? null : v;
+  };
+  const nodes = root.querySelectorAll('*');
+  for (const node of nodes) {
+    const cx = num(node, 'cx'), cy = num(node, 'cy'), r = num(node, 'r') || 0;
+    if (cx !== null || cy !== null) {
+      if (cx !== null) { minX = Math.min(minX, cx - r); maxX = Math.max(maxX, cx + r); }
+      if (cy !== null) { minY = Math.min(minY, cy - r); maxY = Math.max(maxY, cy + r); }
+    }
+    const x = num(node, 'x'), y = num(node, 'y');
+    const rw = num(node, 'width'), rh = num(node, 'height');
+    const isText = (node.tagName || '').toLowerCase() === 'text';
+    if (x !== null) {
+      let x0 = x, x1 = x + (rw || 0);
+      if (isText) {
+        const fs = num(node, 'font-size') || 14;
+        const estW = String(node.textContent || '').length * fs * 0.62;
+        const anchor = (node.getAttribute('text-anchor') || 'start').toLowerCase();
+        if (anchor === 'middle') { x0 = x - estW / 2; x1 = x + estW / 2; }
+        else if (anchor === 'end') { x0 = x - estW; x1 = x; }
+        else x1 = x + estW;
+      }
+      minX = Math.min(minX, x0); maxX = Math.max(maxX, x1);
+    }
+    if (y !== null) {
+      minY = Math.min(minY, y - (isText ? 14 : 0));
+      maxY = Math.max(maxY, y + (rh || (isText ? 4 : 0)));
+    }
+    const x1a = num(node, 'x1'), y1a = num(node, 'y1'), x2a = num(node, 'x2'), y2a = num(node, 'y2');
+    for (const [px, py] of [[x1a, y1a], [x2a, y2a]]) {
+      if (px !== null) { minX = Math.min(minX, px); maxX = Math.max(maxX, px); }
+      if (py !== null) { minY = Math.min(minY, py); maxY = Math.max(maxY, py); }
+    }
   }
-  try {
-    const doc = new DOMParser().parseFromString(svgText, 'image/svg+xml');
-    const el = doc.querySelector('svg');
-    if (!el || !el.querySelector) return stripFixedDims(svgText);
-    const w = parseFloat(el.getAttribute('width'));
-    const h = parseFloat(el.getAttribute('height'));
-    if (w > 0 && h > 0) el.setAttribute('viewBox', `0 0 ${w} ${h}`);
-    el.removeAttribute('width');
-    el.removeAttribute('height');
-    el.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-    return new XMLSerializer().serializeToString(el);
-  } catch (e) {
-    return stripFixedDims(svgText);
+  if (minX < vx || minY < vy || maxX > vx + vw || maxY > vy + vh) {
+    const padX = 0.03 * (maxX - minX);
+    const padY = 0.03 * (maxY - minY);
+    return [minX - padX, minY - padY, (maxX - minX) + 2 * padX, (maxY - minY) + 2 * padY]
+      .map(v => Math.round(v * 10) / 10).join(' ');
   }
+  return null;
 }
 
 const KATEX_CSS = 'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css';

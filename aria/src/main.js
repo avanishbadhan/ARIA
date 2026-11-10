@@ -2516,18 +2516,6 @@ function refreshDevices() {
   if (net) net.textContent = (typeof navigator !== 'undefined' && !navigator.onLine) ? 'Offline' : 'Connected';
   const mic = document.getElementById('sysMic');
   if (mic && voiceEngine) mic.textContent = voiceEngine.isListening ? 'Listening' : 'Standby';
-  const fill = document.getElementById('sysStorageFill');
-  const label = document.getElementById('sysStorageText');
-  try {
-    let bytes = 0;
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      bytes += (k || '').length + (localStorage.getItem(k) || '').length;
-    }
-    const pct = Math.min(100, Math.round((bytes / (5 * 1024 * 1024)) * 100));
-    if (fill) fill.style.width = `${Math.max(2, pct)}%`;
-    if (label) label.textContent = `${pct}% used`;
-  } catch (e) { /* storage estimate unavailable */ }
 }
 
 /**

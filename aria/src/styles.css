@@ -739,8 +739,7 @@ button.side-shortcut:active { transform: scale(0.97); }
 .sys-row .sys-ok { margin-left: auto; display: flex; align-items: center; gap: 6px; }
 .sys-row .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green-ok); box-shadow: 0 0 6px var(--green-ok); }
 .sys-row b { font-weight: 600; font-size: 0.72rem; }
-.storage-bar { flex: 1; height: 5px; border-radius: 3px; background: rgba(148, 184, 255, 0.15); overflow: hidden; margin-left: auto; max-width: 110px; }
-.storage-bar span { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #3b82f6, #a78bfa); border-radius: 3px; }
+
 
 /* Chat terminal */
 .terminal-box {
