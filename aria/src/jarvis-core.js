@@ -57,6 +57,17 @@ export class JarvisCore {
     this.onDisplay = options.onDisplay || (() => {});
     this.onSwarmUpdate = options.onSwarmUpdate || (() => {});
 
+    // Raster image generation for the DRAW branch — the main process fetches
+    // from the free, keyless Pollinations endpoint (see registerImageIpc).
+    // Resolves null when the bridge or network is unavailable, and the DRAW
+    // branch falls back to the LLM's own SVG path.
+    this._generateImage = options.generateImage || ((prompt) => {
+      const bridge = (typeof window !== 'undefined') ? window.jarvisElectron : null;
+      return (bridge && bridge.image && bridge.image.generate)
+        ? bridge.image.generate(prompt)
+        : Promise.resolve(null);
+    });
+
     // Instantiate OpenRouter Client (key set via the Settings UI, stored in localStorage)
     const openRouterApiKey = localStorage.getItem('jarvis_openrouter_api_key') || '';
 
@@ -721,6 +732,36 @@ export class JarvisCore {
       const subject = decision.params.subject || input;
       this._updateAgentState("agent-3", "COMPUTING", `Drawing: "${subject}"`);
       this.voiceEngine.playSearchLaunchSound();
+
+      // First choice: a real rendered image from the free keyless
+      // Pollinations endpoint — orders of magnitude better than the model
+      // hand-writing SVG shapes. The SVG path below is the offline/no-bridge
+      // fallback so drawing still works when the fetch fails.
+      let imageUrl = null;
+      try {
+        imageUrl = await this._generateImage(
+          `${subject}, highly detailed, vibrant digital art, cinematic lighting, high quality, no text, no watermark`
+        );
+      } catch (e) {
+        imageUrl = null;
+      }
+      if (imageUrl && /^data:image\//.test(imageUrl)) {
+        const spokenResponse = `Here's a proper rendering of ${subject}, Sir — up on the display for you.`;
+        this._updateAgentState("agent-3", "ACTIVE", `Rendered: "${subject}"`);
+        this.onResponse({
+          text: spokenResponse,
+          actionType: 'DRAW_DISPLAY',
+          data: { subject, rendered: true, mode: 'image' }
+        });
+        this.onDisplay({
+          kind: 'image',
+          title: subject,
+          body: imageUrl
+        });
+        this._pushHistory(input, spokenResponse);
+        await this.voiceEngine.speak(spokenResponse);
+        return;
+      }
 
       const drawing = await this._chatWithActiveLLM(
         `Draw "${subject}" as ONE complete standalone SVG image (a schematic/vector illustration). ` +

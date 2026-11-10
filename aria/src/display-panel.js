@@ -191,6 +191,18 @@ export class DisplayPanel {
       this.bodyEl.appendChild(fig);
       // Scale the drawing to the panel: SVGs produced without a viewBox
       // still stretch to fit because the container is a flex box.
+    } else if (kind === 'image') {
+      // A raster rendering (data URL served by the main process's image
+      // generator) — same figure frame as SVG drawings.
+      const fig = document.createElement('div');
+      fig.className = 'display-figure';
+      if (/^data:image\//.test(String(body))) {
+        const img = document.createElement('img');
+        img.src = String(body);
+        img.alt = title || 'Generated image';
+        fig.appendChild(img);
+      }
+      this.bodyEl.appendChild(fig);
     } else {
       this._fillText(String(body || ''));
     }

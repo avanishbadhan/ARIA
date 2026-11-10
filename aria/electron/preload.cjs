@@ -48,6 +48,9 @@ contextBridge.exposeInMainWorld('jarvisElectron', {
     fetchWebpage: (url) => ipcRenderer.invoke('mcp:fetch-webpage', { url }),
     browseWebpage: (url, linkText) => ipcRenderer.invoke('mcp:browse-webpage', { url, linkText })
   },
+  image: {
+    generate: (prompt) => ipcRenderer.invoke('image:generate', { prompt })
+  },
   mic: {
     start: (opts) => ipcRenderer.invoke('mic:start', { force: Boolean(opts && opts.force) }),
     stop: () => ipcRenderer.invoke('mic:stop'),

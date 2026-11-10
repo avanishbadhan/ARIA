@@ -1380,6 +1380,13 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible {
   50% { filter: drop-shadow(0 0 32px rgba(122, 215, 255, 0.42)); }
 }
 .display-figure svg { width: 100%; height: 100%; max-height: 72vh; }
+.display-figure img {
+  max-width: 100%;
+  max-height: 72vh;
+  object-fit: contain;
+  border-radius: 10px;
+  border: 1px solid rgba(122, 215, 255, 0.35);
+}
 
 /* --- Footer: system strip --- */
 .display-panel-foot {

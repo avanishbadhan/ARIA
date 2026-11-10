@@ -7,6 +7,59 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createJarvis } from './helpers/jarvis-test-utils.js';
 
+test('DRAW_DISPLAY prefers a real raster image (Pollinations) over the hand-built SVG', async () => {
+  const jarvis = createJarvis();
+  const displays = [];
+  const responses = [];
+  jarvis.onDisplay = (payload) => displays.push(payload);
+  jarvis.onResponse = (payload) => responses.push(payload);
+  jarvis._generateImage = async (prompt) => {
+    assert.match(prompt, /a beach/);
+    return 'data:image/jpeg;base64,AAAA';
+  };
+  const llmCalls = [];
+  jarvis._chatWithActiveLLM = async (...args) => { llmCalls.push(args); return '```svg\n<svg></svg>\n```'; };
+
+  await jarvis.processUserInput('draw a beach');
+
+  assert.equal(displays.length, 1);
+  assert.equal(displays[0].kind, 'image');
+  assert.equal(displays[0].title, 'a beach');
+  assert.equal(displays[0].body, 'data:image/jpeg;base64,AAAA');
+  assert.equal(responses[0].actionType, 'DRAW_DISPLAY');
+  assert.equal(responses[0].data.mode, 'image');
+  assert.equal(llmCalls.length, 0, 'no SVG generation when the image render succeeds');
+});
+
+test('DRAW_DISPLAY falls back to the LLM SVG path when image generation yields nothing usable', async () => {
+  const jarvis = createJarvis();
+  const displays = [];
+  jarvis.onDisplay = (payload) => displays.push(payload);
+  jarvis._generateImage = async () => 'not-a-data-url';
+  const svg = '<svg viewBox="0 0 100 100"><circle cx="10" cy="10" r="5"/></svg>';
+  jarvis._chatWithActiveLLM = async () => '```svg\n' + svg + '\n```';
+
+  await jarvis.processUserInput('draw a beach');
+
+  assert.equal(displays.length, 1);
+  assert.equal(displays[0].kind, 'svg');
+  assert.equal(displays[0].body, svg);
+});
+
+test('DRAW_DISPLAY falls back to the SVG path when image generation throws', async () => {
+  const jarvis = createJarvis();
+  const displays = [];
+  jarvis.onDisplay = (payload) => displays.push(payload);
+  jarvis._generateImage = async () => { throw new Error('offline'); };
+  const svg = '<svg viewBox="0 0 100 100"><circle cx="10" cy="10" r="5"/></svg>';
+  jarvis._chatWithActiveLLM = async () => '```svg\n' + svg + '\n```';
+
+  await jarvis.processUserInput('draw a beach');
+
+  assert.equal(displays.length, 1);
+  assert.equal(displays[0].kind, 'svg');
+});
+
 test('a Wolfram-answered math query pushes a typeset work display titled with the query', async () => {
   const jarvis = createJarvis();
   jarvis.wolfram.solve = async () => 'The result is 8';

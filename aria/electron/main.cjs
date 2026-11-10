@@ -737,6 +737,44 @@ function registerWeatherIpc() {
   });
 }
 
+// --- Image generation: Pollinations.ai (free, keyless FLUX endpoint) ---
+// Real raster art instead of the LLM's hand-built SVG. Plain HTTPS GET, no
+// API key and no account — the image is baked synchronously by the endpoint
+// and returned as a base64 data URL so the renderer can show it with zero
+// CORS involvement. Any failure (offline, timeout, non-image response)
+// resolves null and the DRAW branch falls back to the SVG path.
+function fetchImageDataUrl(url, depth = 0) {
+  return new Promise((resolve) => {
+    const request = https.get(url, { timeout: 60000 }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && depth < 4) {
+        res.resume();
+        resolve(fetchImageDataUrl(new URL(res.headers.location, url).toString(), depth + 1));
+        return;
+      }
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => {
+        if (res.statusCode < 200 || res.statusCode >= 300) { resolve(null); return; }
+        const type = String(res.headers['content-type'] || '').split(';')[0] || '';
+        if (!type.startsWith('image/')) { resolve(null); return; }
+        resolve(`data:${type};base64,${Buffer.concat(chunks).toString('base64')}`);
+      });
+    });
+    request.on('timeout', () => { request.destroy(); });
+    request.on('error', () => resolve(null));
+  });
+}
+
+function registerImageIpc() {
+  ipcMain.handle('image:generate', (event, { prompt } = {}) => {
+    if (!prompt) return Promise.resolve(null);
+    const url =
+      `https://image.pollinations.ai/prompt/${encodeURIComponent(String(prompt))}` +
+      `?width=1280&height=720&nologo=true&model=flux&seed=${crypto.randomInt(1, 1e9)}`;
+    return fetchImageDataUrl(url, 0);
+  });
+}
+
 // --- Maps: nearby places & driving directions (free/keyless OSM stack) ---
 // Nearby-place search uses Overpass (OpenStreetMap tag queries); geocoding
 // uses Nominatim; routing uses OSRM's public demo server. All three are free
@@ -2018,6 +2056,7 @@ app.whenReady().then(() => {
   registerElevenlabsIpc();
   registerWeatherIpc();
   registerMapsIpc();
+  registerImageIpc();
   registerFilesIpc();
   registerSpotifyIpc();
   registerSpotifyAuthIpc();
