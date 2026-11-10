@@ -17,8 +17,6 @@ const micBtn = document.getElementById('micBtn');
 const transcriptDisplay = document.getElementById('transcriptDisplay');
 const textInput = document.getElementById('textInput');
 const sendBtn = document.getElementById('sendBtn');
-const statusDot = document.getElementById('statusDot');
-const statusText = document.getElementById('statusText');
 const spokenLine = document.getElementById('spokenLine');
 const terminalBox = document.getElementById('terminalBox');
 const swarmList = document.getElementById('swarmList');
@@ -51,6 +49,34 @@ const displayPanel = new DisplayPanel({
   closeBtnEl: document.getElementById('displayPanelClose')
 });
 window.__displayPanel = displayPanel;
+
+/**
+ * Live voice-state painter for the System Status card's Voice row — the
+ * dedicated sidebar status card was cut as redundant, and this row took
+ * over its job: colored dot (listening cyan / thinking pink / speaking gold)
+ * plus an Idle-Listening-Thinking-Speaking label.
+ */
+const VOICE_STATE_LABEL = {
+  LISTENING: 'Listening',
+  THINKING: 'Thinking',
+  SPEAKING: 'Speaking',
+  IDLE: 'Idle',
+  ERROR: 'Mic error'
+};
+let lastVoiceState = 'IDLE';
+function paintVoiceState(status) {
+  if (!VOICE_STATE_LABEL[status]) status = lastVoiceState; // unknown/legacy states keep the last known
+  lastVoiceState = status;
+  const mic = document.getElementById('sysMic');
+  if (mic) mic.textContent = VOICE_STATE_LABEL[status];
+  const dot = document.getElementById('sysVoiceDot');
+  if (dot) {
+    dot.className = 'dot';
+    if (status === 'LISTENING' || status === 'THINKING' || status === 'SPEAKING' || status === 'ERROR') {
+      dot.classList.add(status.toLowerCase());
+    }
+  }
+}
 
 // Visualizer Canvas Context
 const ctx = visualizerCanvas ? visualizerCanvas.getContext('2d') : null;
@@ -99,8 +125,7 @@ function stopAll() {
   // The sphere's thinking streak reads isThinking — without clearing it here
   // the yellow chase would run forever after a stop.
   isThinking = false;
-  if (statusDot) statusDot.className = 'status-dot';
-  if (statusText) statusText.textContent = 'STOPPED';
+  paintVoiceState('IDLE');
   restoreGreeting();
   pushActivity('HARNESS', '[STOP] Current task stopped by the user.');
 }
@@ -131,16 +156,10 @@ function initApp() {
     pushActivity(type, message);
   };
 
-  // 2. Status updater helper
+  // 2. Status updater helper. The dedicated sidebar status card is gone —
+  // the live state now rides on the System Status card's Voice row.
   const updateStatus = ({ status, message }) => {
-    if (statusText) statusText.textContent = status;
-    if (statusDot) {
-      statusDot.className = 'status-dot';
-      if (status === 'SPEAKING') statusDot.classList.add('speaking');
-      if (status === 'LISTENING') statusDot.classList.add('listening');
-      if (status === 'THINKING') statusDot.classList.add('thinking');
-    }
-
+    paintVoiceState(status);
     isThinking = status === 'THINKING';
     if (arcReactorContainer) arcReactorContainer.classList.toggle('thinking', isThinking);
 
@@ -2514,8 +2533,8 @@ function refreshDevices() {
   }
   const net = document.getElementById('sysNet');
   if (net) net.textContent = (typeof navigator !== 'undefined' && !navigator.onLine) ? 'Offline' : 'Connected';
-  const mic = document.getElementById('sysMic');
-  if (mic && voiceEngine) mic.textContent = voiceEngine.isListening ? 'Listening' : 'Standby';
+  // The Voice row is owned by paintVoiceState (updateStatus) — polling here
+  // would clobber Thinking/Speaking back to a two-state label.
 }
 
 /**
