@@ -753,8 +753,12 @@ button.side-shortcut:active { transform: scale(0.97); }
 .log-entry.USER { color: #ffffff; }
 .log-entry.ARIA { color: var(--cyan-glow); }
 .log-entry.HARNESS { color: var(--gold-glow); }
-.log-entry.SUCCESS { color: #39ff14; }
-.log-entry.WARNING { color: #ff3366; }
+/* Theme-fit log palette: the neon green/red from the terminal are gone —
+   success lines take the UI's soft indigo (#70a1ff), warnings/errors take
+   the cyberpunk pink (#ff007f) so colorblind eyes sort by ease, not hue. */
+.log-entry.SUCCESS { color: var(--user-color); }
+.log-entry.WARNING { color: var(--accent-pink); }
+.log-entry.ERROR { color: var(--accent-pink); }
 .log-entry.TOOL { color: #a78bfa; }
 
 /* Panels (devices view cards) */

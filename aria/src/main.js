@@ -407,7 +407,7 @@ function initApp() {
         const games = await jarvis.steamHarness.steamLibrary.fetchLibrary(true);
         if (steamLibraryStatus) {
           steamLibraryStatus.textContent = `✅ ${games.length} games loaded from your Steam library.`;
-          steamLibraryStatus.style.color = '#39ff14';
+          steamLibraryStatus.style.color = '#70a1ff';
         }
         addLog({ type: 'SUCCESS', message: `[STEAM LIBRARY] ${games.length} owned games indexed. Voice launch ready.` });
         populateSteamGames(); // Refresh grid with real library
@@ -1790,7 +1790,7 @@ function initSettingsPanel() {
       if (apiKeysStatus) {
         if (openrouterKey || groqKey || geminiKey || deepgramKey || elevenlabsKey || elevenlabsVoiceId || wolframAppId || spotifyClientId || spotifyClientSecret || googleClientId || googleClientSecret) {
           apiKeysStatus.textContent = '✅ Saved.';
-          apiKeysStatus.style.color = '#39ff14';
+          apiKeysStatus.style.color = '#70a1ff';
         } else {
           apiKeysStatus.textContent = 'Enter at least one key to save.';
           apiKeysStatus.style.color = 'var(--text-dim)';
@@ -1844,7 +1844,7 @@ function initSpotifyAccountPanel() {
   const render = (authenticated) => {
     if (statusEl) {
       statusEl.textContent = authenticated ? '✅ Connected' : 'Not connected';
-      statusEl.style.color = authenticated ? '#39ff14' : 'var(--text-dim)';
+      statusEl.style.color = authenticated ? '#70a1ff' : 'var(--text-dim)';
     }
     connectBtn.style.display = authenticated ? 'none' : '';
     if (disconnectBtn) disconnectBtn.style.display = authenticated ? '' : 'none';
@@ -1875,7 +1875,7 @@ function initSpotifyAccountPanel() {
     } catch (err) {
       if (statusEl) {
         statusEl.textContent = `Connection failed: ${err.message}`;
-        statusEl.style.color = '#ff3b3b';
+        statusEl.style.color = '#ff007f';
       }
       render(false);
     } finally {
@@ -1913,7 +1913,7 @@ function initGoogleAccountPanel() {
   const render = (authenticated) => {
     if (statusEl) {
       statusEl.textContent = authenticated ? '✅ Connected' : 'Not connected';
-      statusEl.style.color = authenticated ? '#39ff14' : 'var(--text-dim)';
+      statusEl.style.color = authenticated ? '#70a1ff' : 'var(--text-dim)';
     }
     connectBtn.style.display = authenticated ? 'none' : '';
     if (disconnectBtn) disconnectBtn.style.display = authenticated ? '' : 'none';
@@ -1944,7 +1944,7 @@ function initGoogleAccountPanel() {
     } catch (err) {
       if (statusEl) {
         statusEl.textContent = `Connection failed: ${err.message}`;
-        statusEl.style.color = '#ff3b3b';
+        statusEl.style.color = '#ff007f';
       }
       render(false);
     } finally {
