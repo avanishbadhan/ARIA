@@ -752,7 +752,9 @@ button.side-shortcut:active { transform: scale(0.97); }
 .log-entry { line-height: 1.45; word-break: break-word; }
 .log-entry.USER { color: #ffffff; }
 .log-entry.ARIA { color: var(--cyan-glow); }
-.log-entry.HARNESS { color: var(--gold-glow); }
+/* The #ffaa00 amber read as reddish-orange on the dark terminal — the user
+   wants the pink accent family for system lines. */
+.log-entry.HARNESS { color: var(--accent-pink); }
 /* Theme-fit log palette: the neon green/red from the terminal are gone —
    success lines take the UI's soft indigo (#70a1ff), warnings/errors take
    the cyberpunk pink (#ff007f) so colorblind eyes sort by ease, not hue. */
